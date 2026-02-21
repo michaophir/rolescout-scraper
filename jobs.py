@@ -275,8 +275,43 @@ def main() -> None:
         metavar="PATH",
         help="Export consolidated results to a JSON file",
     )
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="Run with sample data (no internet required)",
+    )
 
     args = parser.parse_args()
+
+    # Demo mode — hardcoded sample data, no network calls needed
+    if args.demo:
+        demo_data: dict[str, tuple[list[Job], str]] = {
+            "Stripe": ([
+                Job("Software Engineer, Payments", "Stripe", "San Francisco, CA", "https://stripe.com/jobs/1", "Payments", "Full-time"),
+                Job("Staff Engineer, Infrastructure", "Stripe", "Remote", "https://stripe.com/jobs/2", "Infrastructure", "Full-time"),
+                Job("Product Manager, Revenue & Finance", "Stripe", "New York, NY", "https://stripe.com/jobs/3", "Product", "Full-time"),
+            ], "Greenhouse"),
+            "Notion": ([
+                Job("Senior Frontend Engineer", "Notion", "San Francisco, CA", "https://notion.so/jobs/1", "Engineering", "Full-time"),
+                Job("Data Scientist", "Notion", "Remote", "https://notion.so/jobs/2", "Data", "Full-time"),
+                Job("Technical Recruiter", "Notion", "New York, NY", "https://notion.so/jobs/3", "People", "Full-time"),
+                Job("Enterprise Account Executive", "Notion", "Austin, TX", "https://notion.so/jobs/4", "Sales", "Full-time"),
+            ], "Greenhouse"),
+            "Linear": ([
+                Job("Backend Engineer", "Linear", "Remote", "https://linear.app/jobs/1", "Engineering", "Full-time"),
+                Job("Designer", "Linear", "Remote", "https://linear.app/jobs/2", "Design", "Full-time"),
+            ], "Ashby"),
+        }
+        print("\n[Demo mode — using sample data]\n")
+        print(f"Fetching open positions for {len(demo_data)} company/companies...\n")
+        for company, (jobs, source) in demo_data.items():
+            print(f"  Searching: {company} ... {len(jobs)} position(s)")
+        print_results(demo_data)
+        if args.export_csv:
+            export_csv(demo_data, args.export_csv)
+        if args.export_json:
+            export_json(demo_data, args.export_json)
+        return
 
     # Collect company names from all sources
     companies: list[str] = list(args.companies)
