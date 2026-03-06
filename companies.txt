@@ -1,0 +1,5 @@
+company_name,website
+Anthropic,https://anthropic.com
+Stripe,https://stripe.com
+Notion,https://notion.so
+Figma,https://figma.com
