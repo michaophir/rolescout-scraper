@@ -360,8 +360,10 @@ def main() -> None:
 
     write_output(args.output, existing)
 
-    print(f"Done. {total_roles} roles found across {succeeded}/{len(companies)} companies."
-          f" {len(failed_companies)} failed (see errors.log).")
+    write_msg = f"Results written to {args.output}"
+    fail_msg = f" | {len(failed_companies)} failed (see errors.log)" if failed_companies else ""
+    print(f"\nDone! {total_roles} roles found across {succeeded}/{len(companies)} companies. "
+          f"{write_msg}{fail_msg}")
 
 
 if __name__ == "__main__":
