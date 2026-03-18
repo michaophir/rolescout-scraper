@@ -237,6 +237,37 @@ def scrape_careers_page(website: str, company: str, session: requests.Session) -
 # Input / Output
 # ---------------------------------------------------------------------------
 
+def read_filters(path: str = "filters.csv") -> list[dict]:
+    """Read filters CSV (field,value). Returns empty list if file missing or empty."""
+    if not Path(path).exists():
+        return []
+    filters = []
+    with open(path, encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            field = row.get("field", "").strip().lower()
+            value = row.get("value", "").strip().lower()
+            if field and value:
+                filters.append({"field": field, "value": value})
+    return filters
+
+
+def apply_filters(rows: list[dict], filters: list[dict]) -> list[dict]:
+    """Keep only rows where at least one filter matches (case-insensitive substring)."""
+    if not filters:
+        return rows
+    filtered = []
+    for row in rows:
+        for f in filters:
+            field_key = f["field"]
+            # Map filter field names to output field names
+            key = "job_title" if field_key == "title" else field_key
+            if key in row and f["value"] in row[key].lower():
+                filtered.append(row)
+                break
+    return filtered
+
+
 def read_companies(path: str) -> list[dict]:
     """Read companies CSV (company_name,website). Skips blanks and comments."""
     companies = []
@@ -293,6 +324,7 @@ def main() -> None:
     args = parser.parse_args()
 
     error_log = setup_error_log()
+    filters = read_filters()
     companies = read_companies(args.input)
     existing = load_existing(args.output)
     seen_ids: set[str] = set()
@@ -335,6 +367,7 @@ def main() -> None:
                     print(f"{len(rows)} roles (careers page)")
 
             if rows:
+                rows = apply_filters(rows, filters)
                 merge_rows(existing, rows, seen_ids)
                 total_roles += len(rows)
                 succeeded += 1
@@ -360,8 +393,10 @@ def main() -> None:
 
     write_output(args.output, existing)
 
-    print(f"Done. {total_roles} roles found across {succeeded}/{len(companies)} companies."
-          f" {len(failed_companies)} failed (see errors.log).")
+    write_msg = f"Results written to {args.output}"
+    fail_msg = f" | {len(failed_companies)} failed (see errors.log)" if failed_companies else ""
+    print(f"\nDone! {total_roles} roles found across {succeeded}/{len(companies)} companies. "
+          f"{write_msg}{fail_msg}")
 
 
 if __name__ == "__main__":
