@@ -20,19 +20,18 @@ On a single execution, the app:
 
 ## Input
 
-**File:** `companies.txt` — CSV format with three fields: `company_name`, `website`, and `tier`
+**File:** `companies.txt` — CSV format with two fields: `company_name` and `website`
 
 ```
-company_name,website,tier
-Anthropic,https://anthropic.com,1
-Stripe,https://stripe.com,2
-Notion,https://notion.so,1
-Figma,https://figma.com,2
+company_name,website
+Anthropic,https://anthropic.com
+Stripe,https://stripe.com
+Notion,https://notion.so
+Figma,https://figma.com
 ```
 
-- First row must be the header (`company_name,website,tier`)
+- First row must be the header (`company_name,website`)
 - `website` is the company's main homepage — the app should use it as the base URL when detecting ATS or locating the careers page, rather than guessing from the company name
-- `tier` is an integer (1 = highest priority) used to indicate the candidate's level of interest in the company. Pass through to output CSV as-is. If absent, leave blank.
 - Blank lines and lines starting with `#` should be ignored
 - The file path should be configurable via a CLI argument (default: `companies.txt`)
 
@@ -51,15 +50,11 @@ Figma,https://figma.com,2
 | `job_title` | Title of the open role |
 | `location` | Office location or "Remote" |
 | `remote` | Boolean (`true` / `false`) |
-| `workplace_type` | One of: `remote`, `hybrid`, `onsite`. Source: Lever `workplaceType`, Ashby `workplaceType`. For Greenhouse, derive from `remote` boolean. Blank if unavailable. |
 | `department` | Team or department (if available) |
 | `date_posted` | Date posted in `YYYY-MM-DD` format (if available) |
 | `accepting_applications` | Boolean (`true` / `false`) |
 | `job_url` | Direct URL to the job posting |
 | `last_seen` | Date this row was last fetched/updated, in `YYYY-MM-DD` format |
-| `description` | Plain text job description, HTML stripped. Truncated to 2000 characters. Source: Greenhouse `content`, Lever `descriptionPlain`, Ashby `descriptionHtml`. Blank if unavailable. |
-| `compensation_raw` | Raw compensation text extracted from the job description or dedicated API field. Not parsed — stored as free text for downstream processing. Source: Lever `additionalPlain`, Ashby `compensationTierSummary`, Greenhouse parsed from `content` HTML. Blank if not found. |
-| `tier` | Company priority tier passed through from `companies.txt`. Blank if not provided. |
 
 - Missing or unavailable fields should be left blank (not omitted)
 - Output should be UTF-8 encoded
@@ -70,7 +65,7 @@ Figma,https://figma.com,2
 The output CSV is treated as a persistent record that is updated on each run, not overwritten wholesale.
 
 - **Duplicate detection** is based on `job_id` (ATS-native ID where available; otherwise a stable hash of `company + job_url`)
-- **Existing role re-fetched:** update all fields in the row with the latest data and refresh `last_seen`. This includes `description`, `workplace_type`, and `compensation_raw`.
+- **Existing role re-fetched:** update all fields in the row with the latest data and refresh `last_seen`
 - **New role found:** append a new row
 - **Role no longer returned by the source:** leave the row in the CSV as-is (do not delete); set `accepting_applications` to `false` if it was previously `true`
 
@@ -82,17 +77,8 @@ Claude Code should determine the best approach per company. Recommended priority
 
 1. **Known ATS APIs** — If the company uses a recognized Applicant Tracking System (ATS), use its public API or JSON feed directly:
    - **Greenhouse:** `https://boards-api.greenhouse.io/v1/boards/{company_slug}/jobs`
-     - Job description available in `content` field (HTML encoded). Strip HTML tags before storing in `description`.
-     - Compensation range may appear within `content` HTML — extract if present and store in `compensation_raw`.
    - **Lever:** `https://api.lever.co/v0/postings/{company_slug}?mode=json`
-     - Job description in `descriptionPlain` (preferred) or `description`.
-     - Compensation in `additionalPlain` field — store in `compensation_raw`.
-     - Workplace type in `workplaceType` field.
-   - **Ashby:** use known JSON endpoints where available
-     - Job description in `descriptionHtml` — strip HTML before storing in `description`.
-     - Compensation in `compensationTierSummary` — often null, leave blank if so.
-     - Workplace type in `workplaceType` field.
-   - **Workday, Rippling, etc.:** use known JSON endpoints where available
+   - **Workday, Ashby, Rippling, etc.:** use known JSON endpoints where available
 2. **Careers page scraping** — If no ATS is detected, attempt to find and scrape the company's `/careers` or `/jobs` page
 3. **Fallback** — If neither works, log the company as `failed` and continue
 
@@ -129,7 +115,6 @@ Options:
 
 - **Language:** Python 3.10+
 - **Dependencies:** `requests`, `beautifulsoup4`, `csv` (stdlib)
-- Use Python stdlib `html` module or `beautifulsoup4` to strip HTML tags from job descriptions — no additional dependencies needed
 - Add `lxml` or `playwright` only if needed for JS-rendered pages
 - No database or persistent state required
 - A `requirements.txt` must be included

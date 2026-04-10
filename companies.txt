@@ -1,5 +1,35 @@
 company_name,website
 Anthropic,https://anthropic.com
+AlphaSense,https://alpha-sense.com
+Databricks,https://databricks.com
+OpenAI,https://openai.com
+Perplexity,https://perplexity.ai
+Glean,https://glean.com
+Ramp,https://ramp.com
+Writer,https://writer.com
+The Trade Desk,https://thetradedesk.com
+Spotify,https://spotify.com
+Google,https://google.com
+Meta,https://meta.com
+Microsoft,https://microsoft.com
+Amazon,https://amazon.com
+Salesforce,https://salesforce.com
+Cohere,https://cohere.com
+Harvey,https://harvey.ai
+Mistral AI,https://mistral.ai
+Snowflake,https://snowflake.com
+Mixpanel,https://mixpanel.com
+Braze,https://braze.com
+Attentive,https://attentive.com
+Palantir,https://palantir.com
+Amplitude,https://amplitude.com
 Stripe,https://stripe.com
-Notion,https://notion.so
-Figma,https://figma.com
+Plaid,https://plaid.com
+Robinhood,https://robinhood.com
+Adyen,https://adyen.com
+Visa,https://visa.com
+Block,https://block.xyz
+DoubleVerify,https://doubleverify.com
+Integral Ad Science,https://integralads.com
+Taboola,https://taboola.com
+Rokt,https://rokt.com
