@@ -10,6 +10,7 @@ Usage:
 import argparse
 import csv
 import hashlib
+import html
 import io
 import logging
 import re
@@ -23,9 +24,13 @@ from bs4 import BeautifulSoup
 
 TODAY = date.today().isoformat()
 
+DESCRIPTION_MAX_CHARS = 2000
+WHITESPACE_RE = re.compile(r"\s+")
+
 OUTPUT_FIELDS = [
-    "job_id", "company", "job_title", "location", "remote",
+    "job_id", "company", "job_title", "location", "remote", "workplace_type",
     "department", "date_posted", "accepting_applications", "job_url", "last_seen",
+    "description", "compensation_raw", "tier",
 ]
 
 # ---------------------------------------------------------------------------
@@ -52,19 +57,76 @@ def is_remote(location: str) -> str:
     return "true" if location and "remote" in location.lower() else "false"
 
 
+def strip_html(raw: str) -> str:
+    """Decode HTML entities, strip tags, and collapse whitespace."""
+    if not raw:
+        return ""
+    # Entities may be double-encoded (e.g. Greenhouse `content` uses &lt;p&gt;) —
+    # unescape the input before handing it to the parser so tags become real tags.
+    decoded = html.unescape(raw)
+    text = BeautifulSoup(decoded, "html.parser").get_text(separator=" ")
+    text = html.unescape(text)
+    return WHITESPACE_RE.sub(" ", text).strip()
+
+
+def truncate(text: str, limit: int = DESCRIPTION_MAX_CHARS) -> str:
+    if not text:
+        return ""
+    return text if len(text) <= limit else text[:limit]
+
+
+def normalize_workplace_type(value) -> str:
+    """Normalize ATS workplaceType values to remote / hybrid / onsite. Blank otherwise."""
+    if not value:
+        return ""
+    s = str(value).strip().lower().replace("-", "").replace("_", "").replace(" ", "")
+    if s in {"remote", "fullyremote"}:
+        return "remote"
+    if s == "hybrid":
+        return "hybrid"
+    if s in {"onsite", "inoffice", "inperson"}:
+        return "onsite"
+    return ""
+
+
+def extract_greenhouse_compensation(content_html: str) -> str:
+    """Pull compensation text from a Greenhouse `content` HTML blob, if present."""
+    if not content_html:
+        return ""
+    decoded = html.unescape(content_html)
+    soup = BeautifulSoup(decoded, "html.parser")
+    pay_range = soup.select_one(".pay-range")
+    if pay_range:
+        txt = WHITESPACE_RE.sub(" ", pay_range.get_text(separator=" ")).strip()
+        if txt:
+            return txt
+    pay_block = soup.select_one(".content-pay-transparency")
+    if pay_block:
+        txt = WHITESPACE_RE.sub(" ", pay_block.get_text(separator=" ")).strip()
+        if txt:
+            return truncate(txt, 500)
+    return ""
+
+
 def make_row(company: str, title: str, location: str, url: str,
-             department: str = "", date_posted: str = "", job_id: str = "") -> dict:
+             department: str = "", date_posted: str = "", job_id: str = "",
+             workplace_type: str = "", description: str = "",
+             compensation_raw: str = "") -> dict:
     return {
         "job_id": job_id or stable_job_id(company, url),
         "company": company,
         "job_title": title,
         "location": location or "",
         "remote": is_remote(location),
+        "workplace_type": workplace_type,
         "department": department,
         "date_posted": date_posted,
         "accepting_applications": "true",
         "job_url": url,
         "last_seen": TODAY,
+        "description": truncate(description),
+        "compensation_raw": compensation_raw or "",
+        "tier": "",
     }
 
 
@@ -119,8 +181,10 @@ def detect_ats(website: str, session: requests.Session) -> tuple[str, str]:
 # ---------------------------------------------------------------------------
 
 def fetch_greenhouse(slug: str, company: str, session: requests.Session) -> list[dict]:
+    # Single list call with ?content=true returns the same `content` blob the
+    # per-job detail endpoint does, so we avoid N+1 requests.
     url = f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true"
-    resp = session.get(url, timeout=10)
+    resp = session.get(url, timeout=15)
     if resp.status_code != 200:
         return []
     rows = []
@@ -129,17 +193,27 @@ def fetch_greenhouse(slug: str, company: str, session: requests.Session) -> list
         depts = item.get("departments") or []
         dept = depts[0].get("name", "") if depts else ""
         posted = (item.get("updated_at") or "")[:10]
+        content_html = item.get("content", "") or ""
+        description = strip_html(content_html)
+        compensation = extract_greenhouse_compensation(content_html)
+        # Greenhouse has no explicit workplaceType field. Per the spec, derive
+        # from the remote signal on location; hybrid/onsite can't be inferred.
+        workplace = "remote" if is_remote(loc) == "true" else ""
         rows.append(make_row(
             company=company, title=item.get("title", ""), location=loc,
             url=item.get("absolute_url", ""), department=dept,
             date_posted=posted, job_id=str(item.get("id", "")),
+            workplace_type=workplace, description=description,
+            compensation_raw=compensation,
         ))
     return rows
 
 
 def fetch_lever(slug: str, company: str, session: requests.Session) -> list[dict]:
+    # Lever's list endpoint already returns descriptionPlain, additionalPlain,
+    # and workplaceType per posting — a single call gives us everything.
     url = f"https://api.lever.co/v0/postings/{slug}?mode=json"
-    resp = session.get(url, timeout=10)
+    resp = session.get(url, timeout=15)
     if resp.status_code != 200:
         return []
     data = resp.json()
@@ -151,32 +225,153 @@ def fetch_lever(slug: str, company: str, session: requests.Session) -> list[dict
         posted = ""
         ts = item.get("createdAt")
         if ts:
-            posted = date.fromtimestamp(ts / 1000).isoformat()
+            try:
+                posted = date.fromtimestamp(ts / 1000).isoformat()
+            except (ValueError, OSError, OverflowError):
+                posted = ""
+        description = item.get("descriptionPlain") or strip_html(item.get("description", ""))
+        compensation = (item.get("additionalPlain") or "").strip()
+        workplace = normalize_workplace_type(item.get("workplaceType"))
         rows.append(make_row(
             company=company, title=item.get("text", ""),
             location=cats.get("location", ""),
             url=item.get("hostedUrl", ""),
             department=cats.get("department", ""),
             date_posted=posted, job_id=item.get("id", ""),
+            workplace_type=workplace, description=description,
+            compensation_raw=compensation,
         ))
     return rows
+
+
+ASHBY_GRAPHQL_URL = "https://jobs.ashbyhq.com/api/non-user-graphql"
+
+ASHBY_LIST_QUERY = """
+query ApiJobBoardWithTeams($organizationHostedJobsPageName: String!) {
+  jobBoard: jobBoardWithTeams(organizationHostedJobsPageName: $organizationHostedJobsPageName) {
+    jobPostings {
+      id
+      title
+      teamId
+      locationName
+      employmentType
+      compensationTierSummary
+    }
+  }
+}
+"""
+
+ASHBY_DETAIL_QUERY = """
+query ApiJobPosting($organizationHostedJobsPageName: String!, $jobPostingId: String!) {
+  jobPosting(
+    organizationHostedJobsPageName: $organizationHostedJobsPageName
+    jobPostingId: $jobPostingId
+  ) {
+    id
+    title
+    departmentName
+    locationName
+    workplaceType
+    employmentType
+    descriptionHtml
+    publishedDate
+    compensationTierSummary
+  }
+}
+"""
+
+
+def _ashby_graphql(session: requests.Session, op: str, query: str, variables: dict) -> dict:
+    payload = {"operationName": op, "variables": variables, "query": query}
+    try:
+        resp = session.post(
+            f"{ASHBY_GRAPHQL_URL}?op={op}",
+            json=payload,
+            headers={"Content-Type": "application/json", "Accept": "application/json"},
+            timeout=15,
+        )
+    except requests.RequestException:
+        return {}
+    if resp.status_code != 200:
+        return {}
+    try:
+        return resp.json() or {}
+    except ValueError:
+        return {}
 
 
 def fetch_ashby(slug: str, company: str, session: requests.Session) -> list[dict]:
-    url = f"https://api.ashbyhq.com/posting-api/job-board/{slug}"
-    resp = session.get(url, timeout=10)
-    if resp.status_code != 200:
+    # Ashby's public posting-api list endpoint doesn't return descriptions or
+    # workplaceType, so we use the non-user GraphQL endpoint the hosted job
+    # board uses. The list query gives us title/location/comp, enough to
+    # filter on. Description + workplaceType come from a per-job detail
+    # query, which we intentionally DEFER until after row filtering (see
+    # enrich_ashby_row) — otherwise boards with hundreds of jobs get
+    # rate-limited fetching detail for postings we'll throw away.
+    list_data = _ashby_graphql(
+        session, "ApiJobBoardWithTeams", ASHBY_LIST_QUERY,
+        {"organizationHostedJobsPageName": slug},
+    )
+    postings = (
+        ((list_data.get("data") or {}).get("jobBoard") or {}).get("jobPostings") or []
+    )
+    if not postings:
         return []
+
     rows = []
-    for item in resp.json().get("jobs", []):
-        rows.append(make_row(
-            company=company, title=item.get("title", ""),
-            location=item.get("location", ""),
-            url=item.get("jobUrl", ""),
-            department=item.get("department", ""),
-            job_id=item.get("id", ""),
-        ))
+    for posting in postings:
+        job_id = posting.get("id", "")
+        if not job_id:
+            continue
+        compensation = (posting.get("compensationTierSummary") or "").strip()
+        job_url = f"https://jobs.ashbyhq.com/{slug}/{job_id}"
+        row = make_row(
+            company=company, title=posting.get("title", ""),
+            location=posting.get("locationName", "") or "",
+            url=job_url,
+            department="",  # departmentName only available on detail
+            date_posted="", job_id=job_id,
+            workplace_type="", description="",
+            compensation_raw=compensation,
+        )
+        # Marker consumed later to populate description / workplaceType.
+        row["_ashby_enrich"] = slug
+        rows.append(row)
     return rows
+
+
+def enrich_ashby_row(row: dict, session: requests.Session) -> None:
+    """Fetch descriptionHtml + workplaceType + departmentName for a single Ashby row."""
+    slug = row.pop("_ashby_enrich", None)
+    if not slug:
+        return
+    job_id = row.get("job_id", "")
+    if not job_id:
+        return
+    detail_data = _ashby_graphql(
+        session, "ApiJobPosting", ASHBY_DETAIL_QUERY,
+        {"organizationHostedJobsPageName": slug, "jobPostingId": job_id},
+    )
+    detail = ((detail_data.get("data") or {}).get("jobPosting")) or {}
+    if not detail:
+        return
+    description = strip_html(detail.get("descriptionHtml", ""))
+    if description:
+        row["description"] = truncate(description)
+    workplace = normalize_workplace_type(detail.get("workplaceType"))
+    if workplace:
+        row["workplace_type"] = workplace
+    dept = detail.get("departmentName") or ""
+    if dept and not row.get("department"):
+        row["department"] = dept
+    posted = (detail.get("publishedDate") or "")[:10]
+    if posted and not row.get("date_posted"):
+        row["date_posted"] = posted
+    # Detail may surface a compensationTierSummary that was missing from the list.
+    if not row.get("compensation_raw"):
+        comp = (detail.get("compensationTierSummary") or "").strip()
+        if comp:
+            row["compensation_raw"] = comp
 
 
 ATS_FETCHERS = {
@@ -269,15 +464,19 @@ def apply_filters(rows: list[dict], filters: list[dict]) -> list[dict]:
 
 
 def read_companies(path: str) -> list[dict]:
-    """Read companies CSV (company_name,website). Skips blanks and comments."""
+    """Read companies CSV (company_name,website,tier). Skips blanks and comments.
+
+    The `tier` column is optional — if absent or blank, tier is left empty.
+    """
     companies = []
     with open(path, encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            name = row.get("company_name", "").strip()
-            site = row.get("website", "").strip()
+            name = (row.get("company_name") or "").strip()
+            site = (row.get("website") or "").strip()
+            tier = (row.get("tier") or "").strip()
             if name and not name.startswith("#"):
-                companies.append({"company_name": name, "website": site})
+                companies.append({"company_name": name, "website": site, "tier": tier})
     return companies
 
 
@@ -338,6 +537,7 @@ def main() -> None:
     for i, entry in enumerate(companies):
         name = entry["company_name"]
         website = entry["website"]
+        tier = entry.get("tier", "")
 
         if args.verbose:
             print(f"[{i+1}/{len(companies)}] {name} ...", end=" ", flush=True)
@@ -367,7 +567,14 @@ def main() -> None:
                     print(f"{len(rows)} roles (careers page)")
 
             if rows:
+                for row in rows:
+                    row["tier"] = tier
                 rows = apply_filters(rows, filters)
+                # Deferred Ashby enrichment: only detail-fetch the rows that
+                # survived filtering, to avoid rate-limiting on large boards.
+                for row in rows:
+                    if "_ashby_enrich" in row:
+                        enrich_ashby_row(row, session)
                 merge_rows(existing, rows, seen_ids)
                 total_roles += len(rows)
                 succeeded += 1
