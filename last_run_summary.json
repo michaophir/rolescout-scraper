@@ -1,0 +1,27 @@
+{
+  "run_date": "2026-04-11",
+  "companies_total": 22,
+  "companies_succeeded": 21,
+  "companies_failed": [
+    "Meta"
+  ],
+  "filters_applied": [
+    "title:product manager",
+    "title:director of product",
+    "title:principal product manager"
+  ],
+  "roles_fetched_post_filter": 134,
+  "field_population": {
+    "description": 134,
+    "workplace_type": 46,
+    "compensation_raw": 76,
+    "date_posted": 134,
+    "department": 134,
+    "tier": 134
+  },
+  "per_ats": {
+    "greenhouse": 92,
+    "ashby": 26,
+    "lever": 16
+  }
+}

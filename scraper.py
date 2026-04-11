@@ -12,6 +12,7 @@ import csv
 import hashlib
 import html
 import io
+import json
 import logging
 import re
 import time
@@ -111,7 +112,7 @@ def extract_greenhouse_compensation(content_html: str) -> str:
 def make_row(company: str, title: str, location: str, url: str,
              department: str = "", date_posted: str = "", job_id: str = "",
              workplace_type: str = "", description: str = "",
-             compensation_raw: str = "") -> dict:
+             compensation_raw: str = "", source: str = "") -> dict:
     return {
         "job_id": job_id or stable_job_id(company, url),
         "company": company,
@@ -127,6 +128,9 @@ def make_row(company: str, title: str, location: str, url: str,
         "description": truncate(description),
         "compensation_raw": compensation_raw or "",
         "tier": "",
+        # Internal (not written to CSV): which fetcher produced this row.
+        # Consumed by the run-summary writer, then discarded.
+        "_source": source,
     }
 
 
@@ -204,7 +208,7 @@ def fetch_greenhouse(slug: str, company: str, session: requests.Session) -> list
             url=item.get("absolute_url", ""), department=dept,
             date_posted=posted, job_id=str(item.get("id", "")),
             workplace_type=workplace, description=description,
-            compensation_raw=compensation,
+            compensation_raw=compensation, source="greenhouse",
         ))
     return rows
 
@@ -239,7 +243,7 @@ def fetch_lever(slug: str, company: str, session: requests.Session) -> list[dict
             department=cats.get("department", ""),
             date_posted=posted, job_id=item.get("id", ""),
             workplace_type=workplace, description=description,
-            compensation_raw=compensation,
+            compensation_raw=compensation, source="lever",
         ))
     return rows
 
@@ -332,7 +336,7 @@ def fetch_ashby(slug: str, company: str, session: requests.Session) -> list[dict
             department="",  # departmentName only available on detail
             date_posted="", job_id=job_id,
             workplace_type="", description="",
-            compensation_raw=compensation,
+            compensation_raw=compensation, source="ashby",
         )
         # Marker consumed later to populate description / workplaceType.
         row["_ashby_enrich"] = slug
@@ -420,7 +424,7 @@ def scrape_careers_page(website: str, company: str, session: requests.Session) -
                 if any(kw in href.lower() for kw in ["/job", "/position", "/role", "/opening", "greenhouse", "lever", "ashby", "workday"]):
                     if not href.startswith("http"):
                         href = base + "/" + href.lstrip("/")
-                    rows.append(make_row(company=company, title=text, location="", url=href))
+                    rows.append(make_row(company=company, title=text, location="", url=href, source="careers_page"))
             if rows:
                 return rows
         except requests.RequestException:
@@ -432,7 +436,7 @@ def scrape_careers_page(website: str, company: str, session: requests.Session) -
 # Input / Output
 # ---------------------------------------------------------------------------
 
-def read_filters(path: str = "filters.csv") -> list[dict]:
+def read_filters(path: str = "role_filters.csv") -> list[dict]:
     """Read filters CSV (field,value). Returns empty list if file missing or empty."""
     if not Path(path).exists():
         return []
@@ -510,13 +514,59 @@ def merge_rows(existing: dict[str, dict], new_rows: list[dict], seen_ids: set) -
     return existing
 
 
+def write_run_summary(
+    path: str,
+    companies_total: int,
+    companies_succeeded: int,
+    failed_companies: list[str],
+    filters: list[dict],
+    run_rows: list[dict],
+) -> None:
+    """Write last_run_summary.json with per-run stats.
+
+    `run_rows` is the list of rows fetched this run (post-filter). We use
+    the in-memory `_source` tag on each row for the per-ATS breakdown — it's
+    not persisted to the CSV.
+    """
+    total = len(run_rows)
+
+    def populated(field: str) -> int:
+        return sum(1 for r in run_rows if (r.get(field) or "").strip())
+
+    per_ats: dict[str, int] = {}
+    for r in run_rows:
+        key = r.get("_source") or "unknown"
+        per_ats[key] = per_ats.get(key, 0) + 1
+
+    summary = {
+        "run_date": TODAY,
+        "companies_total": companies_total,
+        "companies_succeeded": companies_succeeded,
+        "companies_failed": failed_companies,
+        "filters_applied": [f"{f['field']}:{f['value']}" for f in filters],
+        "roles_fetched_post_filter": total,
+        "field_population": {
+            "description": populated("description"),
+            "workplace_type": populated("workplace_type"),
+            "compensation_raw": populated("compensation_raw"),
+            "date_posted": populated("date_posted"),
+            "department": populated("department"),
+            "tier": populated("tier"),
+        },
+        "per_ats": per_ats,
+    }
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(summary, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Fetch open job listings from companies.")
-    parser.add_argument("--input", default="companies.txt", help="Path to companies CSV (default: companies.txt)")
+    parser.add_argument("--input", default="target_company_list.csv", help="Path to companies CSV (default: target_company_list.csv)")
     parser.add_argument("--output", default="open_roles.csv", help="Path to output CSV (default: open_roles.csv)")
     parser.add_argument("--delay", type=float, default=1.0, help="Seconds between requests (default: 1.0)")
     parser.add_argument("--verbose", action="store_true", help="Print progress to stdout")
@@ -532,7 +582,8 @@ def main() -> None:
 
     total_roles = 0
     succeeded = 0
-    failed_companies = []
+    failed_companies: list[str] = []
+    run_rows: list[dict] = []
 
     for i, entry in enumerate(companies):
         name = entry["company_name"]
@@ -576,6 +627,7 @@ def main() -> None:
                     if "_ashby_enrich" in row:
                         enrich_ashby_row(row, session)
                 merge_rows(existing, rows, seen_ids)
+                run_rows.extend(rows)
                 total_roles += len(rows)
                 succeeded += 1
             else:
@@ -599,11 +651,20 @@ def main() -> None:
             row["accepting_applications"] = "false"
 
     write_output(args.output, existing)
+    write_run_summary(
+        "last_run_summary.json",
+        companies_total=len(companies),
+        companies_succeeded=succeeded,
+        failed_companies=failed_companies,
+        filters=filters,
+        run_rows=run_rows,
+    )
 
     write_msg = f"Results written to {args.output}"
     fail_msg = f" | {len(failed_companies)} failed (see errors.log)" if failed_companies else ""
     print(f"\nDone! {total_roles} roles found across {succeeded}/{len(companies)} companies. "
           f"{write_msg}{fail_msg}")
+    print("Run summary written to last_run_summary.json")
 
 
 if __name__ == "__main__":
