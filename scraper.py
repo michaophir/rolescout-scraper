@@ -437,7 +437,12 @@ def scrape_careers_page(website: str, company: str, session: requests.Session) -
 # ---------------------------------------------------------------------------
 
 def read_filters(path: str = "role_filters.csv") -> list[dict]:
-    """Read filters CSV (field,value). Returns empty list if file missing or empty."""
+    """Read filters CSV (field,value). Returns empty list if file missing or empty.
+
+    Supported field types:
+      - ``title``   — case-insensitive substring match against job_title.
+      - ``pattern`` — case-insensitive regex match against job_title (uses ``re.search``).
+    """
     if not Path(path).exists():
         return []
     filters = []
@@ -445,23 +450,51 @@ def read_filters(path: str = "role_filters.csv") -> list[dict]:
         reader = csv.DictReader(f)
         for row in reader:
             field = row.get("field", "").strip().lower()
-            value = row.get("value", "").strip().lower()
-            if field and value:
-                filters.append({"field": field, "value": value})
+            value = row.get("value", "").strip()
+            if not field or not value:
+                continue
+            entry: dict = {"field": field, "value": value}
+            if field == "pattern":
+                try:
+                    entry["_compiled"] = re.compile(value, re.IGNORECASE)
+                except re.error as e:
+                    logging.getLogger("scraper_errors").error(
+                        f"Invalid regex in filter: {value!r} — {e}"
+                    )
+                    continue
+            else:
+                # Substring filters are case-insensitive — lower the value once.
+                entry["value"] = value.lower()
+            filters.append(entry)
     return filters
 
 
 def apply_filters(rows: list[dict], filters: list[dict]) -> list[dict]:
-    """Keep only rows where at least one filter matches (case-insensitive substring)."""
+    """Keep only rows where at least one filter matches.
+
+    Each retained row gets a ``_matched_filter`` tag (``field:value``) so the
+    run summary can report per-filter coverage.
+    """
     if not filters:
         return rows
     filtered = []
     for row in rows:
+        title = (row.get("job_title") or "").lower()
         for f in filters:
-            field_key = f["field"]
-            # Map filter field names to output field names
-            key = "job_title" if field_key == "title" else field_key
-            if key in row and f["value"] in row[key].lower():
+            matched = False
+            if f["field"] == "title":
+                matched = f["value"] in title
+            elif f["field"] == "pattern":
+                compiled = f.get("_compiled")
+                if compiled and compiled.search(row.get("job_title") or ""):
+                    matched = True
+            else:
+                # Generic fallback for future field types.
+                key = "job_title" if f["field"] == "title" else f["field"]
+                if key in row and f["value"] in row[key].lower():
+                    matched = True
+            if matched:
+                row["_matched_filter"] = f"{f['field']}:{f['value']}"
                 filtered.append(row)
                 break
     return filtered
@@ -521,6 +554,7 @@ def write_run_summary(
     failed_companies: list[str],
     filters: list[dict],
     run_rows: list[dict],
+    company_stats: list[dict],
 ) -> None:
     """Write last_run_summary.json with per-run stats.
 
@@ -538,12 +572,20 @@ def write_run_summary(
         key = r.get("_source") or "unknown"
         per_ats[key] = per_ats.get(key, 0) + 1
 
+    # Per-filter match counts, grouped by filter type.
+    filter_coverage: list[dict] = []
+    for f in filters:
+        label = f"{f['field']}:{f['value']}"
+        count = sum(1 for r in run_rows if r.get("_matched_filter") == label)
+        filter_coverage.append({"type": f["field"], "value": f["value"], "matches": count})
+
     summary = {
         "run_date": TODAY,
         "companies_total": companies_total,
         "companies_succeeded": companies_succeeded,
         "companies_failed": failed_companies,
         "filters_applied": [f"{f['field']}:{f['value']}" for f in filters],
+        "filter_coverage": filter_coverage,
         "roles_fetched_post_filter": total,
         "field_population": {
             "description": populated("description"),
@@ -554,6 +596,7 @@ def write_run_summary(
             "tier": populated("tier"),
         },
         "per_ats": per_ats,
+        "per_company": company_stats,
     }
     with open(path, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2, ensure_ascii=False)
@@ -584,11 +627,13 @@ def main() -> None:
     succeeded = 0
     failed_companies: list[str] = []
     run_rows: list[dict] = []
+    company_stats: list[dict] = []
 
     for i, entry in enumerate(companies):
         name = entry["company_name"]
         website = entry["website"]
         tier = entry.get("tier", "")
+        co_stat: dict = {"company": name, "tier": tier, "ats": "", "roles_total": 0, "roles_post_filter": 0}
 
         if args.verbose:
             print(f"[{i+1}/{len(companies)}] {name} ...", end=" ", flush=True)
@@ -618,9 +663,12 @@ def main() -> None:
                     print(f"{len(rows)} roles (careers page)")
 
             if rows:
+                co_stat["roles_total"] = len(rows)
+                co_stat["ats"] = rows[0].get("_source", "") if rows else ""
                 for row in rows:
                     row["tier"] = tier
                 rows = apply_filters(rows, filters)
+                co_stat["roles_post_filter"] = len(rows)
                 # Deferred Ashby enrichment: only detail-fetch the rows that
                 # survived filtering, to avoid rate-limiting on large boards.
                 for row in rows:
@@ -634,13 +682,17 @@ def main() -> None:
                 if args.verbose:
                     print("no roles found")
                 failed_companies.append(name)
+                co_stat["error"] = "No roles found via ATS or careers page"
                 error_log.error(f"{name} | No roles found via ATS or careers page")
 
         except Exception as e:
             if args.verbose:
                 print(f"ERROR: {e}")
             failed_companies.append(name)
+            co_stat["error"] = str(e)
             error_log.error(f"{name} | {e}")
+
+        company_stats.append(co_stat)
 
         if i < len(companies) - 1:
             time.sleep(args.delay)
@@ -658,6 +710,7 @@ def main() -> None:
         failed_companies=failed_companies,
         filters=filters,
         run_rows=run_rows,
+        company_stats=company_stats,
     )
 
     write_msg = f"Results written to {args.output}"

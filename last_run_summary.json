@@ -1,27 +1,309 @@
 {
-  "run_date": "2026-04-11",
+  "run_date": "2026-04-12",
   "companies_total": 22,
   "companies_succeeded": 21,
   "companies_failed": [
     "Meta"
   ],
   "filters_applied": [
-    "title:product manager",
+    "title:chief product officer",
+    "title:cpo",
+    "title:vice president of product",
+    "title:vp of product",
+    "title:senior director of product",
+    "title:director of product management",
     "title:director of product",
-    "title:principal product manager"
+    "title:head of product",
+    "title:founding product",
+    "title:group product manager",
+    "title:staff product manager",
+    "title:principal product manager",
+    "title:principal product",
+    "title:forward deployed product",
+    "title:senior product manager",
+    "title:product lead",
+    "title:product manager",
+    "title:product operations",
+    "title:technical product manager",
+    "title:associate product manager",
+    "title:apm"
   ],
-  "roles_fetched_post_filter": 134,
+  "filter_coverage": [
+    {
+      "type": "title",
+      "value": "chief product officer",
+      "matches": 0
+    },
+    {
+      "type": "title",
+      "value": "cpo",
+      "matches": 1
+    },
+    {
+      "type": "title",
+      "value": "vice president of product",
+      "matches": 0
+    },
+    {
+      "type": "title",
+      "value": "vp of product",
+      "matches": 0
+    },
+    {
+      "type": "title",
+      "value": "senior director of product",
+      "matches": 0
+    },
+    {
+      "type": "title",
+      "value": "director of product management",
+      "matches": 0
+    },
+    {
+      "type": "title",
+      "value": "director of product",
+      "matches": 0
+    },
+    {
+      "type": "title",
+      "value": "head of product",
+      "matches": 1
+    },
+    {
+      "type": "title",
+      "value": "founding product",
+      "matches": 1
+    },
+    {
+      "type": "title",
+      "value": "group product manager",
+      "matches": 4
+    },
+    {
+      "type": "title",
+      "value": "staff product manager",
+      "matches": 25
+    },
+    {
+      "type": "title",
+      "value": "principal product manager",
+      "matches": 6
+    },
+    {
+      "type": "title",
+      "value": "principal product",
+      "matches": 0
+    },
+    {
+      "type": "title",
+      "value": "forward deployed product",
+      "matches": 0
+    },
+    {
+      "type": "title",
+      "value": "senior product manager",
+      "matches": 18
+    },
+    {
+      "type": "title",
+      "value": "product lead",
+      "matches": 5
+    },
+    {
+      "type": "title",
+      "value": "product manager",
+      "matches": 80
+    },
+    {
+      "type": "title",
+      "value": "product operations",
+      "matches": 9
+    },
+    {
+      "type": "title",
+      "value": "technical product manager",
+      "matches": 0
+    },
+    {
+      "type": "title",
+      "value": "associate product manager",
+      "matches": 0
+    },
+    {
+      "type": "title",
+      "value": "apm",
+      "matches": 0
+    }
+  ],
+  "roles_fetched_post_filter": 150,
   "field_population": {
-    "description": 134,
-    "workplace_type": 46,
-    "compensation_raw": 76,
-    "date_posted": 134,
-    "department": 134,
-    "tier": 134
+    "description": 150,
+    "workplace_type": 54,
+    "compensation_raw": 89,
+    "date_posted": 150,
+    "department": 150,
+    "tier": 150
   },
   "per_ats": {
-    "greenhouse": 92,
-    "ashby": 26,
-    "lever": 16
-  }
+    "greenhouse": 100,
+    "ashby": 30,
+    "lever": 20
+  },
+  "per_company": [
+    {
+      "company": "Anthropic",
+      "tier": "1",
+      "ats": "greenhouse",
+      "roles_total": 428,
+      "roles_post_filter": 9
+    },
+    {
+      "company": "AlphaSense",
+      "tier": "2",
+      "ats": "greenhouse",
+      "roles_total": 186,
+      "roles_post_filter": 7
+    },
+    {
+      "company": "Databricks",
+      "tier": "1",
+      "ats": "greenhouse",
+      "roles_total": 853,
+      "roles_post_filter": 32
+    },
+    {
+      "company": "OpenAI",
+      "tier": "1",
+      "ats": "ashby",
+      "roles_total": 643,
+      "roles_post_filter": 10
+    },
+    {
+      "company": "Perplexity",
+      "tier": "2",
+      "ats": "ashby",
+      "roles_total": 78,
+      "roles_post_filter": 0
+    },
+    {
+      "company": "Ramp",
+      "tier": "1",
+      "ats": "ashby",
+      "roles_total": 130,
+      "roles_post_filter": 5
+    },
+    {
+      "company": "Writer",
+      "tier": "3",
+      "ats": "ashby",
+      "roles_total": 46,
+      "roles_post_filter": 0
+    },
+    {
+      "company": "The Trade Desk",
+      "tier": "2",
+      "ats": "greenhouse",
+      "roles_total": 152,
+      "roles_post_filter": 6
+    },
+    {
+      "company": "Spotify",
+      "tier": "2",
+      "ats": "lever",
+      "roles_total": 179,
+      "roles_post_filter": 11
+    },
+    {
+      "company": "Google",
+      "tier": "3",
+      "ats": "careers_page",
+      "roles_total": 2,
+      "roles_post_filter": 0
+    },
+    {
+      "company": "Meta",
+      "tier": "3",
+      "ats": "",
+      "roles_total": 0,
+      "roles_post_filter": 0,
+      "error": "No roles found via ATS or careers page"
+    },
+    {
+      "company": "Cohere",
+      "tier": "2",
+      "ats": "ashby",
+      "roles_total": 120,
+      "roles_post_filter": 6
+    },
+    {
+      "company": "Harvey",
+      "tier": "1",
+      "ats": "ashby",
+      "roles_total": 229,
+      "roles_post_filter": 9
+    },
+    {
+      "company": "Mistral AI",
+      "tier": "2",
+      "ats": "careers_page",
+      "roles_total": 9,
+      "roles_post_filter": 0
+    },
+    {
+      "company": "Braze",
+      "tier": "3",
+      "ats": "greenhouse",
+      "roles_total": 184,
+      "roles_post_filter": 0
+    },
+    {
+      "company": "Attentive",
+      "tier": "3",
+      "ats": "greenhouse",
+      "roles_total": 62,
+      "roles_post_filter": 8
+    },
+    {
+      "company": "Palantir",
+      "tier": "1",
+      "ats": "lever",
+      "roles_total": 245,
+      "roles_post_filter": 0
+    },
+    {
+      "company": "Stripe",
+      "tier": "1",
+      "ats": "greenhouse",
+      "roles_total": 485,
+      "roles_post_filter": 22
+    },
+    {
+      "company": "Plaid",
+      "tier": "2",
+      "ats": "lever",
+      "roles_total": 95,
+      "roles_post_filter": 9
+    },
+    {
+      "company": "Robinhood",
+      "tier": "3",
+      "ats": "greenhouse",
+      "roles_total": 143,
+      "roles_post_filter": 5
+    },
+    {
+      "company": "Adyen",
+      "tier": "3",
+      "ats": "greenhouse",
+      "roles_total": 287,
+      "roles_post_filter": 11
+    },
+    {
+      "company": "Block",
+      "tier": "2",
+      "ats": "greenhouse",
+      "roles_total": 88,
+      "roles_post_filter": 0
+    }
+  ]
 }
