@@ -1,9 +1,10 @@
 {
-  "run_date": "2026-04-12",
+  "run_date": "2026-04-13",
   "companies_total": 22,
-  "companies_succeeded": 21,
+  "companies_succeeded": 20,
   "companies_failed": [
-    "Meta"
+    "Meta",
+    "Palantir"
   ],
   "filters_applied": [
     "title:chief product officer",
@@ -82,7 +83,7 @@
     {
       "type": "title",
       "value": "staff product manager",
-      "matches": 25
+      "matches": 26
     },
     {
       "type": "title",
@@ -102,7 +103,7 @@
     {
       "type": "title",
       "value": "senior product manager",
-      "matches": 18
+      "matches": 17
     },
     {
       "type": "title",
@@ -138,51 +139,51 @@
   "roles_fetched_post_filter": 150,
   "field_population": {
     "description": 150,
-    "workplace_type": 54,
-    "compensation_raw": 89,
+    "workplace_type": 44,
+    "compensation_raw": 80,
     "date_posted": 150,
     "department": 150,
     "tier": 150
   },
   "per_ats": {
-    "greenhouse": 100,
-    "ashby": 30,
-    "lever": 20
+    "greenhouse": 101,
+    "ashby": 39,
+    "lever": 10
   },
   "per_company": [
     {
       "company": "Anthropic",
       "tier": "1",
       "ats": "greenhouse",
-      "roles_total": 428,
+      "roles_total": 427,
       "roles_post_filter": 9
     },
     {
       "company": "AlphaSense",
       "tier": "2",
       "ats": "greenhouse",
-      "roles_total": 186,
+      "roles_total": 184,
       "roles_post_filter": 7
     },
     {
       "company": "Databricks",
       "tier": "1",
       "ats": "greenhouse",
-      "roles_total": 853,
+      "roles_total": 855,
       "roles_post_filter": 32
     },
     {
       "company": "OpenAI",
       "tier": "1",
       "ats": "ashby",
-      "roles_total": 643,
+      "roles_total": 640,
       "roles_post_filter": 10
     },
     {
       "company": "Perplexity",
       "tier": "2",
       "ats": "ashby",
-      "roles_total": 78,
+      "roles_total": 77,
       "roles_post_filter": 0
     },
     {
@@ -196,7 +197,7 @@
       "company": "Writer",
       "tier": "3",
       "ats": "ashby",
-      "roles_total": 46,
+      "roles_total": 47,
       "roles_post_filter": 0
     },
     {
@@ -210,8 +211,8 @@
       "company": "Spotify",
       "tier": "2",
       "ats": "lever",
-      "roles_total": 179,
-      "roles_post_filter": 11
+      "roles_total": 176,
+      "roles_post_filter": 10
     },
     {
       "company": "Google",
@@ -232,14 +233,14 @@
       "company": "Cohere",
       "tier": "2",
       "ats": "ashby",
-      "roles_total": 120,
+      "roles_total": 119,
       "roles_post_filter": 6
     },
     {
       "company": "Harvey",
       "tier": "1",
       "ats": "ashby",
-      "roles_total": 229,
+      "roles_total": 231,
       "roles_post_filter": 9
     },
     {
@@ -253,7 +254,7 @@
       "company": "Braze",
       "tier": "3",
       "ats": "greenhouse",
-      "roles_total": 184,
+      "roles_total": 179,
       "roles_post_filter": 0
     },
     {
@@ -266,43 +267,44 @@
     {
       "company": "Palantir",
       "tier": "1",
-      "ats": "lever",
-      "roles_total": 245,
-      "roles_post_filter": 0
+      "ats": "",
+      "roles_total": 0,
+      "roles_post_filter": 0,
+      "error": "No roles found via ATS or careers page"
     },
     {
       "company": "Stripe",
       "tier": "1",
       "ats": "greenhouse",
-      "roles_total": 485,
+      "roles_total": 486,
       "roles_post_filter": 22
     },
     {
       "company": "Plaid",
       "tier": "2",
-      "ats": "lever",
-      "roles_total": 95,
+      "ats": "ashby",
+      "roles_total": 99,
       "roles_post_filter": 9
     },
     {
       "company": "Robinhood",
       "tier": "3",
       "ats": "greenhouse",
-      "roles_total": 143,
-      "roles_post_filter": 5
+      "roles_total": 144,
+      "roles_post_filter": 6
     },
     {
       "company": "Adyen",
       "tier": "3",
       "ats": "greenhouse",
-      "roles_total": 287,
+      "roles_total": 289,
       "roles_post_filter": 11
     },
     {
       "company": "Block",
       "tier": "2",
       "ats": "greenhouse",
-      "roles_total": 88,
+      "roles_total": 95,
       "roles_post_filter": 0
     }
   ]
