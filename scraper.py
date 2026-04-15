@@ -31,7 +31,7 @@ WHITESPACE_RE = re.compile(r"\s+")
 OUTPUT_FIELDS = [
     "job_id", "company", "job_title", "location", "remote", "workplace_type",
     "department", "date_posted", "accepting_applications", "job_url", "last_seen",
-    "description", "compensation_raw", "tier",
+    "description", "compensation_raw", "tier", "match_score",
 ]
 
 # ---------------------------------------------------------------------------
@@ -469,6 +469,56 @@ def read_filters(path: str = "role_filters.csv") -> list[dict]:
     return filters
 
 
+def calculate_match_score(job_title: str, description: str, filters: list[dict]):
+    """Score a role 0–100 based on filter hits across title/pattern/seniority/domain/skill.
+
+    Returns an int in [0, 100] when the role can be scored, or "" if the
+    description is blank (blank descriptions are flagged as unscored rather
+    than as a legitimate 0).
+
+    Weights:
+      - title   : +35 if any ``title`` substring or any ``pattern`` regex matches the job_title
+      - seniority: +25 if any ``seniority`` value is a substring of the job_title
+      - domain  : +5 per ``domain`` match in description, capped at +25
+      - skill   : +1 per ``skill`` match in description, capped at +15
+    """
+    if not (description or "").strip():
+        return ""
+
+    title_lower = (job_title or "").lower()
+    desc_lower = description.lower()
+
+    def of_type(t: str) -> list[dict]:
+        return [f for f in filters if f["field"] == t]
+
+    score = 0
+
+    # Title: substring OR pattern regex
+    title_hit = any(f["value"] in title_lower for f in of_type("title"))
+    if not title_hit:
+        for f in of_type("pattern"):
+            compiled = f.get("_compiled")
+            if compiled and compiled.search(job_title or ""):
+                title_hit = True
+                break
+    if title_hit:
+        score += 35
+
+    # Seniority: substring on title
+    if any(f["value"] in title_lower for f in of_type("seniority")):
+        score += 25
+
+    # Domain: +5 per match in description, max 25
+    domain_hits = sum(1 for f in of_type("domain") if f["value"] in desc_lower)
+    score += min(domain_hits * 5, 25)
+
+    # Skill: +1 per match in description, max 15
+    skill_hits = sum(1 for f in of_type("skill") if f["value"] in desc_lower)
+    score += min(skill_hits, 15)
+
+    return min(score, 100)
+
+
 def apply_filters(rows: list[dict], filters: list[dict]) -> list[dict]:
     """Keep only rows where at least one filter matches.
 
@@ -572,12 +622,28 @@ def write_run_summary(
         key = r.get("_source") or "unknown"
         per_ats[key] = per_ats.get(key, 0) + 1
 
-    # Per-filter match counts, grouped by filter type.
+    # Per-filter match counts. Only title/pattern rows admit roles; seniority,
+    # domain, and skill rows are scoring inputs only, so they're excluded here.
     filter_coverage: list[dict] = []
     for f in filters:
+        if f["field"] not in {"title", "pattern"}:
+            continue
         label = f"{f['field']}:{f['value']}"
         count = sum(1 for r in run_rows if r.get("_matched_filter") == label)
         filter_coverage.append({"type": f["field"], "value": f["value"], "matches": count})
+
+    # Match score distribution across this run's rows.
+    scored_vals = [r["match_score"] for r in run_rows
+                   if isinstance(r.get("match_score"), int)]
+    unscored = sum(1 for r in run_rows if r.get("match_score") == "")
+    avg_score = round(sum(scored_vals) / len(scored_vals)) if scored_vals else 0
+    high_matches = sum(1 for v in scored_vals if v >= 70)
+    match_score_stats = {
+        "scored": len(scored_vals),
+        "unscored": unscored,
+        "avg_score": avg_score,
+        "high_matches": high_matches,
+    }
 
     summary = {
         "run_date": TODAY,
@@ -596,6 +662,7 @@ def write_run_summary(
             "tier": populated("tier"),
         },
         "per_ats": per_ats,
+        "match_score_stats": match_score_stats,
         "per_company": company_stats,
     }
     with open(path, "w", encoding="utf-8") as f:
@@ -674,6 +741,13 @@ def main() -> None:
                 for row in rows:
                     if "_ashby_enrich" in row:
                         enrich_ashby_row(row, session)
+                # Scoring must run AFTER enrichment so Ashby descriptions are populated.
+                for row in rows:
+                    row["match_score"] = calculate_match_score(
+                        row.get("job_title", ""),
+                        row.get("description", ""),
+                        filters,
+                    )
                 merge_rows(existing, rows, seen_ids)
                 run_rows.extend(rows)
                 total_roles += len(rows)

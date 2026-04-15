@@ -1,10 +1,9 @@
 {
-  "run_date": "2026-04-13",
+  "run_date": "2026-04-15",
   "companies_total": 22,
-  "companies_succeeded": 20,
+  "companies_succeeded": 21,
   "companies_failed": [
-    "Meta",
-    "Palantir"
+    "Meta"
   ],
   "filters_applied": [
     "title:chief product officer",
@@ -27,7 +26,33 @@
     "title:product operations",
     "title:technical product manager",
     "title:associate product manager",
-    "title:apm"
+    "title:apm",
+    "seniority:principal",
+    "seniority:director",
+    "seniority:vp",
+    "seniority:head",
+    "seniority:staff",
+    "seniority:senior",
+    "seniority:founding",
+    "domain:fintech",
+    "domain:audio",
+    "domain:media",
+    "domain:adtech",
+    "domain:advertising",
+    "domain:ai",
+    "domain:machine learning",
+    "domain:data",
+    "skill:roadmapping",
+    "skill:data products",
+    "skill:cross-functional",
+    "skill:api",
+    "skill:platform",
+    "skill:b2b",
+    "skill:enterprise",
+    "skill:growth",
+    "skill:0 to 1",
+    "skill:sql",
+    "skill:figma"
   ],
   "filter_coverage": [
     {
@@ -83,7 +108,7 @@
     {
       "type": "title",
       "value": "staff product manager",
-      "matches": 26
+      "matches": 31
     },
     {
       "type": "title",
@@ -103,7 +128,7 @@
     {
       "type": "title",
       "value": "senior product manager",
-      "matches": 17
+      "matches": 15
     },
     {
       "type": "title",
@@ -113,12 +138,12 @@
     {
       "type": "title",
       "value": "product manager",
-      "matches": 80
+      "matches": 81
     },
     {
       "type": "title",
       "value": "product operations",
-      "matches": 9
+      "matches": 8
     },
     {
       "type": "title",
@@ -136,54 +161,60 @@
       "matches": 0
     }
   ],
-  "roles_fetched_post_filter": 150,
+  "roles_fetched_post_filter": 153,
   "field_population": {
-    "description": 150,
-    "workplace_type": 44,
-    "compensation_raw": 80,
-    "date_posted": 150,
-    "department": 150,
-    "tier": 150
+    "description": 153,
+    "workplace_type": 57,
+    "compensation_raw": 91,
+    "date_posted": 153,
+    "department": 153,
+    "tier": 153
   },
   "per_ats": {
-    "greenhouse": 101,
-    "ashby": 39,
-    "lever": 10
+    "greenhouse": 100,
+    "ashby": 33,
+    "lever": 20
+  },
+  "match_score_stats": {
+    "scored": 153,
+    "unscored": 0,
+    "avg_score": 55,
+    "high_matches": 35
   },
   "per_company": [
     {
       "company": "Anthropic",
       "tier": "1",
       "ats": "greenhouse",
-      "roles_total": 427,
+      "roles_total": 435,
       "roles_post_filter": 9
     },
     {
       "company": "AlphaSense",
       "tier": "2",
       "ats": "greenhouse",
-      "roles_total": 184,
+      "roles_total": 183,
       "roles_post_filter": 7
     },
     {
       "company": "Databricks",
       "tier": "1",
       "ats": "greenhouse",
-      "roles_total": 855,
-      "roles_post_filter": 32
+      "roles_total": 852,
+      "roles_post_filter": 31
     },
     {
       "company": "OpenAI",
       "tier": "1",
       "ats": "ashby",
-      "roles_total": 640,
+      "roles_total": 649,
       "roles_post_filter": 10
     },
     {
       "company": "Perplexity",
       "tier": "2",
       "ats": "ashby",
-      "roles_total": 77,
+      "roles_total": 75,
       "roles_post_filter": 0
     },
     {
@@ -204,15 +235,15 @@
       "company": "The Trade Desk",
       "tier": "2",
       "ats": "greenhouse",
-      "roles_total": 152,
+      "roles_total": 160,
       "roles_post_filter": 6
     },
     {
       "company": "Spotify",
       "tier": "2",
       "ats": "lever",
-      "roles_total": 176,
-      "roles_post_filter": 10
+      "roles_total": 180,
+      "roles_post_filter": 11
     },
     {
       "company": "Google",
@@ -233,15 +264,15 @@
       "company": "Cohere",
       "tier": "2",
       "ats": "ashby",
-      "roles_total": 119,
+      "roles_total": 116,
       "roles_post_filter": 6
     },
     {
       "company": "Harvey",
       "tier": "1",
       "ats": "ashby",
-      "roles_total": 231,
-      "roles_post_filter": 9
+      "roles_total": 238,
+      "roles_post_filter": 12
     },
     {
       "company": "Mistral AI",
@@ -254,43 +285,42 @@
       "company": "Braze",
       "tier": "3",
       "ats": "greenhouse",
-      "roles_total": 179,
+      "roles_total": 174,
       "roles_post_filter": 0
     },
     {
       "company": "Attentive",
       "tier": "3",
       "ats": "greenhouse",
-      "roles_total": 62,
+      "roles_total": 60,
       "roles_post_filter": 8
     },
     {
       "company": "Palantir",
       "tier": "1",
-      "ats": "",
-      "roles_total": 0,
-      "roles_post_filter": 0,
-      "error": "No roles found via ATS or careers page"
+      "ats": "lever",
+      "roles_total": 231,
+      "roles_post_filter": 0
     },
     {
       "company": "Stripe",
       "tier": "1",
       "ats": "greenhouse",
-      "roles_total": 486,
-      "roles_post_filter": 22
+      "roles_total": 500,
+      "roles_post_filter": 23
     },
     {
       "company": "Plaid",
       "tier": "2",
-      "ats": "ashby",
-      "roles_total": 99,
+      "ats": "lever",
+      "roles_total": 93,
       "roles_post_filter": 9
     },
     {
       "company": "Robinhood",
       "tier": "3",
       "ats": "greenhouse",
-      "roles_total": 144,
+      "roles_total": 149,
       "roles_post_filter": 6
     },
     {
@@ -298,13 +328,13 @@
       "tier": "3",
       "ats": "greenhouse",
       "roles_total": 289,
-      "roles_post_filter": 11
+      "roles_post_filter": 10
     },
     {
       "company": "Block",
       "tier": "2",
       "ats": "greenhouse",
-      "roles_total": 95,
+      "roles_total": 107,
       "roles_post_filter": 0
     }
   ]
