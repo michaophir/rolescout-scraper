@@ -1,0 +1,44 @@
+Job ID,Company,Role,Person,Date,Event,Source,Stage,State,Compensation,Location,Next Action,Next Action Date,Notes,Job URL
+RS001,Anthropic,Product Manager Claude Code,Sarah Chen,2026-03-01,Applied,LinkedIn,Applied,Active,280000-320000,San Francisco CA,,,,https://job-boards.greenhouse.io/anthropic/jobs/4985920008
+RS001,Anthropic,Product Manager Claude Code,Sarah Chen,2026-03-10,Recruiter Screen,LinkedIn,Recruiter Screen,Active,280000-320000,San Francisco CA,Send thank you note,2026-04-10,,https://job-boards.greenhouse.io/anthropic/jobs/4985920008
+RS001,Anthropic,Product Manager Claude Code,Marcus Lee,2026-03-20,Hiring Manager,LinkedIn,Hiring Manager,Active,280000-320000,San Francisco CA,Prep case study,2026-04-12,,https://job-boards.greenhouse.io/anthropic/jobs/4985920008
+RS002,Anthropic,Product Manager Consumer,N/A,2026-03-15,Applied,Direct,Applied,No Response,260000-300000,New York NY,,,,https://job-boards.greenhouse.io/anthropic/jobs/5127559008
+RS003,Figma,Product Manager AI,Taylor Morgan,2026-03-05,Applied,LinkedIn,Applied,Active,200000-240000,San Francisco CA,,,,https://boards.greenhouse.io/figma/jobs/5574247004
+RS003,Figma,Product Manager AI,Taylor Morgan,2026-03-15,Recruiter Screen,LinkedIn,Recruiter Screen,Active,200000-240000,San Francisco CA,,,,https://boards.greenhouse.io/figma/jobs/5574247004
+RS003,Figma,Product Manager AI,Dana Kim,2026-03-25,Hiring Manager,LinkedIn,Hiring Manager,Active,200000-240000,San Francisco CA,Follow up on timeline,2026-04-09,,https://boards.greenhouse.io/figma/jobs/5574247004
+RS003,Figma,Product Manager AI,Dana Kim,2026-04-05,Interview Loop,LinkedIn,Interview Loop,Active,200000-240000,San Francisco CA,Prep design critique,2026-04-14,,https://boards.greenhouse.io/figma/jobs/5574247004
+RS004,Decagon,Senior Agent Product Manager,Jamie Park,2026-03-08,Applied,Referral,Applied,Active,210000-250000,San Francisco CA,,,,https://jobs.ashbyhq.com/decagon/dcf9b561-f2fb-422b-88a9-33ce76e96608
+RS004,Decagon,Senior Agent Product Manager,Jamie Park,2026-03-18,Recruiter Screen,Referral,Recruiter Screen,Active,210000-250000,San Francisco CA,,,,https://jobs.ashbyhq.com/decagon/dcf9b561-f2fb-422b-88a9-33ce76e96608
+RS004,Decagon,Senior Agent Product Manager,Alex Rivera,2026-03-28,Hiring Manager,Referral,Hiring Manager,Ghosted,210000-250000,San Francisco CA,Send follow up,2026-04-08,,https://jobs.ashbyhq.com/decagon/dcf9b561-f2fb-422b-88a9-33ce76e96608
+RS005,Stripe,Product Manager AMER Cards,N/A,2026-03-10,Applied,LinkedIn,Applied,Rejected,200000-240000,Remote,,,,https://stripe.com/jobs/search?gh_jid=7568269
+RS006,Stripe,Product Manager Banking as a Service,Jamie Park,2026-03-08,Applied,LinkedIn,Applied,Active,210000-250000,Remote,,,,https://stripe.com/jobs/search?gh_jid=7561053
+RS006,Stripe,Product Manager Banking as a Service,Jamie Park,2026-03-18,Recruiter Screen,LinkedIn,Recruiter Screen,Active,210000-250000,Remote,Schedule HM interview,2026-04-11,,https://stripe.com/jobs/search?gh_jid=7561053
+RS007,Notion,Product Manager Enterprise,Taylor Morgan,2026-03-12,Applied,Direct,Applied,Active,190000-230000,New York NY,,,,https://jobs.ashbyhq.com/notion/35785e61-c4c3-44ec-a401-6741d89dd16a
+RS007,Notion,Product Manager Enterprise,Taylor Morgan,2026-03-22,Recruiter Screen,Direct,Recruiter Screen,Active,190000-230000,New York NY,,,,https://jobs.ashbyhq.com/notion/35785e61-c4c3-44ec-a401-6741d89dd16a
+RS007,Notion,Product Manager Enterprise,Dana Kim,2026-04-01,Hiring Manager,Direct,Hiring Manager,Active,190000-230000,New York NY,,,,https://jobs.ashbyhq.com/notion/35785e61-c4c3-44ec-a401-6741d89dd16a
+RS007,Notion,Product Manager Enterprise,Dana Kim,2026-04-07,Interview Loop,Direct,Interview Loop,Active,190000-230000,New York NY,Prep product critique,2026-04-14,,https://jobs.ashbyhq.com/notion/35785e61-c4c3-44ec-a401-6741d89dd16a
+RS008,Spotify,Group Product Manager Core X,Alex Rivera,2026-02-20,Applied,Referral,Applied,Active,230000-270000,Remote,,,,https://jobs.lever.co/spotify/3a7a3d26-bd02-496b-86d3-df5277e5b478
+RS008,Spotify,Group Product Manager Core X,Alex Rivera,2026-03-02,Recruiter Screen,Referral,Recruiter Screen,Active,230000-270000,Remote,,,,https://jobs.lever.co/spotify/3a7a3d26-bd02-496b-86d3-df5277e5b478
+RS008,Spotify,Group Product Manager Core X,Jordan Wells,2026-03-15,Hiring Manager,Referral,Hiring Manager,Active,230000-270000,Remote,,,,https://jobs.lever.co/spotify/3a7a3d26-bd02-496b-86d3-df5277e5b478
+RS008,Spotify,Group Product Manager Core X,Jordan Wells,2026-03-28,Interview Loop,Referral,Interview Loop,Active,230000-270000,Remote,,,,https://jobs.lever.co/spotify/3a7a3d26-bd02-496b-86d3-df5277e5b478
+RS008,Spotify,Group Product Manager Core X,Casey Brown,2026-04-05,Final Round,Referral,Final Round,Active,230000-270000,Remote,Await decision,2026-04-14,,https://jobs.lever.co/spotify/3a7a3d26-bd02-496b-86d3-df5277e5b478
+RS009,Plaid,Staff Product Manager Applied AI,N/A,2026-03-15,Applied,LinkedIn,Applied,No Response,220000-260000,San Francisco CA,,,,https://jobs.lever.co/plaid/591846f4-0bb6-4f08-b5a0-0a2891056bf5
+RS010,Sierra,Product Manager Agent SDK,Quinn Adams,2026-03-18,Applied,LinkedIn,Applied,Active,200000-240000,San Francisco CA,,,,https://jobs.ashbyhq.com/sierra/10d2e2f1-6657-40c9-b6fb-6999c76df6cf
+RS010,Sierra,Product Manager Agent SDK,Quinn Adams,2026-03-28,Recruiter Screen,LinkedIn,Recruiter Screen,Declined,200000-240000,San Francisco CA,,,Role not the right fit,https://jobs.ashbyhq.com/sierra/10d2e2f1-6657-40c9-b6fb-6999c76df6cf
+RS011,Intercom,Senior AI Product Manager,Riley Park,2026-03-20,Applied,LinkedIn,Applied,Active,210000-250000,Remote,,,,https://job-boards.greenhouse.io/intercom/jobs/7377200
+RS011,Intercom,Senior AI Product Manager,Riley Park,2026-04-01,Recruiter Screen,LinkedIn,Recruiter Screen,Active,210000-250000,Remote,Schedule HM interview,2026-04-11,,https://job-boards.greenhouse.io/intercom/jobs/7377200
+RS012,The Trade Desk,Staff Product Manager Decisioned Workflows,Morgan Chase,2026-03-25,Applied,Referral,Applied,Active,240000-280000,New York NY,,,,https://job-boards.greenhouse.io/thetradedesk/jobs/5088830007
+RS012,The Trade Desk,Staff Product Manager Decisioned Workflows,Morgan Chase,2026-04-03,Recruiter Screen,Referral,Recruiter Screen,Active,240000-280000,New York NY,,,,https://job-boards.greenhouse.io/thetradedesk/jobs/5088830007
+RS012,The Trade Desk,Staff Product Manager Decisioned Workflows,Sam Lee,2026-04-08,Hiring Manager,Referral,Hiring Manager,Active,240000-280000,New York NY,Follow up on next steps,2026-04-11,,https://job-boards.greenhouse.io/thetradedesk/jobs/5088830007
+RS013,Anthropic,Product Manager Multi-Cloud Growth,N/A,2026-04-01,Saved,LinkedIn,Saved,Active,270000-310000,San Francisco CA,Reach out to contact,2026-04-10,,https://job-boards.greenhouse.io/anthropic/jobs/5153924008
+RS014,Intercom,Staff Product Manager Web Growth,Riley Park,2026-02-15,Applied,LinkedIn,Applied,Active,220000-260000,Remote,,,,https://job-boards.greenhouse.io/intercom/jobs/7279208
+RS014,Intercom,Staff Product Manager Web Growth,Riley Park,2026-02-25,Recruiter Screen,LinkedIn,Recruiter Screen,Active,220000-260000,Remote,,,,https://job-boards.greenhouse.io/intercom/jobs/7279208
+RS014,Intercom,Staff Product Manager Web Growth,Jordan Wells,2026-03-05,Hiring Manager,LinkedIn,Hiring Manager,Active,220000-260000,Remote,,,,https://job-boards.greenhouse.io/intercom/jobs/7279208
+RS014,Intercom,Staff Product Manager Web Growth,Jordan Wells,2026-03-15,Interview Loop,LinkedIn,Interview Loop,Active,220000-260000,Remote,,,,https://job-boards.greenhouse.io/intercom/jobs/7279208
+RS014,Intercom,Staff Product Manager Web Growth,Jordan Wells,2026-03-25,Final Round,LinkedIn,Final Round,Active,220000-260000,Remote,,,,https://job-boards.greenhouse.io/intercom/jobs/7279208
+RS014,Intercom,Staff Product Manager Web Growth,Jordan Wells,2026-04-01,Offer,LinkedIn,Offer,Active,245000-245000,Remote,Negotiate comp,2026-04-10,,https://job-boards.greenhouse.io/intercom/jobs/7279208
+RS014,Intercom,Staff Product Manager Web Growth,Jordan Wells,2026-04-08,Accepted,LinkedIn,Offer,Accepted,245000-245000,Remote,,,Start date TBD,https://job-boards.greenhouse.io/intercom/jobs/7279208
+7568270,Intercom,Staff Product Manager Web Growth,Jordan Wells,2026-03-15,Interview Loop,LinkedIn,Interview Loop,Active,220000-260000,Remote,,,https://job-boards.greenhouse.io/intercom/jobs/7279208,
+7568270,Intercom,Staff Product Manager Web Growth,Jordan Wells,2026-03-25,Final Round,LinkedIn,Final Round,Active,220000-260000,Remote,,,https://job-boards.greenhouse.io/intercom/jobs/7279208,
+7568270,Intercom,Staff Product Manager Web Growth,Jordan Wells,2026-04-01,Offer,LinkedIn,Offer,Active,230000-260000,Remote,Negotiate comp,2026-04-10,https://job-boards.greenhouse.io/intercom/jobs/7279208,
+7568270,Intercom,Staff Product Manager Web Growth,Jordan Wells,2026-04-08,Accepted,LinkedIn,Accepted,Active,245000-245000,Remote,,,https://job-boards.greenhouse.io/intercom/jobs/7279208,

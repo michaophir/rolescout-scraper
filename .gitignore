@@ -5,4 +5,3 @@ __pycache__/
 errors.log
 .venv/
 companies.txt
-open_roles.csv

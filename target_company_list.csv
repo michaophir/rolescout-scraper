@@ -1,23 +1,38 @@
 company_name,website,tier
 Anthropic,https://anthropic.com,1
-AlphaSense,https://alpha-sense.com,2
-Databricks,https://databricks.com,1
 OpenAI,https://openai.com,1
-Perplexity,https://perplexity.ai,2
-Ramp,https://ramp.com,1
-Writer,https://writer.com,3
-The Trade Desk,https://thetradedesk.com,2
-Spotify,https://spotify.com,2
-Google,https://google.com,3
-Meta,https://meta.com,3
-Cohere,https://cohere.com,2
-Harvey,https://harvey.ai,1
-Mistral AI,https://mistral.ai,2
-Braze,https://braze.com,3
-Attentive,https://attentive.com,3
-Palantir,https://palantir.com,1
+Databricks,https://databricks.com,1
 Stripe,https://stripe.com,1
+Ramp,https://ramp.com,1
+Harvey,https://harvey.ai,1
+Palantir,https://palantir.com,1
+Decagon,https://decagon.ai,1
+Sierra,https://sierra.ai,1
+Cursor,https://cursor.com,1
+Clay,https://clay.com,1
+Runway,https://runwayml.com,1
+Perplexity,https://perplexity.ai,2
 Plaid,https://plaid.com,2
-Robinhood,https://robinhood.com,3
-Adyen,https://adyen.com,3
-Block,https://block.xyz,2
+Cohere,https://cohere.com,2
+Mistral AI,https://mistral.ai,2
+Linear,https://linear.app,2
+Notion,https://notion.so,2
+Figma,https://figma.com,2
+Vercel,https://vercel.com,2
+Mercury,https://mercury.com,2
+Brex,https://brex.com,2
+Modern Treasury,https://moderntreasury.com,2
+Addepar,https://addepar.com,2
+Carta,https://carta.com,2
+Vanta,https://vanta.com,2
+ElevenLabs,https://elevenlabs.io,2
+Scale AI,https://scale.com,2
+Spotify,https://spotify.com,2
+Arcade,https://arcade.xyz,2
+Cedar,https://cedar.com,2
+Klaviyo,https://klaviyo.com,3
+Reflection AI,https://reflection.ai,1
+EliseAI,https://eliseai.com,2
+Baseten,https://baseten.co,2
+Thinking Machines Lab,https://thinkingmachines.ai,2
+Listen Labs,https://listenlabs.ai,3

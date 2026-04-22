@@ -1,0 +1,50 @@
+{
+  "name": "Alex Rivera",
+  "email": "alex.rivera@email.com",
+  "phone": "(555) 012-3456",
+  "location": "San Francisco, CA",
+  "title": "Senior Product Manager",
+  "summary": "Senior Product Manager with 8 years of experience building consumer and B2B SaaS products. Track record of launching 0-to-1 products and scaling them to millions of users. Strong technical background with experience working closely with engineering and data teams.",
+  "skills": [
+    "Product Strategy",
+    "Roadmap Planning",
+    "A/B Testing",
+    "SQL",
+    "Data Analysis",
+    "User Research",
+    "Agile",
+    "Figma",
+    "Go-to-Market",
+    "Stakeholder Management"
+  ],
+  "experience": [
+    {
+      "company": "Acme Corp",
+      "title": "Senior Product Manager",
+      "start": "2021",
+      "end": "Present",
+      "description": "Led a team of 3 PMs building the core analytics platform. Grew DAU 40% through a personalization initiative."
+    },
+    {
+      "company": "Startup Inc",
+      "title": "Product Manager",
+      "start": "2018",
+      "end": "2021",
+      "description": "Owned the onboarding flow end to end. Reduced time-to-value from 14 days to 3 days."
+    }
+  ],
+  "education": [
+    {
+      "institution": "UC Berkeley",
+      "degree": "BS Computer Science",
+      "year": "2016"
+    }
+  ],
+  "target_roles": [
+    "Director of Product",
+    "VP of Product",
+    "Head of Product"
+  ],
+  "target_companies": [],
+  "story_bank": []
+}
