@@ -16,7 +16,7 @@ import json
 import logging
 import re
 import time
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -25,7 +25,7 @@ from bs4 import BeautifulSoup
 
 TODAY = date.today().isoformat()
 
-DESCRIPTION_MAX_CHARS = 2000
+DESCRIPTION_MAX_CHARS = 6000
 WHITESPACE_RE = re.compile(r"\s+")
 
 OUTPUT_FIELDS = [
@@ -646,7 +646,7 @@ def write_run_summary(
     }
 
     summary = {
-        "run_date": TODAY,
+        "run_date": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
         "companies_total": companies_total,
         "companies_succeeded": companies_succeeded,
         "companies_failed": failed_companies,
