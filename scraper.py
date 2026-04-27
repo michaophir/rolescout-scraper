@@ -513,7 +513,9 @@ def filters_from_profile(profile: dict) -> list[dict]:
     return filters
 
 
-def calculate_match_score(job_title: str, description: str, filters: list[dict]):
+def calculate_match_score(job_title: str, description: str,
+                          filters: list[dict],
+                          candidate_skills: list[str] = []):
     """Score a role 0–100 based on filter hits across title/pattern/seniority/domain/skill.
 
     Returns an int in [0, 100] when the role can be scored, or "" if the
@@ -556,8 +558,18 @@ def calculate_match_score(job_title: str, description: str, filters: list[dict])
     domain_hits = sum(1 for f in of_type("domain") if f["value"] in desc_lower)
     score += min(domain_hits * 5, 25)
 
-    # Skill: +1 per match in description, max 15
-    skill_hits = sum(1 for f in of_type("skill") if f["value"] in desc_lower)
+    # Skill scoring — use candidate_skills if provided,
+    # otherwise fall back to role_filters skill rows
+    if candidate_skills:
+        skill_hits = sum(
+            1 for skill in candidate_skills
+            if skill.lower() in desc_lower
+        )
+    else:
+        skill_hits = sum(
+            1 for f in of_type("skill")
+            if f["value"] in desc_lower
+        )
     score += min(skill_hits, 15)
 
     return min(score, 100)
@@ -737,6 +749,20 @@ def main() -> None:
     profile_companies = companies_from_profile(profile)
     profile_filters = filters_from_profile(profile)
 
+    candidate_skills: list[str] = []
+    if profile_companies and profile_filters:
+        candidate_skills = [
+            s.lower() for s in profile.get("skills", []) if s
+        ]
+
+    excluded: set[str] = set()
+    if profile.get("preferences", {}).get("excluded_companies"):
+        excluded = {
+            c.strip().lower()
+            for c in profile["preferences"]["excluded_companies"]
+            if c.strip()
+        }
+
     if not args.csv and profile_companies and profile_filters:
         companies = profile_companies
         filters = profile_filters
@@ -761,6 +787,10 @@ def main() -> None:
 
     for i, entry in enumerate(companies):
         name = entry["company_name"]
+        if name.lower() in excluded:
+            if args.verbose:
+                print(f"[{i+1}/{len(companies)}] {name} ... skipped (excluded)")
+            continue
         website = entry["website"]
         tier = entry.get("tier", "")
         co_stat: dict = {"company": name, "tier": tier, "ats": "", "roles_total": 0, "roles_post_filter": 0}
@@ -810,6 +840,7 @@ def main() -> None:
                         row.get("job_title", ""),
                         row.get("description", ""),
                         filters,
+                        candidate_skills,
                     )
                 merge_rows(existing, rows, seen_ids)
                 run_rows.extend(rows)

@@ -1,5 +1,5 @@
 {
-  "run_date": "2026-04-27T10:23:46",
+  "run_date": "2026-04-27T11:31:15",
   "companies_total": 63,
   "companies_succeeded": 57,
   "companies_failed": [
@@ -216,8 +216,8 @@
   "match_score_stats": {
     "scored": 284,
     "unscored": 0,
-    "avg_score": 69,
-    "high_matches": 121
+    "avg_score": 64,
+    "high_matches": 113
   },
   "per_company": [
     {
@@ -231,7 +231,7 @@
       "company": "OpenAI",
       "tier": "1",
       "ats": "ashby",
-      "roles_total": 649,
+      "roles_total": 650,
       "roles_post_filter": 11
     },
     {
@@ -435,7 +435,7 @@
       "company": "Spotify",
       "tier": "2",
       "ats": "lever",
-      "roles_total": 183,
+      "roles_total": 182,
       "roles_post_filter": 14
     },
     {
@@ -499,7 +499,7 @@
       "company": "Airtable",
       "tier": "2",
       "ats": "greenhouse",
-      "roles_total": 52,
+      "roles_total": 53,
       "roles_post_filter": 3
     },
     {
@@ -514,7 +514,7 @@
       "company": "Deel",
       "tier": "2",
       "ats": "ashby",
-      "roles_total": 248,
+      "roles_total": 247,
       "roles_post_filter": 10
     },
     {
@@ -608,7 +608,7 @@
       "company": "Klaviyo",
       "tier": "3",
       "ats": "greenhouse",
-      "roles_total": 247,
+      "roles_total": 241,
       "roles_post_filter": 16
     },
     {
@@ -622,7 +622,7 @@
       "company": "Justworks",
       "tier": "3",
       "ats": "greenhouse",
-      "roles_total": 80,
+      "roles_total": 79,
       "roles_post_filter": 7
     },
     {
@@ -650,7 +650,7 @@
       "company": "Dandy",
       "tier": "3",
       "ats": "ashby",
-      "roles_total": 128,
+      "roles_total": 127,
       "roles_post_filter": 1
     },
     {
