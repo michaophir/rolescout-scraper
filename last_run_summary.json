@@ -1,5 +1,5 @@
 {
-  "run_date": "2026-04-27T11:31:15",
+  "run_date": "2026-05-01T12:18:37",
   "companies_total": 63,
   "companies_succeeded": 57,
   "companies_failed": [
@@ -111,7 +111,7 @@
     {
       "type": "title",
       "value": "vp of product",
-      "matches": 1
+      "matches": 2
     },
     {
       "type": "title",
@@ -121,12 +121,12 @@
     {
       "type": "title",
       "value": "director of product management",
-      "matches": 0
+      "matches": 1
     },
     {
       "type": "title",
       "value": "director of product",
-      "matches": 5
+      "matches": 4
     },
     {
       "type": "title",
@@ -136,7 +136,7 @@
     {
       "type": "title",
       "value": "founding product",
-      "matches": 2
+      "matches": 3
     },
     {
       "type": "title",
@@ -146,17 +146,17 @@
     {
       "type": "title",
       "value": "staff product manager",
-      "matches": 55
+      "matches": 50
     },
     {
       "type": "title",
       "value": "principal product manager",
-      "matches": 5
+      "matches": 4
     },
     {
       "type": "title",
       "value": "principal product",
-      "matches": 4
+      "matches": 7
     },
     {
       "type": "title",
@@ -166,7 +166,7 @@
     {
       "type": "title",
       "value": "senior product manager",
-      "matches": 37
+      "matches": 36
     },
     {
       "type": "title",
@@ -176,7 +176,7 @@
     {
       "type": "title",
       "value": "product manager",
-      "matches": 144
+      "matches": 140
     },
     {
       "type": "title",
@@ -199,102 +199,102 @@
       "matches": 0
     }
   ],
-  "roles_fetched_post_filter": 284,
+  "roles_fetched_post_filter": 278,
   "field_population": {
-    "description": 284,
+    "description": 278,
     "workplace_type": 122,
-    "compensation_raw": 142,
-    "date_posted": 284,
-    "department": 284,
-    "tier": 284
+    "compensation_raw": 136,
+    "date_posted": 278,
+    "department": 278,
+    "tier": 278
   },
   "per_ats": {
-    "greenhouse": 163,
-    "ashby": 98,
-    "lever": 23
+    "greenhouse": 156,
+    "ashby": 103,
+    "lever": 19
   },
   "match_score_stats": {
-    "scored": 284,
+    "scored": 278,
     "unscored": 0,
     "avg_score": 64,
-    "high_matches": 113
+    "high_matches": 112
   },
   "per_company": [
     {
       "company": "Anthropic",
       "tier": "1",
       "ats": "greenhouse",
-      "roles_total": 453,
-      "roles_post_filter": 7
+      "roles_total": 439,
+      "roles_post_filter": 4
     },
     {
       "company": "OpenAI",
       "tier": "1",
       "ats": "ashby",
-      "roles_total": 650,
-      "roles_post_filter": 11
+      "roles_total": 666,
+      "roles_post_filter": 13
     },
     {
       "company": "Databricks",
       "tier": "1",
       "ats": "greenhouse",
-      "roles_total": 831,
-      "roles_post_filter": 32
+      "roles_total": 823,
+      "roles_post_filter": 29
     },
     {
       "company": "Stripe",
       "tier": "1",
       "ats": "greenhouse",
-      "roles_total": 486,
-      "roles_post_filter": 23
+      "roles_total": 494,
+      "roles_post_filter": 22
     },
     {
       "company": "Ramp",
       "tier": "1",
       "ats": "ashby",
-      "roles_total": 129,
-      "roles_post_filter": 4
+      "roles_total": 116,
+      "roles_post_filter": 2
     },
     {
       "company": "Harvey",
       "tier": "1",
       "ats": "ashby",
-      "roles_total": 240,
-      "roles_post_filter": 12
+      "roles_total": 245,
+      "roles_post_filter": 11
     },
     {
       "company": "Palantir",
       "tier": "1",
       "ats": "lever",
-      "roles_total": 234,
+      "roles_total": 235,
       "roles_post_filter": 0
     },
     {
       "company": "Decagon",
       "tier": "1",
       "ats": "ashby",
-      "roles_total": 98,
+      "roles_total": 101,
       "roles_post_filter": 7
     },
     {
       "company": "Sierra",
       "tier": "1",
       "ats": "ashby",
-      "roles_total": 131,
-      "roles_post_filter": 15
+      "roles_total": 130,
+      "roles_post_filter": 16
     },
     {
       "company": "Cursor",
       "tier": "1",
       "ats": "ashby",
-      "roles_total": 71,
-      "roles_post_filter": 0
+      "roles_total": 76,
+      "roles_post_filter": 4
     },
     {
       "company": "Clay",
       "tier": "1",
       "ats": "careers_page",
-      "roles_total": 8,
+      "roles_total": 10,
       "roles_post_filter": 0
     },
     {
@@ -308,7 +308,7 @@
       "company": "Reflection AI",
       "tier": "1",
       "ats": "ashby",
-      "roles_total": 36,
+      "roles_total": 42,
       "roles_post_filter": 0
     },
     {
@@ -323,7 +323,7 @@
       "company": "Coreweave",
       "tier": "1",
       "ats": "greenhouse",
-      "roles_total": 246,
+      "roles_total": 247,
       "roles_post_filter": 8
     },
     {
@@ -337,7 +337,7 @@
       "company": "Perplexity",
       "tier": "2",
       "ats": "ashby",
-      "roles_total": 72,
+      "roles_total": 69,
       "roles_post_filter": 1
     },
     {
@@ -351,49 +351,49 @@
       "company": "Cohere",
       "tier": "2",
       "ats": "ashby",
-      "roles_total": 115,
+      "roles_total": 121,
       "roles_post_filter": 5
     },
     {
       "company": "Linear",
       "tier": "2",
       "ats": "ashby",
-      "roles_total": 22,
+      "roles_total": 23,
       "roles_post_filter": 2
     },
     {
       "company": "Notion",
       "tier": "2",
       "ats": "ashby",
-      "roles_total": 140,
+      "roles_total": 142,
       "roles_post_filter": 2
     },
     {
       "company": "Figma",
       "tier": "2",
       "ats": "greenhouse",
-      "roles_total": 160,
+      "roles_total": 157,
       "roles_post_filter": 3
     },
     {
       "company": "Vercel",
       "tier": "2",
       "ats": "greenhouse",
-      "roles_total": 85,
+      "roles_total": 86,
       "roles_post_filter": 2
     },
     {
       "company": "Mercury",
       "tier": "2",
       "ats": "greenhouse",
-      "roles_total": 66,
+      "roles_total": 58,
       "roles_post_filter": 3
     },
     {
       "company": "Brex",
       "tier": "2",
       "ats": "greenhouse",
-      "roles_total": 253,
+      "roles_total": 227,
       "roles_post_filter": 16
     },
     {
@@ -407,56 +407,56 @@
       "company": "Carta",
       "tier": "2",
       "ats": "greenhouse",
-      "roles_total": 61,
+      "roles_total": 54,
       "roles_post_filter": 1
     },
     {
       "company": "Vanta",
       "tier": "2",
       "ats": "ashby",
-      "roles_total": 159,
-      "roles_post_filter": 4
+      "roles_total": 148,
+      "roles_post_filter": 5
     },
     {
       "company": "ElevenLabs",
       "tier": "2",
       "ats": "ashby",
-      "roles_total": 113,
+      "roles_total": 133,
       "roles_post_filter": 0
     },
     {
       "company": "Scale AI",
       "tier": "2",
       "ats": "greenhouse",
-      "roles_total": 170,
-      "roles_post_filter": 9
+      "roles_total": 173,
+      "roles_post_filter": 11
     },
     {
       "company": "Spotify",
       "tier": "2",
       "ats": "lever",
-      "roles_total": 182,
-      "roles_post_filter": 14
+      "roles_total": 196,
+      "roles_post_filter": 10
     },
     {
       "company": "EliseAI",
       "tier": "2",
       "ats": "ashby",
-      "roles_total": 111,
-      "roles_post_filter": 3
+      "roles_total": 112,
+      "roles_post_filter": 2
     },
     {
       "company": "Baseten",
       "tier": "2",
       "ats": "ashby",
-      "roles_total": 56,
+      "roles_total": 57,
       "roles_post_filter": 1
     },
     {
       "company": "Gamma",
       "tier": "2",
       "ats": "ashby",
-      "roles_total": 61,
+      "roles_total": 60,
       "roles_post_filter": 0
     },
     {
@@ -470,14 +470,14 @@
       "company": "Intercom",
       "tier": "2",
       "ats": "greenhouse",
-      "roles_total": 175,
-      "roles_post_filter": 15
+      "roles_total": 174,
+      "roles_post_filter": 14
     },
     {
       "company": "Amplitude",
       "tier": "2",
       "ats": "greenhouse",
-      "roles_total": 47,
+      "roles_total": 58,
       "roles_post_filter": 1
     },
     {
@@ -499,8 +499,8 @@
       "company": "Airtable",
       "tier": "2",
       "ats": "greenhouse",
-      "roles_total": 53,
-      "roles_post_filter": 3
+      "roles_total": 27,
+      "roles_post_filter": 0
     },
     {
       "company": "Rippling",
@@ -514,8 +514,8 @@
       "company": "Deel",
       "tier": "2",
       "ats": "ashby",
-      "roles_total": 247,
-      "roles_post_filter": 10
+      "roles_total": 226,
+      "roles_post_filter": 11
     },
     {
       "company": "Narvar",
@@ -528,7 +528,7 @@
       "company": "Ro",
       "tier": "2",
       "ats": "lever",
-      "roles_total": 46,
+      "roles_total": 47,
       "roles_post_filter": 0
     },
     {
@@ -558,7 +558,7 @@
       "company": "Workato",
       "tier": "2",
       "ats": "greenhouse",
-      "roles_total": 170,
+      "roles_total": 173,
       "roles_post_filter": 6
     },
     {
@@ -572,7 +572,7 @@
       "company": "Cohere",
       "tier": "2",
       "ats": "ashby",
-      "roles_total": 115,
+      "roles_total": 121,
       "roles_post_filter": 5
     },
     {
@@ -608,21 +608,21 @@
       "company": "Klaviyo",
       "tier": "3",
       "ats": "greenhouse",
-      "roles_total": 241,
-      "roles_post_filter": 16
+      "roles_total": 236,
+      "roles_post_filter": 18
     },
     {
       "company": "Attentive",
       "tier": "3",
       "ats": "greenhouse",
-      "roles_total": 59,
+      "roles_total": 61,
       "roles_post_filter": 8
     },
     {
       "company": "Justworks",
       "tier": "3",
       "ats": "greenhouse",
-      "roles_total": 79,
+      "roles_total": 83,
       "roles_post_filter": 7
     },
     {
@@ -637,7 +637,7 @@
       "tier": "3",
       "ats": "ashby",
       "roles_total": 22,
-      "roles_post_filter": 1
+      "roles_post_filter": 2
     },
     {
       "company": "Cedar",
@@ -650,21 +650,21 @@
       "company": "Dandy",
       "tier": "3",
       "ats": "ashby",
-      "roles_total": 127,
-      "roles_post_filter": 1
+      "roles_total": 81,
+      "roles_post_filter": 0
     },
     {
       "company": "BetterUp",
       "tier": "3",
       "ats": "ashby",
-      "roles_total": 38,
+      "roles_total": 36,
       "roles_post_filter": 3
     },
     {
       "company": "Hinge Health",
       "tier": "3",
       "ats": "ashby",
-      "roles_total": 84,
+      "roles_total": 82,
       "roles_post_filter": 7
     }
   ]
