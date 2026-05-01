@@ -4,25 +4,56 @@
 
 A command-line Python application that reads a list of target companies and role filters, fetches open job listings, filters by relevance, scores each role against a candidate profile, and outputs a consolidated CSV with a run summary JSON. Designed to run once on demand with no persistent state.
 
-> **Pipeline context:** This scraper is Step 2 in the RoleScout pipeline. Step 1 (Candidate Profile) produces `candidate_profile.json`, `target_company_list.csv`, and `role_filters.csv` as outputs. The scraper consumes all three. Each input file can also be provided manually — the scraper does not require Step 1 to have been run.
+> **Pipeline context:** This scraper is Step 2 in the RoleScout pipeline. Step 1 (Candidate Profile) produces `candidate_profile.json` as its primary output, with `target_company_list.csv` and `role_filters.csv` as compatibility exports. The scraper prefers `candidate_profile.json` when present; otherwise it falls back to the two CSVs. The `--csv` flag forces CSV mode even when a profile exists. Each input can also be provided manually — the scraper does not require Step 1 to have been run.
 
 ---
 
 ## Definition of Done
 
 On a single execution, the app:
-1. Reads target companies from `target_company_list.csv`
-2. Reads role filters and scoring config from `role_filters.csv`
-3. Fetches open roles for each company via ATS API or careers page
-4. Filters roles using `title` and `pattern` filter rows
-5. Scores each passing role using `seniority`, `domain`, and `skill` filter rows
-6. Writes all filtered, scored results to `open_roles.csv`
+1. Loads `candidate_profile.json` if present (companies + filters + skills + excluded_companies); otherwise reads `target_company_list.csv` and `role_filters.csv`. The `--csv` flag forces CSV mode.
+2. Skips any company listed in `preferences.excluded_companies` from the profile
+3. Fetches open roles for each company via ATS API, slug-guessing fallback, or careers page scrape
+4. Filters roles using `title` and `pattern` filter rows; drops any role whose title contains an `exclude_title` value
+5. Scores each passing role using `seniority`, `domain`, and `skill` (or `profile.skills`) signals
+6. Merges results into `open_roles.csv` (incremental update)
 7. Writes a run summary to `last_run_summary.json`
 8. Exits cleanly with a summary printed to stdout
 
 ---
 
 ## Input Files
+
+### `candidate_profile.json` (preferred input)
+
+JSON produced by Step 1 of the RoleScout pipeline. When this file is present and contains both `target_companies` and `role_filters`, the scraper uses it instead of the CSV files. Pass `--csv` to force CSV mode.
+
+```json
+{
+  "target_companies": [
+    {"company_name": "Anthropic", "website": "https://anthropic.com", "tier": 1}
+  ],
+  "role_filters": [
+    {"field": "title", "value": "Product Manager"},
+    {"field": "pattern", "value": "(?i)(product manager|head of product)"},
+    {"field": "seniority", "value": "Senior"},
+    {"field": "domain", "value": "AI"},
+    {"field": "exclude_title", "value": "data"}
+  ],
+  "skills": ["roadmapping", "B2B", "API"],
+  "preferences": {
+    "excluded_companies": ["Meta", "Google"]
+  }
+}
+```
+
+- `target_companies[]` — same shape as `target_company_list.csv` rows
+- `role_filters[]` — same shape as `role_filters.csv` rows; same field types apply (see filter table below)
+- `skills[]` — list of skill strings. When present, **overrides** the `skill` filter rows for match scoring (see Match Scoring)
+- `preferences.excluded_companies[]` — case-insensitive company names to skip entirely (no fetch attempt, no `errors.log` entry)
+- Configurable via `--profile` CLI argument (default: `candidate_profile.json`)
+
+---
 
 ### `target_company_list.csv`
 
@@ -40,7 +71,7 @@ Figma,https://figma.com,2
 - `website` — company homepage, used as base URL for ATS detection
 - `tier` — integer priority (1 = highest). Passed through to output CSV as-is
 - Blank lines and lines starting with `#` are ignored
-- Configurable via `--companies` CLI argument (default: `target_company_list.csv`)
+- Configurable via `--input` CLI argument (default: `target_company_list.csv`)
 
 ---
 
@@ -98,15 +129,19 @@ skill,Figma
 |---|---|---|---|
 | `title` | ✅ Yes — role must match to pass | ✅ Yes | `job_title` (substring, case-insensitive) |
 | `pattern` | ✅ Yes — role must match to pass | ✅ Yes | `job_title` (regex match) |
+| `exclude_title` | ✅ Yes — role is **dropped** if matched | ❌ No | `job_title` (substring, case-insensitive) |
 | `seniority` | ❌ No | ✅ Yes | `job_title` (substring, case-insensitive) |
 | `domain` | ❌ No | ✅ Yes | `description` (substring, case-insensitive) |
 | `skill` | ❌ No | ✅ Yes | `description` (substring, case-insensitive) |
 
-**Admission logic:** A role passes filtering if its `job_title` matches at least one `title` or `pattern` row. `seniority`, `domain`, and `skill` rows are never used for admission.
+**Admission logic:**
+1. A role passes admission if its `job_title` matches at least one `title` or `pattern` row.
+2. After admission, any role whose `job_title` contains an `exclude_title` value is dropped. `exclude_title` only excludes — it never admits a role on its own.
+3. `seniority`, `domain`, and `skill` rows are never used for admission.
 
 **Matching:** All string matching is case-insensitive substring. Python `in` operator on lowercased strings. Pattern rows use `re.search()`.
 
-- Configurable via `--filters` CLI argument (default: `role_filters.csv`)
+- The CSV path is hardcoded to `role_filters.csv` (no CLI override). Use a candidate profile if you need a different filter set.
 
 ---
 
@@ -131,7 +166,7 @@ One row per filtered, scored job listing.
 | `accepting_applications` | Boolean (`true` / `false`) |
 | `job_url` | Direct URL to the job posting |
 | `last_seen` | Date this row was last fetched, `YYYY-MM-DD` |
-| `description` | Plain text JD, HTML stripped, truncated to 2000 characters. Blank if unavailable. |
+| `description` | Plain text JD, HTML stripped, truncated to 6000 characters. Blank if unavailable. |
 | `compensation_raw` | Raw compensation text, not parsed. Blank if not found. |
 | `tier` | Company priority tier from input file |
 | `match_score` | Integer 0–100 match score. Blank (not 0) if description is empty and scoring cannot run. |
@@ -157,36 +192,40 @@ Written on every run. Contains:
 
 ```json
 {
-  "run_date": "2026-04-15",
-  "companies_total": 22,
-  "companies_succeeded": 21,
-  "companies_failed": ["Meta"],
+  "run_date": "2026-05-01T11:23:47",
+  "companies_total": 63,
+  "companies_succeeded": 57,
+  "companies_failed": ["Glean", "Retool", "Rippling"],
   "filters_applied": [
     "title:product manager",
-    "title:staff product manager",
-    "pattern:(?i)..."
+    "pattern:(?i)(product manager|head of product)",
+    "seniority:senior",
+    "domain:ai",
+    "skill:roadmapping"
   ],
   "filter_coverage": [
     {"type": "title", "value": "product manager", "matches": 81},
-    {"type": "title", "value": "staff product manager", "matches": 31}
+    {"type": "pattern", "value": "(?i)(product manager|head of product)", "matches": 12}
   ],
-  "roles_fetched_post_filter": 153,
+  "roles_fetched_post_filter": 278,
   "field_population": {
-    "description": 153,
-    "workplace_type": 57,
+    "description": 270,
+    "workplace_type": 105,
     "compensation_raw": 91,
-    "date_posted": 153,
-    "department": 153,
-    "tier": 153
+    "date_posted": 278,
+    "department": 240,
+    "tier": 278
   },
   "per_ats": {
-    "greenhouse": 100,
-    "ashby": 33,
-    "lever": 20
+    "greenhouse": 180,
+    "ashby": 50,
+    "lever": 40,
+    "careers_page": 8,
+    "unknown": 0
   },
   "match_score_stats": {
-    "scored": 153,
-    "unscored": 0,
+    "scored": 270,
+    "unscored": 8,
     "avg_score": 55,
     "high_matches": 35
   },
@@ -195,16 +234,27 @@ Written on every run. Contains:
       "company": "Anthropic",
       "tier": "1",
       "ats": "greenhouse",
-      "roles_total": 435,
+      "roles_total": 439,
       "roles_post_filter": 9
+    },
+    {
+      "company": "Glean",
+      "tier": "2",
+      "ats": "",
+      "roles_total": 0,
+      "roles_post_filter": 0,
+      "error": "No roles found via ATS or careers page"
     }
   ]
 }
 ```
 
 **Important scoping rules:**
-- `filters_applied` — includes only `title` and `pattern` rows. Excludes `seniority`, `domain`, `skill` rows
-- `filter_coverage` — includes only `title` and `pattern` rows. Excludes `seniority`, `domain`, `skill` rows
+- `run_date` — ISO 8601 timestamp (`YYYY-MM-DDTHH:MM:SS`), captured at write time
+- `filters_applied` — includes all filter rows **except** `exclude_title` (those are quiet drops, not advertised admission filters)
+- `filter_coverage` — includes only `title` and `pattern` rows. Counts admissions per filter (which row admitted each role). Excludes `seniority`, `domain`, `skill`, `exclude_title`
+- `per_ats` — keyed by the in-memory `_source` tag. Possible keys: `greenhouse`, `lever`, `ashby`, `careers_page`, `unknown`
+- `per_company` — one entry per company processed; failures include an `error` string. Companies skipped via `excluded_companies` are **not** included
 - `high_matches` — count of roles with `match_score >= 70`
 - `match_score_stats.unscored` — count of roles where description was blank and score was left empty
 
@@ -225,6 +275,15 @@ Scoring runs after admission filtering. Each role receives a `match_score` from 
 
 **Total: 0–100**
 
+### Skill source: profile vs filters
+
+Skill scoring draws from one of two sources:
+
+- **Profile mode active** (`candidate_profile.json` loaded with both `target_companies` and `role_filters`, AND `skills[]` non-empty): scores against `profile.skills[]`. The `skill` filter rows are ignored.
+- **CSV fallback** (or profile lacks `skills[]`): scores against the `skill` rows in `role_filters.csv`.
+
+Both sources cap at +15. Switching sources changes which terms count, not the weight.
+
 ### Null score rule
 
 If `description` is blank, set `match_score` to `""` (empty string), not `0`. A blank score means unscored, not a bad match. Roles with blank scores appear at the bottom of the Best Match section in the Review UI, not excluded.
@@ -237,54 +296,69 @@ Because admission filtering already guarantees a `title` or `pattern` match, all
 
 ## Fetching Strategy
 
-Priority order per company:
+Three-step cascade per company. The first step that returns roles wins.
 
-1. **Known ATS APIs** — detect and use public JSON endpoints:
-   - **Greenhouse:** `https://boards-api.greenhouse.io/v1/boards/{slug}/jobs`
-     - Description from `content` (HTML — strip tags)
-     - Compensation from within `content` HTML — extract if present
-   - **Lever:** `https://api.lever.co/v0/postings/{slug}?mode=json`
-     - Description from `descriptionPlain` (preferred) or `description`
-     - Compensation from `additionalPlain`
-     - Workplace type from `workplaceType`
-   - **Ashby:** known JSON endpoints
-     - Description from `descriptionHtml` (strip HTML)
-     - Compensation from `compensationTierSummary` (often null)
-     - Workplace type from `workplaceType`
-2. **Careers page scraping** — fallback to `/careers` or `/jobs` page
-3. **Log and continue** — if neither works, log to `errors.log` and proceed
+### 1. ATS detection from website
 
-**ATS detection layer** runs before fetching. Attempts to identify which ATS a company uses based on known slugs and URL patterns.
+Fetch the company `website`, scan the first 50KB of HTML for known ATS embed patterns, and route to the matching fetcher:
 
-**Known unsupported companies:**
-- Google — JS-rendered, custom ATS. Returns ~2 roles via careers page scraping. Marked as `careers_page` in per_company output.
-- Meta — JS-rendered, no ATS detected. Returns 0 roles. Marked as failed in per_company output.
+| ATS | Detection regex | Fetch endpoint |
+|---|---|---|
+| Greenhouse | `boards.greenhouse.io/{slug}` or `board.greenhouse.io/{slug}` | `https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true` |
+| Lever | `jobs.lever.co/{slug}` | `https://api.lever.co/v0/postings/{slug}?mode=json` |
+| Ashby | `jobs.ashbyhq.com/{slug}` | `https://jobs.ashbyhq.com/api/non-user-graphql` (GraphQL) |
+
+### 2. Slug-guessing fallback
+
+If detection fails, try slug variants derived from the company name (`acme-co`, `acmeco`, `acme_co`) against every ATS in turn. First non-empty response wins. Marked as `slug guess` in verbose output.
+
+### 3. Careers page scraping
+
+If no ATS works, scan `/careers`, `/jobs`, and `/open-positions` for links containing job-shaped keywords (`/job`, `/position`, `/role`, `/opening`, or known ATS hostnames). Each link becomes a row with `title` only — description, location, comp, and workplace_type are blank. Marked as `careers_page` in per_company output.
+
+### 4. Log and continue
+
+If all three steps fail, log to `errors.log` and add the company to `companies_failed`.
+
+### Per-ATS field details
+
+- **Greenhouse:** Single list call with `?content=true` returns the per-job description blob, avoiding N+1 detail fetches. Description from `content` (HTML — strip tags). Compensation extracted from `.pay-range` or `.content-pay-transparency` blocks within the content HTML. No explicit `workplaceType` field — derived as `remote` if location contains "remote", otherwise blank.
+- **Lever:** Single list call returns `descriptionPlain`, `additionalPlain`, and `workplaceType` per posting. Description from `descriptionPlain` (preferred) or `description`. Compensation from `additionalPlain`. Workplace type from `workplaceType`.
+- **Ashby:** Two-stage GraphQL fetch against the (non-public) `non-user-graphql` endpoint used by the hosted job board:
+  1. **List query** (`ApiJobBoardWithTeams`) returns `id`, `title`, `locationName`, `compensationTierSummary` for all postings — enough to filter on
+  2. **Detail query** (`ApiJobPosting`) is **deferred until after admission filtering** to avoid rate-limiting on large boards. It populates `descriptionHtml`, `workplaceType`, `departmentName`, and `publishedDate` for surviving rows only.
+
+  This means scoring runs *after* enrichment, since Ashby descriptions don't exist before the detail fetch.
 
 ---
 
 ## CLI Interface
 
 ```bash
-python scraper.py [OPTIONS]
+python3 scraper.py [OPTIONS]
 
 Options:
-  --companies  PATH   Path to target companies file (default: target_company_list.csv)
-  --filters    PATH   Path to role filters file (default: role_filters.csv)
-  --output     PATH   Path to output CSV file (default: open_roles.csv)
-  --summary    PATH   Path to run summary JSON (default: last_run_summary.json)
-  --delay      FLOAT  Seconds to wait between requests (default: 1.0)
-  --verbose           Print progress to stdout
+  --input    PATH   Path to target companies CSV (default: target_company_list.csv)
+  --output   PATH   Path to output CSV file (default: open_roles.csv)
+  --profile  PATH   Path to candidate profile JSON (default: candidate_profile.json)
+  --csv             Force CSV input mode; ignore candidate_profile.json
+  --delay    FLOAT  Seconds to wait between requests (default: 1.0)
+  --verbose         Print progress to stdout
 ```
+
+The role filters CSV path (`role_filters.csv`) and run summary path (`last_run_summary.json`) are hardcoded — not exposed via CLI.
 
 ---
 
 ## Error Handling
 
 - Must not crash if a single company fetch fails
-- Failed companies logged to `errors.log` with timestamp, company name, and reason
-- Summary printed at completion:
+- Failed companies logged to `errors.log` with timestamp, company name, and reason (`<timestamp> | <company> | <reason>`)
+- Companies skipped via `excluded_companies` are **not** logged as failures
+- Summary printed at completion (failure tail only included when there are failures):
   ```
-  Done. 153 roles found across 21/22 companies. 1 failed (see errors.log).
+  Done! 278 roles found across 57/63 companies. Results written to open_roles.csv | 6 failed (see errors.log)
+  Run summary written to last_run_summary.json
   ```
 
 ---
@@ -303,14 +377,16 @@ Options:
 ## File Structure
 
 ```
-sandbox/
+rolescout-scraper/
 ├── scraper.py                  # Main script
-├── target_company_list.csv     # Input: companies and tiers
-├── role_filters.csv            # Input: admission filters + scoring config
-├── open_roles.csv              # Output: filtered, scored roles
+├── candidate_profile.json      # Input: preferred — companies + filters + skills + preferences
+├── target_company_list.csv     # Input: companies and tiers (CSV fallback)
+├── role_filters.csv            # Input: admission filters + scoring config (CSV fallback)
+├── open_roles.csv              # Output: filtered, scored roles (incrementally updated)
 ├── last_run_summary.json       # Output: run metadata and stats
 ├── errors.log                  # Output: per-company errors
 ├── requirements.txt            # Python dependencies
+├── job-scraper-requirements.md # This document
 ├── CLAUDE.md                   # Claude Code context file
 └── ats_samples/                # Sample ATS API responses for testing
     ├── greenhouse_anthropic.json
@@ -322,19 +398,21 @@ sandbox/
 
 ## Known Limitations
 
-- Description truncated to 2000 characters — skill/domain mentions past that cutoff won't score
-- `workplace_type` has low population (~37% of roles) — many ATS responses don't include it
+- Description truncated to 6000 characters — skill/domain mentions past that cutoff won't score
+- `workplace_type` has low population — many ATS responses don't include it. Greenhouse never sets `hybrid` or `onsite` (only `remote`, derived from location)
 - Match scoring uses keyword matching only — no semantic or ML-based matching
 - Title scoring is unweighted — all matching title filters score equally (+35). Higher seniority titles do not score higher than generic PM titles in V0
+- Ashby description enrichment runs *after* admission filtering, so descriptions for filtered-out Ashby roles remain blank in `open_roles.csv` if those rows were merged from a previous run with different filters
+- `careers_page` rows have only `title` and `job_url` populated — descriptions, locations, comp, and workplace_type are blank, so they're effectively unscored
 
 ---
 
 ## Out of Scope (V0)
 
 - Authentication or login-gated job pages
-- Scheduling or recurring runs
+- Scheduling or recurring runs (single-shot CLI only)
+- JS-rendered career pages (no Playwright integration yet — handled by failing fast)
 - Semantic or ML-based matching
 - Weighted title scoring by seniority level
-- Company Composer integration (planned for Step 1 of pipeline)
 - Hosted scraper trigger (planned for V1.5 with FastAPI on Railway)
 - DuckDB in-memory data layer (planned for V1.5)
