@@ -16,9 +16,11 @@ On a single execution, the app:
 3. Fetches open roles for each company via ATS API, slug-guessing fallback, or careers page scrape
 4. Filters roles using `title` and `pattern` filter rows; drops any role whose title contains an `exclude_title` value
 5. Scores each passing role using `seniority`, `domain`, and `skill` (or `profile.skills`) signals
-6. Merges results into `open_roles.csv` (incremental update)
+6. Writes results to `open_roles.csv` (overwrites existing by default; `--preserve` switches to incremental merge)
 7. Writes a run summary to `last_run_summary.json`
 8. Exits cleanly with a summary printed to stdout
+
+**Default is fresh runs.** Before fetching, the scraper deletes `open_roles.csv`, `last_run_summary.json`, and `errors.log` so each run produces clean files. Pass `--preserve` to keep them and merge new results into the existing CSV.
 
 ---
 
@@ -175,14 +177,16 @@ One row per filtered, scored job listing.
 - Missing fields left blank, never omitted
 - One row per job listing
 
-#### Merge behavior (incremental updates)
+#### Write behavior
 
-The output CSV is treated as a persistent record updated on each run, not overwritten wholesale.
+- **Default (fresh):** `open_roles.csv` is deleted at the start of the run, then written from scratch with only the roles fetched this run.
+- **With `--preserve`:** the existing CSV is loaded and treated as a persistent record updated incrementally:
+  - **Duplicate detection:** based on `job_id`
+  - **Existing role re-fetched:** update all fields, refresh `last_seen`
+  - **New role:** append new row
+  - **Role no longer returned:** leave row, set `accepting_applications` to `false`
 
-- **Duplicate detection:** based on `job_id`
-- **Existing role re-fetched:** update all fields, refresh `last_seen`
-- **New role:** append new row
-- **Role no longer returned:** leave row, set `accepting_applications` to `false`
+The same delete-vs-preserve rule applies to `last_run_summary.json` and `errors.log`.
 
 ---
 
@@ -342,6 +346,7 @@ Options:
   --output   PATH   Path to output CSV file (default: open_roles.csv)
   --profile  PATH   Path to candidate profile JSON (default: candidate_profile.json)
   --csv             Force CSV input mode; ignore candidate_profile.json
+  --preserve        Keep existing open_roles.csv and merge new results (default: overwrite)
   --delay    FLOAT  Seconds to wait between requests (default: 1.0)
   --verbose         Print progress to stdout
 ```

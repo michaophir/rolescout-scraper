@@ -752,7 +752,13 @@ def main() -> None:
     parser.add_argument("--profile", default="candidate_profile.json", help="Path to candidate profile JSON (default: candidate_profile.json)")
     parser.add_argument("--csv", action="store_true",
         help="Force CSV input mode, ignore candidate_profile.json")
+    parser.add_argument("--preserve", action="store_true",
+        help="Keep existing open_roles.csv and merge new results (default: overwrite)")
     args = parser.parse_args()
+
+    if not args.preserve:
+        for path in (args.output, "last_run_summary.json", "errors.log"):
+            Path(path).unlink(missing_ok=True)
 
     error_log = setup_error_log()
 
