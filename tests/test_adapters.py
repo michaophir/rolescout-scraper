@@ -49,6 +49,8 @@ def test_greenhouse(load_fixture, fake_session):
     assert first.workplace_type == ""
     assert first.url == "https://job-boards.greenhouse.io/anthropic/jobs/5456619008"
     assert first.date_posted == "2026-10-19"
+    # first_published, not updated_at (2026-08-21 for this role)
+    assert roles[1].date_posted == "2024-12-20"
     assert first.compensation_text == "$190,000 — $230,000 USD"
     assert first.description.startswith("About Anthropic Anthropic’s mission is")
     assert len(first.description) == 8864  # not truncated
@@ -72,7 +74,16 @@ def test_lever(load_fixture, fake_session):
     assert first.date_posted == "2026-10-23"
     assert first.compensation_text.startswith(
         "The United States base range for this position is $87,069-$124,385 plus equity.")
-    assert first.description.startswith("Spotify Technology is our business-to-business")
+    # Opening text, then the list sections under their headings, then `additional`.
+    description = first.description
+    assert description.startswith("Spotify Technology is our business-to-business")
+    opening = description.index("clear business value will be key to your success.")
+    do = description.index("What You'll Do\n• Identify and pursue new business opportunities")
+    are = description.index("Who You Are\n• You have 4+ years of experience")
+    where = description.index("Where You'll Be\nThis role is based in New York City")
+    additional = description.index("The United States base range for this position")
+    assert opening < do < are < where < additional
+    assert "<" not in description
     assert roles[1].location == "London"
 
 
@@ -108,22 +119,27 @@ def test_company_override(adapter_cls, load_fixture, fake_session):
 def test_greenhouse_edge_cases(fake_session):
     payload = {"jobs": [{
         "id": 7, "title": "Engineer", "absolute_url": "https://x/7",
-        "location": {"name": "Remote - US"}, "departments": [], "updated_at": None,
+        "location": {"name": "Remote - US"}, "departments": [],
+        "first_published": None, "updated_at": "2026-03-04T10:00:00-05:00",
         "content": "&lt;p&gt;Build &amp;amp; ship&lt;/p&gt;",
     }]}
     (role,) = GreenhouseAdapter(fake_session(payload)).fetch("acme")
     assert role.workplace_type == "remote"  # inferred from location
     assert role.company == "acme"  # falls back to the slug
-    assert (role.department, role.date_posted, role.compensation_text) == ("", "", "")
+    assert role.date_posted == "2026-03-04"  # falls back to updated_at
+    assert (role.department, role.compensation_text) == ("", "")
     assert role.description == "Build & ship"  # double-encoded entities decoded
 
 
 def test_lever_edge_cases(fake_session):
     payload = [{"id": "a", "text": "Engineer", "hostedUrl": "https://x/a",
                 "description": "<p>Hello <b>there</b></p>", "workplaceType": "unspecified",
+                "lists": [{"text": "Requirements", "content": "<li>Python</li><li>SQL &amp; dbt</li>"}],
+                "additional": "<div>Pay: $1</div>",
                 "createdAt": 1700000000000}]
     (role,) = LeverAdapter(fake_session(payload)).fetch("acme")
-    assert role.description == "Hello there"  # HTML fallback when no plain text
+    # HTML fallbacks when the *Plain fields are absent; list items one per line.
+    assert role.description == "Hello there\n\nRequirements\nPython\nSQL & dbt\n\nPay: $1"
     assert role.workplace_type == ""
     assert role.date_posted == "2023-11-14"  # UTC, independent of local timezone
     assert (role.department, role.location, role.compensation_text) == ("", "", "")

@@ -35,3 +35,12 @@ def normalize_workplace_type(value: object) -> str:
     if s in {"onsite", "inoffice", "inperson"}:
         return "onsite"
     return ""
+
+
+def html_to_lines(raw: str | None) -> str:
+    """Like strip_html, but keeps one line per block (list item, paragraph)."""
+    if not raw:
+        return ""
+    text = BeautifulSoup(html.unescape(raw), "html.parser").get_text(separator="\n")
+    lines = (collapse_whitespace(line) for line in html.unescape(text).splitlines())
+    return "\n".join(line for line in lines if line)

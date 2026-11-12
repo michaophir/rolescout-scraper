@@ -56,7 +56,7 @@ class GreenhouseAdapter(SourceAdapter):
                 # inferred, from the location text.
                 workplace_type="remote" if "remote" in location.lower() else "",
                 url=item.get("absolute_url") or "",
-                date_posted=(item.get("updated_at") or "")[:10],
+                date_posted=(item.get("first_published") or item.get("updated_at") or "")[:10],
                 compensation_text=extract_compensation(content_html),
                 description=strip_html(content_html),
             ))

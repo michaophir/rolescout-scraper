@@ -47,3 +47,19 @@ def load_fixture():
 @pytest.fixture
 def fake_session():
     return FakeSession
+
+
+@pytest.fixture(autouse=True)
+def isolated_db_path(monkeypatch, tmp_path):
+    """Point the default database at a temp file so no test touches ~/.rolescout."""
+    path = tmp_path / "rolescout-test.db"
+    monkeypatch.setenv("ROLESCOUT_DB", str(path))
+    return path
+
+
+@pytest.fixture
+def conn(isolated_db_path):
+    from rolescout.db import connect
+    connection = connect()
+    yield connection
+    connection.close()
