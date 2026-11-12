@@ -12,3 +12,6 @@ companies.txt
 *.db
 *.db-wal
 *.db-shm
+
+# Company list exports (personal data: your target companies)
+rolescout-companies*.json

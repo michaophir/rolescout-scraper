@@ -70,7 +70,8 @@ def test_board_linked_from_the_careers_page_is_saved(conn):
         ("lever", "acme-inc", "link", "linked from https://acme.com/careers")]
     assert resolution(conn, "Acme")["outcome"] == "mapped"
     # Strong evidence found: no slug was guessed.
-    assert web.urls == ["https://acme.com", "https://acme.com/careers", LEVER.format("acme-inc")]
+    assert web.urls == ["https://acme.com/robots.txt", "https://acme.com",
+                        "https://acme.com/careers", LEVER.format("acme-inc")]
 
 
 def test_unconfirmed_guess_is_listed_but_not_saved(conn):
@@ -119,7 +120,8 @@ def test_unsupported_job_system_is_recorded_with_its_url(conn):
     saved = resolution(conn, "Dynamo")
     assert (saved["job_system"], saved["job_system_url"]) == ("workday", res.job_system_url)
     # A careers page that names its job system outranks guessing: no board API was called.
-    assert web.urls == ["https://dynamo.com", "https://dynamo.com/careers"]
+    assert web.urls == ["https://dynamo.com/robots.txt", "https://dynamo.com",
+                        "https://dynamo.com/careers"]
 
 
 # --- confirmation, per source ------------------------------------------------
@@ -203,8 +205,8 @@ def test_nothing_found_stays_unresolved(conn):
     (res,), web = run_resolve(conn, {})
     assert res.outcome == "unresolved"
     assert res.notes[0] == "could not fetch https://lumen.example: HTTP 404"
-    # homepage, two fallback careers paths, one slug x three sources
-    assert len(web.urls) == 1 + 2 + 3
+    # robots.txt, homepage, two fallback careers paths, one slug x three sources
+    assert len(web.urls) == 1 + 1 + 2 + 3
     assert resolution(conn, "Lumen")["outcome"] == "unresolved"
 
 
@@ -266,6 +268,50 @@ def test_one_company_blowing_up_does_not_stop_the_rest(conn, monkeypatch):
     results, _ = run_resolve(conn, {})
     assert [(r.company, r.outcome) for r in results] == [("Acme", "unresolved"), ("Bolt", "unresolved")]
     assert "parser exploded" in results[0].notes[0]
+
+
+# --- robots.txt --------------------------------------------------------------
+
+def test_robots_txt_disallowed_page_is_skipped_and_noted(conn):
+    companies.add_company(conn, "Acme", website="https://acme.com")
+    (res,), web = run_resolve(conn, {
+        "https://acme.com/robots.txt": "User-agent: *\nDisallow: /careers\n",
+        "https://acme.com": '<a href="/careers">Careers</a>',
+        "https://acme.com/careers": '<a href="https://jobs.lever.co/acme">Jobs</a>',  # must not be read
+        LEVER.format("acme"): lever_jobs(3),
+        "https://jobs.lever.co/acme": "<title>Acme</title>",
+    })
+    assert "https://acme.com/careers" not in web.urls
+    assert "robots.txt disallows https://acme.com/careers; skipped" in res.notes
+    assert web.urls.count("https://acme.com/robots.txt") == 1  # fetched once per site
+    # The board APIs are not subject to the company's robots.txt: the guess still ran,
+    # and with no link evidence it stays unconfirmed.
+    assert LEVER.format("acme") in web.urls
+    assert res.outcome == "needs_review" and boards_of(conn, "Acme") == []
+    assert "robots.txt disallows https://acme.com/careers; skipped" in resolution(conn, "Acme")["evidence"]["notes"]
+
+
+def test_robots_txt_rules_for_our_user_agent_and_server_errors(conn):
+    companies.add_company(conn, "Bolt", website="https://bolt.com")
+    companies.add_company(conn, "Cobalt", website="https://cobalt.com")
+    companies.add_company(conn, "Dynamo", website="https://dynamo.com")
+    results, web = run_resolve(conn, {
+        # Blocked by name, while other crawlers are allowed.
+        "https://bolt.com/robots.txt": "User-agent: rolescout\nDisallow: /\n\nUser-agent: *\nAllow: /\n",
+        "https://bolt.com": '<a href="https://jobs.lever.co/bolt">Jobs</a>',
+        # A robots.txt that errors means "stay out" (RFC 9309).
+        "https://cobalt.com/robots.txt": 503,
+        "https://cobalt.com": '<a href="https://jobs.lever.co/cobalt">Jobs</a>',
+        # Everyone else is blocked, we are allowed.
+        "https://dynamo.com/robots.txt": "User-agent: *\nDisallow: /\n\nUser-agent: rolescout\nAllow: /\n",
+        "https://dynamo.com": '<a href="https://jobs.lever.co/dynamo">Jobs</a>',
+        LEVER.format("dynamo"): lever_jobs(2),
+    })
+    by = {r.company: r for r in results}
+    assert "https://bolt.com" not in web.urls and "https://cobalt.com" not in web.urls
+    assert by["Bolt"].notes[0] == "robots.txt disallows https://bolt.com; skipped"
+    assert by["Cobalt"].outcome == "unresolved"
+    assert by["Dynamo"].outcome == "mapped"
 
 
 # --- helpers -----------------------------------------------------------------

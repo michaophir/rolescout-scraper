@@ -40,8 +40,9 @@ class FakeSession:
 class FakeWeb:
     """A whole fake internet: serves pages and API responses by URL, 404 otherwise.
 
-    ``pages`` maps a URL to an HTML string, a JSON-able object, or a
-    ``(final_url, body)`` tuple to simulate a redirect.
+    ``pages`` maps a URL to an HTML string, a JSON-able object, a
+    ``(final_url, body)`` tuple to simulate a redirect, or an int to return
+    that HTTP status.
     """
 
     def __init__(self, pages):
@@ -53,6 +54,8 @@ class FakeWeb:
         if url not in self.pages:
             return FakeWebResponse(url, None, 404)
         body = self.pages[url]
+        if isinstance(body, int):
+            return FakeWebResponse(url, None, body)
         if isinstance(body, tuple):
             url, body = body
         return FakeWebResponse(url, body, 200)
@@ -64,6 +67,9 @@ class FakeWebResponse:
         self.status_code = status_code
         self._body = body
         self.text = body if isinstance(body, str) else json.dumps(body)
+
+    def __repr__(self):
+        return f"<FakeWebResponse {self.status_code} {self.url}>"
 
     def json(self):
         if isinstance(self._body, str):

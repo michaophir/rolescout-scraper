@@ -2,7 +2,11 @@
 
 import argparse
 import json
+import os
 import sys
+import time
+from datetime import datetime
+from pathlib import Path
 
 from rolescout import __version__
 from rolescout.adapters import ADAPTERS, SourceError, get_adapter
@@ -11,9 +15,12 @@ from rolescout.companies import (
     set_active,
 )
 from rolescout.db import DB_ENV_VAR, DEFAULT_DB_PATH, SchemaError, connect, resolve_db_path
+from rolescout import schedule as launchd
+from rolescout.ops import BackupError, backup_database, collect_status, rotate_log
 from rolescout.query import query_roles
 from rolescout.resolve import Resolution, mapping_report, resolve_companies
-from rolescout.scout import BoardResult, run_scout
+from rolescout.scout import BoardResult, ScoutAlreadyRunning, run_scout
+from rolescout.transfer import TransferError, export_companies, import_companies
 
 DESCRIPTION_PREVIEW_CHARS = 400
 
@@ -63,8 +70,49 @@ def _cmd_fetch(args: argparse.Namespace) -> int:
 
 def _cmd_companies_import(args) -> int:
     conn = connect(args.db)
-    added, updated = import_csv(conn, args.csv)
-    print(f"Imported {args.csv}: {added} added, {updated} updated.")
+    if args.file == "-" or args.file.lower().endswith(".json"):
+        try:
+            data = json.load(sys.stdin) if args.file == "-" else json.loads(
+                Path(args.file).expanduser().read_text(encoding="utf-8"))
+        except ValueError as exc:
+            raise TransferError(f"{args.file} is not valid JSON: {exc}") from None
+        result = import_companies(conn, data)
+        print(f"Imported {'standard input' if args.file == '-' else args.file}: "
+              f"{result['companies_added']} companies added, {result['companies_updated']} updated, "
+              f"{result['boards_added']} boards added.")
+        for warning in result["warnings"]:
+            print(f"  warning: {warning}")
+        return 0
+    added, updated = import_csv(conn, args.file)
+    print(f"Imported {args.file}: {added} added, {updated} updated.")
+    return 0
+
+
+def _inside_git_repo(path: Path) -> Path | None:
+    for parent in path.resolve().parents:
+        if (parent / ".git").exists():
+            return parent
+    return None
+
+
+def _cmd_companies_export(args) -> int:
+    data = export_companies(connect(args.db))
+    text = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+    if args.file == "-":
+        sys.stdout.write(text)
+        return 0
+    path = Path(args.file).expanduser()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # Private to you: the file lists the companies you are targeting.
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(text)
+    boards = sum(len(c["boards"]) for c in data["companies"])
+    print(f"Exported {len(data['companies'])} companies and {boards} boards to {path}")
+    repo = _inside_git_repo(path)
+    if repo:
+        print(f"warning: {path} is inside the git repository at {repo}. It is personal data; "
+              "move it out or make sure it is ignored before committing.", file=sys.stderr)
     return 0
 
 
@@ -234,13 +282,11 @@ def _print_progress(result: BoardResult) -> None:
     print(f"  {result.company} ({result.source}/{result.ref}) ... {detail}", flush=True)
 
 
-def _cmd_scout(args) -> int:
-    conn = connect(args.db)
-    if not args.json:
-        print(f"Database: {resolve_db_path(args.db)}")
-    summary = run_scout(conn, delay=args.delay, on_board=None if args.json else _print_progress)
+def _scout_once(conn, args, *, as_json: bool = False):
+    """Run one scout and print its summary. Returns the summary."""
+    summary = run_scout(conn, delay=args.delay, on_board=None if as_json else _print_progress)
 
-    if args.json:
+    if as_json:
         print(json.dumps({
             "run_id": summary.run_id, "started_at": summary.started_at,
             "finished_at": summary.finished_at, "status": summary.status,
@@ -249,34 +295,183 @@ def _cmd_scout(args) -> int:
             "boards": [vars(b) for b in summary.boards],
             "companies": [vars(s) for s in summary.snapshots],
         }, indent=2, ensure_ascii=False))
+        return summary
+    print(f"\nRun {summary.run_id} {summary.status}: {summary.started_at} -> {summary.finished_at}")
+    if summary.boards:
+        rows = []
+        for snap in summary.snapshots:
+            boards = [b for b in summary.boards if b.company == snap.company]
+            failed = [b for b in boards if b.status != "ok"]
+            status = "ok" if not failed else ("error" if len(failed) == len(boards) else "partial")
+            rows.append([
+                snap.company, ", ".join(f"{b.source}/{b.ref}" for b in boards), status,
+                sum(b.roles_fetched or 0 for b in boards), snap.open_roles,
+                "baseline" if snap.baseline and not snap.opened else snap.opened, snap.closed,
+                "; ".join(b.error or "" for b in failed)])
+        rows.append(["TOTAL", f"{len(summary.boards)} boards",
+                     f"{summary.ok} ok, {summary.failed} failed",
+                     sum(b.roles_fetched or 0 for b in summary.boards),
+                     summary.total("open_roles"), summary.total("opened"),
+                     summary.total("closed"), ""])
+        print(format_table(
+            ["Company", "Boards", "Status", "Fetched", "Open", "Opened", "Closed", "Error"],
+            rows, {"Error": 60}))
     else:
-        print(f"\nRun {summary.run_id} {summary.status}: {summary.started_at} -> {summary.finished_at}")
-        if summary.boards:
-            rows = []
-            for snap in summary.snapshots:
-                boards = [b for b in summary.boards if b.company == snap.company]
-                failed = [b for b in boards if b.status != "ok"]
-                status = "ok" if not failed else ("error" if len(failed) == len(boards) else "partial")
-                rows.append([
-                    snap.company, ", ".join(f"{b.source}/{b.ref}" for b in boards), status,
-                    sum(b.roles_fetched or 0 for b in boards), snap.open_roles,
-                    "baseline" if snap.baseline and not snap.opened else snap.opened, snap.closed,
-                    "; ".join(b.error or "" for b in failed)])
-            rows.append(["TOTAL", f"{len(summary.boards)} boards",
-                         f"{summary.ok} ok, {summary.failed} failed",
-                         sum(b.roles_fetched or 0 for b in summary.boards),
-                         summary.total("open_roles"), summary.total("opened"),
-                         summary.total("closed"), ""])
-            print(format_table(
-                ["Company", "Boards", "Status", "Fetched", "Open", "Opened", "Closed", "Error"],
-                rows, {"Error": 60}))
-        else:
-            print("No active company is mapped to a board. Use: rolescout companies resolve "
-                  "(or: rolescout companies map NAME SOURCE REF)")
-        if summary.unmapped:
-            print(f"\nSkipped {summary.unmapped} active companies with no board mapping.")
+        print("No active company is mapped to a board. Use: rolescout companies resolve "
+              "(or: rolescout companies map NAME SOURCE REF)")
+    if summary.unmapped:
+        print(f"\nSkipped {summary.unmapped} active companies with no board mapping.")
+    return summary
+
+
+def _cmd_scout(args) -> int:
+    conn = connect(args.db)
+    if not args.json:
+        print(f"Database: {resolve_db_path(args.db)}")
+    try:
+        summary = _scout_once(conn, args, as_json=args.json)
+    except ScoutAlreadyRunning as exc:
+        # Not an error: the other scout is doing the work.
+        print(f"Not starting: {exc}.")
+        return 0
     # Non-zero only when nothing could be fetched at all (e.g. no network).
     return 1 if summary.boards and summary.ok == 0 else 0
+
+
+# --- unattended running: daily, backup, status, schedule --------------------
+
+def _human_bytes(n: int) -> str:
+    return f"{n / 1_000_000:.1f} MB" if n >= 100_000 else f"{n / 1000:.1f} KB"
+
+
+def _print_backup(conn, directory: str, keep: int) -> None:
+    target, removed = backup_database(conn, directory, keep=keep)
+    print(f"Backup written: {target} ({_human_bytes(target.stat().st_size)})"
+          + (f"; removed {len(removed)} older backup{'' if len(removed) == 1 else 's'}" if removed else ""))
+
+
+def _cmd_backup(args) -> int:
+    _print_backup(connect(args.db), args.directory, args.keep)
+    return 0
+
+
+def _cmd_daily(args) -> int:
+    """What the scheduled job runs: scout (retrying if the network is not up yet), then backup."""
+    if args.log:
+        log = Path(args.log).expanduser()
+        log.parent.mkdir(parents=True, exist_ok=True)
+        rotate_log(log)
+        sys.stdout = sys.stderr = open(log, "a", buffering=1, encoding="utf-8")
+    print(f"=== rolescout daily, {datetime.now().astimezone().strftime('%Y-%m-%d %H:%M:%S %Z')} ===")
+    print(f"Database: {resolve_db_path(args.db)}")
+    code = 0
+    try:
+        conn = connect(args.db)
+        for attempt in range(1, args.attempts + 1):
+            try:
+                summary = _scout_once(conn, args)
+            except ScoutAlreadyRunning as exc:
+                print(f"Not starting: {exc}. Skipping this run.")
+                return 0
+            if not summary.boards or summary.ok:
+                break
+            # Every board failed: most often the Mac just woke and has no network yet.
+            if attempt < args.attempts:
+                print(f"Every board failed (attempt {attempt} of {args.attempts}); "
+                      f"retrying in {args.retry_wait:g} seconds.")
+                time.sleep(args.retry_wait)
+            else:
+                print(f"Every board failed on all {args.attempts} attempts.")
+                code = 1
+        if args.backup_dir:
+            _print_backup(conn, args.backup_dir, args.keep)
+    except Exception as exc:  # the log must say why an unattended run died
+        print(f"error: {type(exc).__name__}: {exc}")
+        code = 1
+    print(f"=== finished {datetime.now().astimezone().strftime('%H:%M:%S')}, "
+          f"{'ok' if code == 0 else 'FAILED'} ===\n")
+    return code
+
+
+def _cmd_status(args) -> int:
+    conn = connect(args.db)
+    status = collect_status(conn, schedule=launchd.read_schedule())
+    if args.json:
+        print(json.dumps(status, indent=2, ensure_ascii=False))
+        return 0 if status["healthy"] else 1
+
+    print("HEALTHY" if status["healthy"] else "NEEDS ATTENTION")
+    for item in status["attention"]:
+        print(f"  ! {item}")
+    lines = []
+    last = status["last_run"]
+    if last:
+        lines.append(("Last run", f"{last['started_at']} ({last['hours_ago']:g} hours ago), {last['status']}"))
+        lines.append(("Companies", f"{last['companies_ok']} ok, {last['companies_failed']} failed "
+                                   f"({last['boards_ok']} boards ok, {last['boards_failed']} failed)"))
+        lines.append(("Changes", f"{last['roles_opened']} opened, {last['roles_closed']} closed in that run"))
+    else:
+        lines.append(("Last run", "never"))
+    if status["scout_running"]:
+        lines.append(("Right now", "a scout is running"))
+    failing = status["failing_boards"]
+    lines.append(("Failing boards", f"{len(failing)} failing more than two runs in a row"
+                  if failing else "none failing more than two runs in a row"))
+    lines.append(("Open roles", f"{status['open_roles']:,} across {status['companies_mapped']} mapped "
+                                f"companies ({status['companies_active']} active)"))
+    lines.append(("Database", f"{status['database']} ({_human_bytes(status['database_bytes'])})"))
+    backup = status["last_backup"]
+    if backup:
+        lines.append(("Last backup", f"{backup['path']} ({_human_bytes(backup['bytes'])}, "
+                                     f"{backup['modified']}, {backup['count']} kept)"))
+    sched = status["schedule"]
+    if not sched["supported"]:
+        lines.append(("Next run", "not scheduled (rolescout schedules itself on macOS only)"))
+    elif sched.get("loaded"):
+        lines.append(("Next run", f"{sched['next_run']} local time (daily at {sched['time']})"))
+        lines.append(("Log", sched["log"]))
+        if sched.get("database") and Path(sched["database"]) != resolve_db_path(args.db):
+            lines.append(("Note", f"the schedule runs against a different database: {sched['database']}"))
+    elif sched.get("installed"):
+        lines.append(("Next run", sched.get("error") or "schedule file present but not loaded"))
+    else:
+        lines.append(("Next run", "not scheduled (rolescout schedule install --at HH:MM)"))
+    for label, value in lines:
+        print(f"{label + ':':<16}{value}")
+    if last and last["failed"]:
+        print("\nFailed in the last run:")
+        print(format_table(["Company", "Board", "Error"],
+                           [[f["name"], f"{f['source']}/{f['ref']}", f["error"]] for f in last["failed"]],
+                           {"Error": 80}))
+    return 0 if status["healthy"] else 1
+
+
+def _cmd_schedule_install(args) -> int:
+    hour, minute = launchd.parse_time(args.at)
+    db = resolve_db_path(args.db).resolve()
+    info = launchd.install(
+        hour, minute, db=db, keep=args.keep,
+        backup_dir=Path(args.backup_dir).expanduser().resolve(),
+        log_dir=Path(args.log_dir).expanduser().resolve())
+    connect(db).close()  # make sure the database exists before the first run
+    print(f"Scheduled: rolescout scouts daily at {hour:02d}:{minute:02d} local time, then backs up.")
+    print(f"  Next run:  {launchd.next_run(hour, minute).strftime('%Y-%m-%d %H:%M')}")
+    print(f"  Database:  {db}")
+    print(f"  Log:       {info['log']}")
+    print(f"  Backups:   {info['backup_dir']} (last {args.keep} kept)")
+    print(f"  Schedule:  {info['plist']} (launchd domain {info['domain']})")
+    if info["domain"].startswith("user/"):
+        print("  Note: loaded without a desktop session. If runs do not happen, log in at the "
+              "Mac's screen once (or enable automatic login) and install again.")
+    return 0
+
+
+def _cmd_schedule_remove(args) -> int:
+    if launchd.remove():
+        print(f"Schedule removed ({launchd.plist_path()} deleted). Logs, backups and the database are kept.")
+    else:
+        print("No schedule was installed.")
+    return 0
 
 
 # --- query ------------------------------------------------------------------
@@ -327,10 +522,17 @@ def build_parser() -> argparse.ArgumentParser:
     companies = commands.add_parser("companies", help="manage target companies and board mappings")
     sub = companies.add_subparsers(dest="subcommand", required=True, metavar="SUBCOMMAND")
 
-    p = sub.add_parser("import", parents=[db],
-                       help="import a CSV with company_name, website, tier columns")
-    p.add_argument("csv")
+    p = sub.add_parser(
+        "import", parents=[db],
+        help="import companies: a CSV (company_name, website, tier) or a .json export with boards")
+    p.add_argument("file", help="CSV file, .json export, or - to read an export from standard input")
     p.set_defaults(func=_cmd_companies_import)
+
+    p = sub.add_parser(
+        "export", parents=[db],
+        help="write companies and their board mappings to a JSON file (personal data)")
+    p.add_argument("file", help="where to write it, or - for standard output")
+    p.set_defaults(func=_cmd_companies_export)
 
     p = sub.add_parser("list", parents=[db], help="list companies with their board and status")
     p.add_argument("--active", action="store_true", help="only active companies")
@@ -390,6 +592,46 @@ def build_parser() -> argparse.ArgumentParser:
     scout.add_argument("--json", action="store_true", help="print the run summary as JSON")
     scout.set_defaults(func=_cmd_scout)
 
+    p = commands.add_parser(
+        "status", parents=[db],
+        help="health at a glance, no network: last run, failures, open roles, next run")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=_cmd_status)
+
+    p = commands.add_parser(
+        "backup", parents=[db],
+        help="write a consistent copy of the database (safe during a scout)")
+    p.add_argument("directory", help="folder to write rolescout-YYYYMMDD-HHMMSS.db into")
+    p.add_argument("--keep", type=int, default=7, metavar="N",
+                   help="how many backups to keep in that folder (default: 7)")
+    p.set_defaults(func=_cmd_backup)
+
+    sched = commands.add_parser("schedule", help="daily scheduled scout (macOS launchd)")
+    ssub = sched.add_subparsers(dest="subcommand", required=True, metavar="SUBCOMMAND")
+    p = ssub.add_parser("install", parents=[db],
+                        help="run scout and backup every day at a set time; replaces any existing schedule")
+    p.add_argument("--at", required=True, metavar="HH:MM", help="24-hour local time, e.g. 07:30")
+    p.add_argument("--backup-dir", default=str(launchd.DEFAULT_BACKUP_DIR), metavar="DIR",
+                   help=f"where the daily backup goes (default: {launchd.DEFAULT_BACKUP_DIR})")
+    p.add_argument("--keep", type=int, default=7, metavar="N", help="backups to keep (default: 7)")
+    p.add_argument("--log-dir", default=str(launchd.DEFAULT_LOG_DIR), metavar="DIR",
+                   help=f"where the log goes (default: {launchd.DEFAULT_LOG_DIR})")
+    p.set_defaults(func=_cmd_schedule_install)
+    p = ssub.add_parser("remove", help="remove the daily schedule; keeps logs, backups and data")
+    p.set_defaults(func=_cmd_schedule_remove)
+
+    p = commands.add_parser(
+        "daily", parents=[db],
+        help="what the schedule runs: scout, retry if offline, then backup")
+    p.add_argument("--backup-dir", metavar="DIR", help="back up here after the scout")
+    p.add_argument("--keep", type=int, default=7, metavar="N")
+    p.add_argument("--log", metavar="FILE", help="append output to this file (rotated at 1 MB, 3 kept)")
+    p.add_argument("--delay", type=float, default=1.0, metavar="SECONDS")
+    p.add_argument("--attempts", type=int, default=3, metavar="N",
+                   help="tries when every board fails, e.g. no network after wake (default: 3)")
+    p.add_argument("--retry-wait", type=float, default=120.0, metavar="SECONDS")
+    p.set_defaults(func=_cmd_daily)
+
     query = commands.add_parser(
         "query", parents=[db], help="search stored roles (no network)")
     query.add_argument("--company", help="exact company name (case-insensitive)")
@@ -416,7 +658,8 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return args.func(args)
-    except (CompanyError, SchemaError, FileNotFoundError) as exc:
+    except (CompanyError, SchemaError, FileNotFoundError, TransferError, BackupError,
+            launchd.ScheduleError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:

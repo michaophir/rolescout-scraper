@@ -1,9 +1,11 @@
 """The scout run: fetch every board of every active company and record what changed."""
 
 import json
+import os
 import sqlite3
 import time
 from collections.abc import Callable, Iterable
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from itertools import groupby
 
@@ -11,6 +13,11 @@ from rolescout.adapters import get_adapter
 from rolescout.db import transaction, utc_now
 from rolescout.http import make_session
 from rolescout.models import Role
+
+try:
+    import fcntl
+except ImportError:  # not a Unix system: no lock is taken
+    fcntl = None
 
 # A role is closed once it has been absent from this many consecutive
 # successful fetches of its board. Failed fetches are not counted.
@@ -63,6 +70,55 @@ class RunSummary:
 
     def total(self, attr: str) -> int:
         return sum(getattr(s, attr) for s in self.snapshots)
+
+
+class ScoutAlreadyRunning(Exception):
+    """Another scout holds the lock on this database."""
+
+
+def database_file(conn: sqlite3.Connection) -> str:
+    """Path of the connection's main database file ("" for an in-memory one)."""
+    return conn.execute("PRAGMA database_list").fetchone()[2] or ""
+
+
+@contextmanager
+def scout_lock(conn: sqlite3.Connection):
+    """Hold the one-scout-at-a-time lock for this database.
+
+    An OS file lock on ``<database>.lock``: it disappears with the process,
+    so a crashed scout never leaves a stale lock behind.
+    """
+    path = database_file(conn)
+    if not path or fcntl is None:
+        yield
+        return
+    handle = open(path + ".lock", "a+")
+    try:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            handle.seek(0)
+            pid = handle.read().strip()
+            raise ScoutAlreadyRunning(
+                "another scout is already running on this database"
+                + (f" (pid {pid})" if pid else "")) from None
+        handle.seek(0)
+        handle.truncate()
+        handle.write(str(os.getpid()))
+        handle.flush()
+        yield
+        handle.seek(0)
+        handle.truncate()
+    finally:
+        handle.close()  # closing releases the lock
+
+
+def scout_is_running(conn: sqlite3.Connection) -> bool:
+    try:
+        with scout_lock(conn):
+            return False
+    except ScoutAlreadyRunning:
+        return True
 
 
 def apply_fetch(conn: sqlite3.Connection, company_id: int, board_id: int,
@@ -127,7 +183,16 @@ def _open_by_department(conn, company_id: int) -> dict[str, int]:
     return {r["dept"]: r["n"] for r in rows}
 
 
-def run_scout(
+def run_scout(conn: sqlite3.Connection, **kwargs) -> RunSummary:
+    """Run one scout, or raise ``ScoutAlreadyRunning`` if one is in progress.
+
+    See ``_run_scout`` for the arguments.
+    """
+    with scout_lock(conn):
+        return _run_scout(conn, **kwargs)
+
+
+def _run_scout(
     conn: sqlite3.Connection,
     *,
     delay: float = 1.0,

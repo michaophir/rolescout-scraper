@@ -19,6 +19,7 @@ import sqlite3
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from urllib.parse import unquote, urljoin, urlparse
+from urllib.robotparser import RobotFileParser
 
 import requests
 from bs4 import BeautifulSoup
@@ -26,7 +27,7 @@ from bs4 import BeautifulSoup
 from rolescout.adapters import ADAPTERS, BoardNotFound, SourceError, get_adapter
 from rolescout.companies import CompanyError, add_board
 from rolescout.db import transaction, utc_now
-from rolescout.http import make_session
+from rolescout.http import USER_AGENT, make_session
 
 PAGE_TIMEOUT = 20
 PAGE_MAX_CHARS = 3_000_000
@@ -225,6 +226,7 @@ class Resolver:
     def __init__(self, session: requests.Session | None = None, delay: float = 1.0) -> None:
         self.session = session or make_session(min_interval=delay)
         self._adapters: dict[str, object] = {}
+        self._robots: dict[str, RobotFileParser | None] = {}
 
     def adapter(self, source: str):
         if source not in self._adapters:
@@ -233,8 +235,38 @@ class Resolver:
 
     # -- pages
 
+    def _allowed(self, url: str, res: Resolution) -> bool:
+        """Whether the site's robots.txt lets us read this page.
+
+        One robots.txt request per site, cached. A missing file (any 4xx)
+        allows everything; a server error disallows everything, as RFC 9309
+        asks. Applies to company websites only, never to the job board APIs.
+        """
+        parsed = urlparse(url)
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+        if origin not in self._robots:
+            rules: RobotFileParser | None = RobotFileParser()
+            res.requests += 1
+            try:
+                resp = self.session.get(
+                    origin + "/robots.txt", timeout=PAGE_TIMEOUT, headers={"Accept": "text/plain,*/*"})
+                if resp.status_code == 200:
+                    rules.parse((resp.text or "")[:500_000].splitlines())
+                elif resp.status_code >= 500:
+                    rules.parse(["User-agent: *", "Disallow: /"])
+                else:
+                    rules = None
+            except requests.RequestException:
+                rules = None  # unreachable: the page request will report that itself
+            self._robots[origin] = rules
+        rules = self._robots[origin]
+        return rules is None or rules.can_fetch(USER_AGENT, url)
+
     def _page(self, url: str, res: Resolution) -> tuple[str, str] | None:
         """(final URL, HTML) or None. Never raises."""
+        if not self._allowed(url, res):
+            res.notes.append(f"robots.txt disallows {url}; skipped")
+            return None
         res.requests += 1
         try:
             resp = self.session.get(
