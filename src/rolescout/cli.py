@@ -16,9 +16,14 @@ from rolescout.companies import (
 )
 from rolescout.db import DB_ENV_VAR, DEFAULT_DB_PATH, SchemaError, connect, resolve_db_path
 from rolescout import schedule as launchd
-from rolescout.ops import BackupError, backup_database, collect_status, rotate_log
+from rolescout.gaps import (
+    GapsError, connector_brief, gaps_report, mark_rechecked, recheck_due, summary_line,
+)
+from rolescout.ops import BackupError, backup_database, collect_status, failing_boards, rotate_log
 from rolescout.query import query_roles
-from rolescout.resolve import Resolution, mapping_report, resolve_companies
+from rolescout.resolve import (
+    Resolution, clear_job_system, mapping_report, resolve_companies, set_job_system,
+)
 from rolescout.scout import BoardResult, ScoutAlreadyRunning, run_scout
 from rolescout.transfer import TransferError, export_companies, import_companies
 
@@ -179,7 +184,8 @@ def _print_resolution(res: Resolution, dry_run: bool) -> None:
         boards = ", ".join(f"{c.source}/{c.ref}" for c in res.to_save)
         line = f"{verb} {boards}"
     elif res.outcome == "needs_review":
-        line = "needs review"
+        line = (f"uses {res.job_system}, board name not found" if res.job_system and not res.candidates
+                else "needs review")
     elif res.outcome == "unsupported":
         line = f"unsupported: {res.job_system} ({res.job_system_url})"
     else:
@@ -192,25 +198,11 @@ def _candidate_rows(results: list[Resolution], wanted) -> list[list]:
             for r in results for c in r.candidates if wanted(r, c)]
 
 
-def _cmd_companies_resolve(args) -> int:
-    conn = connect(args.db)
-    if not args.json:
-        print(f"Database: {resolve_db_path(args.db)}" + ("  (dry run: nothing is saved)" if args.dry_run else ""))
-    results = resolve_companies(
-        conn, names=args.names, dry_run=args.dry_run, delay=args.delay,
-        on_company=None if args.json else lambda r: _print_resolution(r, args.dry_run))
-    if args.json:
-        print(json.dumps([{**vars(r), "candidates": [vars(c) for c in r.candidates]}
-                          for r in results], indent=2, ensure_ascii=False))
-        return 0
-    if not results:
-        print("Nothing to resolve: every active company already has a board.")
-        return 0
-
-    verb = "Would save" if args.dry_run else "Saved"
+def _print_resolve_summary(results: list[Resolution], dry_run: bool) -> None:
+    verb = "Would save" if dry_run else "Saved"
     headers = ["Company", "Board", "Found by", "Roles", "Evidence"]
     widths = {"Evidence": 130}
-    saved = _candidate_rows(results, lambda r, c: c in r.to_save)
+    saved = _candidate_rows(results, lambda r, c: c in r.to_save and (c.saved or dry_run))
     if saved:
         print(f"\n{verb} ({len(saved)}):")
         print(format_table(headers, saved, widths))
@@ -223,6 +215,12 @@ def _cmd_companies_resolve(args) -> int:
     if rejected:
         print(f"\nRejected, a different company owns the slug ({len(rejected)}):")
         print(format_table(headers, rejected, widths))
+    boardless = [[r.company, r.job_system, r.job_system_url] for r in results
+                 if r.outcome == "needs_review" and r.job_system and not r.candidates]
+    if boardless:
+        print(f"\nOn a supported system, but the board name was not found ({len(boardless)}) "
+              "- map by hand: rolescout companies map NAME SOURCE BOARD")
+        print(format_table(["Company", "Job system", "Seen on"], boardless, {"Seen on": 100}))
     unsupported = [[r.company, r.job_system, r.job_system_url] for r in results
                    if r.outcome == "unsupported"]
     if unsupported:
@@ -231,13 +229,112 @@ def _cmd_companies_resolve(args) -> int:
     unresolved = [[r.company, "; ".join(r.notes) or "no careers page or board found"]
                   for r in results if r.outcome == "unresolved"]
     if unresolved:
-        print(f"\nUnresolved ({len(unresolved)}):")
+        print(f"\nNot identified ({len(unresolved)}) - if you find the job system yourself: "
+              "rolescout companies set-system NAME SYSTEM URL")
         print(format_table(["Company", "What happened"], unresolved, {"What happened": 110}))
     counts = {o: sum(r.outcome == o for r in results)
               for o in ("mapped", "needs_review", "unsupported", "unresolved")}
     print(f"\n{len(results)} companies: {counts['mapped']} mapped, {counts['needs_review']} need review, "
           f"{counts['unsupported']} on an unsupported system, {counts['unresolved']} unresolved. "
           f"{sum(r.requests for r in results)} requests.")
+
+
+def _cmd_companies_resolve(args) -> int:
+    conn = connect(args.db)
+    recheck = getattr(args, "recheck", False)
+    if not args.json:
+        print(f"Database: {resolve_db_path(args.db)}" + ("  (dry run: nothing is saved)" if args.dry_run else ""))
+    failing = failing_boards(conn) if recheck else []
+    if failing and not args.json:
+        print("Also re-resolving companies whose board has failed three or more runs in a row: "
+              + ", ".join(sorted({b["company"] for b in failing})))
+    results = resolve_companies(
+        conn, names=None if recheck else args.names, failing=failing, dry_run=args.dry_run,
+        delay=args.delay, on_company=None if args.json else lambda r: _print_resolution(r, args.dry_run))
+    if recheck and not args.dry_run:
+        mark_rechecked(conn)
+    if args.json:
+        print(json.dumps([{**vars(r), "candidates": [vars(c) for c in r.candidates]}
+                          for r in results], indent=2, ensure_ascii=False))
+        return 0
+    if not results:
+        print("Nothing to resolve: every active company has a board or a recorded job system.")
+        return 0
+    _print_resolve_summary(results, args.dry_run)
+    return 0
+
+
+def _cmd_companies_set_system(args) -> int:
+    conn = connect(args.db)
+    set_job_system(conn, args.name, args.system, args.url, args.note or "")
+    row = conn.execute(
+        "SELECT c.name, r.job_system FROM company_resolutions r JOIN companies c "
+        "ON c.id = r.company_id WHERE c.name = ?", (args.name.strip(),)).fetchone()
+    print(f"{row['name']}: job system recorded as {row['job_system']} ({args.url.strip()}). "
+          "Automatic detection will not overwrite it.")
+    return 0
+
+
+def _cmd_companies_clear_system(args) -> int:
+    conn = connect(args.db)
+    name = get_company(conn, args.name)["name"]
+    if clear_job_system(conn, args.name):
+        print(f"{name}: hand-recorded job system removed; the next resolve will look again.")
+    else:
+        print(f"{name} has no hand-recorded job system.")
+    return 0
+
+
+# --- gaps and connector briefs ----------------------------------------------
+
+def _tier(tier) -> str:
+    return "" if tier is None else f"T{tier}"
+
+
+def _print_gaps(report: dict) -> None:
+    uncovered = report["active_companies"] - report["covered"]
+    print(f"Coverage gaps: {summary_line(report)} "
+          f"({uncovered} of {report['active_companies']} active companies not covered)")
+
+    def system_rows(groups):
+        return [[g["system"] if i == 0 else "", len(g["companies"]) if i == 0 else "",
+                 g["why"] if i == 0 else "", m["company"], _tier(m["tier"]),
+                 (m["url"] or "") + ("  (by hand)" if m["manual"] else "")]
+                for g in groups for i, m in enumerate(g["companies"])]
+    headers = ["Job system", "Count", "Why", "Company", "Tier", "URL"]
+    candidates = [g for g in report["systems"] if g["build_candidate"]]
+    others = [g for g in report["systems"] if not g["build_candidate"]]
+    print("\nBuild candidates (3 or more companies, or a tier-1 company) "
+          "- details: rolescout brief SYSTEM")
+    print(format_table(headers, system_rows(candidates), {"URL": 80}) if candidates else "  (none)")
+    print("\nOther unsupported job systems:")
+    print(format_table(headers, system_rows(others), {"URL": 80}) if others else "  (none)")
+
+    print("\nOn a supported system, not mapped yet - rolescout companies map NAME SOURCE BOARD")
+    rows = []
+    for e in report["needs_mapping"]:
+        boards = "; ".join(f"{c['source']}/{c['ref']}: {c['detail']}" for c in e["candidates"])
+        rows.append([e["company"], _tier(e["tier"]), e["system"] or "",
+                     boards or (e["notes"][-1] if e["notes"] else "")])
+    print(format_table(["Company", "Tier", "System", "Detail"], rows, {"Detail": 110}) if rows else "  (none)")
+
+    print("\nNeeds identification - rolescout companies set-system NAME SYSTEM URL")
+    rows = [[e["company"], _tier(e["tier"]), e["careers_url"] or e["website"] or "", e["reason"]]
+            for e in report["unidentified"]]
+    print(format_table(["Company", "Tier", "Careers page", "Why"], rows, {"Why": 80}) if rows else "  (none)")
+
+
+def _cmd_gaps(args) -> int:
+    report = gaps_report(connect(args.db))
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+    else:
+        _print_gaps(report)
+    return 0
+
+
+def _cmd_brief(args) -> int:
+    print(connector_brief(connect(args.db), args.system))
     return 0
 
 
@@ -266,8 +363,9 @@ def _cmd_companies_report(args) -> int:
     rows = []
     for u in report["unresolved"]:
         pending = [c for c in u["candidates"] if c["status"] == "unconfirmed"]
-        detail = "; ".join(f"{c['source']}/{c['ref']}: {c['detail']}" for c in pending) or u["reason"]
-        rows.append([u["company"], "needs review" if pending else u["reason"].split(";")[0][:40], detail])
+        detail = ("; ".join(f"{c['source']}/{c['ref']}: {c['detail']}" for c in pending)
+                  or (u["notes"][-1] if u["reason"] == "needs review" and u["notes"] else u["reason"]))
+        rows.append([u["company"], u["reason"].split(";")[0][:40], detail])
     print(format_table(["Company", "Status", "Detail"], rows, {"Detail": 100}) if rows else "  (none)")
     return 0
 
@@ -355,6 +453,33 @@ def _cmd_backup(args) -> int:
     return 0
 
 
+def _weekly_recheck(conn, args) -> None:
+    """Re-resolve unmapped companies and owners of failing boards. Never fails the daily run."""
+    try:
+        failing = failing_boards(conn)
+        print("\nWeekly coverage re-check"
+              + (": includes boards failing three or more runs in a row ("
+                 + ", ".join(f"{b['company']} {b['source']}/{b['ref']}" for b in failing) + ")"
+                 if failing else ""))
+        results = resolve_companies(conn, failing=failing, delay=args.delay,
+                                    on_company=lambda r: _print_resolution(r, False))
+        mark_rechecked(conn)
+        if results:
+            _print_resolve_summary(results, False)
+        else:
+            print("Nothing to re-check.")
+        for board in failing:
+            added = [c for r in results if r.company == board["company"] for c in r.candidates if c.saved]
+            if added:
+                print(f"{board['company']}: found {', '.join(f'{c.source}/{c.ref}' for c in added)}. "
+                      f"The old board {board['source']}/{board['ref']} is still mapped and failing; "
+                      f"remove it with: rolescout companies unmap \"{board['company']}\" "
+                      f"{board['source']} {board['ref']}")
+        print(f"Coverage gaps: {summary_line(gaps_report(conn))}")
+    except Exception as exc:
+        print(f"Coverage re-check failed, will try again tomorrow: {type(exc).__name__}: {exc}")
+
+
 def _cmd_daily(args) -> int:
     """What the scheduled job runs: scout (retrying if the network is not up yet), then backup."""
     if args.log:
@@ -383,6 +508,8 @@ def _cmd_daily(args) -> int:
             else:
                 print(f"Every board failed on all {args.attempts} attempts.")
                 code = 1
+        if code == 0 and recheck_due(conn, args.recheck_days):
+            _weekly_recheck(conn, args)
         if args.backup_dir:
             _print_backup(conn, args.backup_dir, args.keep)
     except Exception as exc:  # the log must say why an unattended run died
@@ -420,6 +547,7 @@ def _cmd_status(args) -> int:
     lines.append(("Open roles", f"{status['open_roles']:,} across {status['companies_mapped']} mapped "
                                 f"companies ({status['companies_active']} active)"))
     lines.append(("Database", f"{status['database']} ({_human_bytes(status['database_bytes'])})"))
+    lines.append(("Coverage gaps", status["gaps"]["summary"] + "  (rolescout gaps)"))
     backup = status["last_backup"]
     if backup:
         lines.append(("Last backup", f"{backup['path']} ({_human_bytes(backup['bytes'])}, "
@@ -580,6 +708,29 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=_cmd_companies_resolve)
 
     p = sub.add_parser(
+        "recheck", parents=[db],
+        help="resolve unmapped companies and companies whose board keeps failing "
+             "(the daily job does this weekly)")
+    p.add_argument("--dry-run", action="store_true", help="show what would be saved; write nothing")
+    p.add_argument("--delay", type=float, default=1.0, metavar="SECONDS")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=_cmd_companies_resolve, recheck=True, names=[])
+
+    p = sub.add_parser(
+        "set-system", parents=[db],
+        help="record by hand which job system a company uses; detection never overwrites it")
+    p.add_argument("name")
+    p.add_argument("system", help="e.g. workday, rippling, paycom, or custom for a home-built site")
+    p.add_argument("url", help="where its jobs are listed")
+    p.add_argument("--note", help="anything worth keeping, e.g. how you found it")
+    p.set_defaults(func=_cmd_companies_set_system)
+
+    p = sub.add_parser("clear-system", parents=[db],
+                       help="forget a hand-recorded job system so detection applies again")
+    p.add_argument("name")
+    p.set_defaults(func=_cmd_companies_clear_system)
+
+    p = sub.add_parser(
         "report", parents=[db],
         help="mapping status of all companies: mapped, unsupported job system, unresolved")
     p.add_argument("--json", action="store_true")
@@ -591,6 +742,18 @@ def build_parser() -> argparse.ArgumentParser:
                        help="minimum pause between requests (default: 1.0)")
     scout.add_argument("--json", action="store_true", help="print the run summary as JSON")
     scout.set_defaults(func=_cmd_scout)
+
+    p = commands.add_parser(
+        "gaps", parents=[db],
+        help="companies we cannot fetch, grouped by job system, with connectors worth building")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=_cmd_gaps)
+
+    p = commands.add_parser(
+        "brief", parents=[db],
+        help="print a connector brief for one unsupported job system (Markdown, stays local)")
+    p.add_argument("system", help="a job system named in: rolescout gaps")
+    p.set_defaults(func=_cmd_brief)
 
     p = commands.add_parser(
         "status", parents=[db],
@@ -630,6 +793,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--attempts", type=int, default=3, metavar="N",
                    help="tries when every board fails, e.g. no network after wake (default: 3)")
     p.add_argument("--retry-wait", type=float, default=120.0, metavar="SECONDS")
+    p.add_argument("--recheck-days", type=float, default=7.0, metavar="DAYS",
+                   help="re-check coverage (resolve unmapped companies and failing boards) "
+                        "this often; 0 turns it off (default: 7)")
     p.set_defaults(func=_cmd_daily)
 
     query = commands.add_parser(
@@ -659,7 +825,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return args.func(args)
     except (CompanyError, SchemaError, FileNotFoundError, TransferError, BackupError,
-            launchd.ScheduleError) as exc:
+            launchd.ScheduleError, GapsError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:

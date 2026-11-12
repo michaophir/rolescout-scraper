@@ -129,6 +129,13 @@ MIGRATIONS: list[list[str]] = [
         )
         """,
     ],
+    [
+        # A job system recorded by hand (companies set-system). Automatic
+        # detection never overwrites a row with manual = 1.
+        "ALTER TABLE company_resolutions ADD COLUMN manual INTEGER NOT NULL DEFAULT 0",
+        # Small facts about the database itself, e.g. when coverage was last re-checked.
+        "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+    ],
 ]
 
 SCHEMA_VERSION = len(MIGRATIONS)
@@ -175,6 +182,16 @@ def migrate(conn: sqlite3.Connection) -> None:
             for statement in MIGRATIONS[version]:
                 conn.execute(statement)
             conn.execute(f"PRAGMA user_version = {version + 1}")
+
+
+def get_meta(conn: sqlite3.Connection, key: str) -> str | None:
+    row = conn.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+    return row[0] if row else None
+
+
+def set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
+    with transaction(conn):
+        conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, value))
 
 
 def connect(path: str | os.PathLike | None = None) -> sqlite3.Connection:

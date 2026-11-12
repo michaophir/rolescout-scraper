@@ -135,6 +135,18 @@ healthy and 1 when not, so from your own machine:
 ssh mac '~/.rolescout/venv/bin/rolescout status'
 ```
 
+`status` also prints one `Coverage gaps:` line. Gaps are companies rolescout
+cannot fetch yet; they never change the exit code. About once a week the
+daily run re-checks them by itself: it re-resolves companies with no board
+and companies whose board has failed three or more runs in a row. To see the
+detail, or to record a job system found by hand:
+
+```sh
+rolescout gaps
+rolescout brief SYSTEM
+rolescout companies set-system NAME SYSTEM URL
+```
+
 After the first scheduled time has passed, check that the run happened:
 
 ```sh

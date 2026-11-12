@@ -88,6 +88,25 @@ def rotate_log(path: str | os.PathLike, *, max_bytes: int = LOG_MAX_BYTES, keep:
 
 # --- status ------------------------------------------------------------------
 
+def failing_boards(conn: sqlite3.Connection, min_runs: int = FAILING_AFTER_RUNS) -> list[dict]:
+    """Boards of active companies whose last ``min_runs`` or more fetches all failed."""
+    found = []
+    for board in conn.execute(
+            "SELECT b.source, b.ref, b.last_success_at, b.last_error, c.name AS company "
+            "FROM boards b JOIN companies c ON c.id = b.company_id WHERE c.active = 1 "
+            "AND b.last_error IS NOT NULL ORDER BY c.name, b.id"):
+        streak = 0
+        for attempt in conn.execute(
+                "SELECT status FROM run_boards WHERE source = ? AND ref = ? ORDER BY run_id DESC",
+                (board["source"], board["ref"])):
+            if attempt["status"] == "ok":
+                break
+            streak += 1
+        if streak >= min_runs:
+            found.append({**dict(board), "failed_runs_in_a_row": streak})
+    return found
+
+
 def _parse_utc(stamp: str) -> datetime:
     return datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
 
@@ -138,20 +157,7 @@ def collect_status(conn: sqlite3.Connection, *, schedule: dict | None = None,
             "failed": [dict(f) for f in failed_now],
         }
 
-    # Boards whose most recent fetches all failed, counted back from the latest.
-    for board in conn.execute(
-            "SELECT b.source, b.ref, b.last_success_at, b.last_error, c.name AS company "
-            "FROM boards b JOIN companies c ON c.id = b.company_id WHERE c.active = 1 "
-            "AND b.last_error IS NOT NULL ORDER BY c.name"):
-        streak = 0
-        for attempt in conn.execute(
-                "SELECT status FROM run_boards WHERE source = ? AND ref = ? ORDER BY run_id DESC",
-                (board["source"], board["ref"])):
-            if attempt["status"] == "ok":
-                break
-            streak += 1
-        if streak >= FAILING_AFTER_RUNS:
-            status["failing_boards"].append({**dict(board), "failed_runs_in_a_row": streak})
+    status["failing_boards"] = failing_boards(conn)
 
     if schedule and schedule.get("backup_dir"):
         backups = list_backups(schedule["backup_dir"])
@@ -185,4 +191,13 @@ def collect_status(conn: sqlite3.Connection, *, schedule: dict | None = None,
         attention.append("the schedule file exists but launchd has not loaded it; "
                          "run: rolescout schedule install")
     status["healthy"] = not attention
+
+    # Coverage gaps are information, not a fault: they never affect "healthy".
+    from rolescout.gaps import RECHECK_META_KEY, gaps_report, summary_line
+    from rolescout.db import get_meta
+    report = gaps_report(conn)
+    status["gaps"] = {
+        "summary": summary_line(report), "build_candidates": report["build_candidates"],
+        "unidentified": len(report["unidentified"]), "needs_mapping": len(report["needs_mapping"]),
+        "last_recheck_at": get_meta(conn, RECHECK_META_KEY)}
     return status

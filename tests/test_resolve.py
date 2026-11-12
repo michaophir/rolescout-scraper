@@ -190,14 +190,16 @@ def test_lever_logo_link_confirms_and_title_rejects(conn):
 
 # --- other outcomes ----------------------------------------------------------
 
-def test_careers_page_with_no_known_system_is_recorded_as_custom(conn):
+def test_careers_page_naming_no_system_is_unidentified_not_custom(conn):
     companies.add_company(conn, "Kite", website="https://kite.com")
     (res,), _ = run_resolve(conn, {
         "https://kite.com": '<a href="/company/careers">Join us</a>',
         "https://kite.com/company/careers": "<h1>Work at Kite</h1><div id=jobs></div>",
     })
-    assert (res.outcome, res.job_system, res.job_system_url) == (
-        "unsupported", "custom", "https://kite.com/company/careers")
+    # "custom" told nobody anything: the careers page is kept, the system stays unknown.
+    assert (res.outcome, res.job_system, res.careers_url) == (
+        "unresolved", None, "https://kite.com/company/careers")
+    assert res.notes[-1] == "careers page https://kite.com/company/careers names no job system we recognize"
 
 
 def test_nothing_found_stays_unresolved(conn):
@@ -384,10 +386,10 @@ def test_report_groups_every_company(conn, resolved):
     assert [(m["company"], m["ref"], m["origin"]) for m in report["mapped"]["lever"]] == [
         ("Acme", "acme", "link")]
     assert report["unsupported"] == {
-        "smartrecruiters": [{"company": "Dynamo", "url": "https://careers.smartrecruiters.com/Dynamo"}],
-        "custom": [{"company": "Kite", "url": "https://kite.com/careers"}]}
+        "smartrecruiters": [{"company": "Dynamo", "url": "https://careers.smartrecruiters.com/Dynamo"}]}
     assert [(u["company"], u["reason"]) for u in report["unresolved"]] == [
         ("Bolt", "needs review"),
+        ("Kite", "careers page names no job system we recognize"),
         ("Lumen", "could not fetch https://lumen.com: HTTP 404; could not fetch https://lumen.com/careers: HTTP 404"),
         ("Never", "not resolved yet")]
 
@@ -416,16 +418,16 @@ def test_resolve_and_report_commands(conn, resolved, capsys, monkeypatch):
     assert "Not saved, needs your confirmation (1)" in out and "greenhouse/bolt" in out
     assert "Rejected, a different company owns the slug (1):" in out
     assert "board belongs to 'Zebra Staffing', not 'Never'" in out
-    assert "Job system detected but not supported (2):" in out
+    assert "Job system detected but not supported (1):" in out
     assert "https://careers.smartrecruiters.com/Dynamo" in out
-    assert "Unresolved (2):" in out
-    assert "6 companies: 1 mapped, 1 need review, 2 on an unsupported system, 2 unresolved." in out
+    assert "Not identified (3)" in out and "rolescout companies set-system NAME SYSTEM URL" in out
+    assert "6 companies: 1 mapped, 1 need review, 1 on an unsupported system, 3 unresolved." in out
     assert boards_of(conn, "Mango")[0][:3] == ("ashby", "mango", "guess")
 
     assert cli.main(["companies", "report"]) == 0
     out = capsys.readouterr().out
-    assert "7 active companies: 2 mapped, 2 on an unsupported job system, 3 unresolved." in out
-    assert "smartrecruiters" in out and "custom" in out and "needs review" in out
+    assert "7 active companies: 2 mapped, 1 on an unsupported job system, 4 unresolved." in out
+    assert "smartrecruiters" in out and "custom" not in out and "needs review" in out
 
     assert cli.main(["companies", "report", "--json"]) == 0
     assert set(json.loads(capsys.readouterr().out)["mapped"]) == {"lever", "ashby"}

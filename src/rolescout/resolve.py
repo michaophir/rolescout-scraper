@@ -10,6 +10,11 @@ Two kinds of evidence, in order:
 
 Anything else is reported and left unmapped. When the careers page points at
 a job system we have no adapter for, that system and URL are recorded.
+
+Careers pages that render their listings with JavaScript still tend to name
+their job system in the static HTML: an embed script, an API hostname, a CSS
+hook, a board token in inline config. Those fingerprints identify the system
+even when no board link is present.
 """
 
 import html
@@ -32,6 +37,7 @@ from rolescout.http import USER_AGENT, make_session
 PAGE_TIMEOUT = 20
 PAGE_MAX_CHARS = 3_000_000
 MAX_CAREERS_PAGES = 2          # careers pages followed from the homepage
+MAX_OWN_SCRIPTS = 2            # the site's own script files read when the pages name no board
 MAX_LINKED_BOARDS = 2          # more distinct boards than this on one site is suspicious
 # A guessed board is confirmed when at least this share of its postings
 # reference the company's own domain (job URL, link or email address).
@@ -44,7 +50,7 @@ _SLUG = r"([A-Za-z0-9][A-Za-z0-9_.%-]*)"
 SUPPORTED_LINKS: list[tuple[str, re.Pattern]] = [
     ("greenhouse", re.compile(
         r"greenhouse\.io/embed/job_(?:board|app)(?:/js)?\?[^\"'\s<>]*?\bfor=([A-Za-z0-9_]+)", re.I)),
-    ("greenhouse", re.compile(r"boards-api\.greenhouse\.io/v1/boards/([A-Za-z0-9_]+)", re.I)),
+    ("greenhouse", re.compile(r"(?<![\w-])(?:boards-)?api\.greenhouse\.io/v1/boards/([A-Za-z0-9_]+)", re.I)),
     ("greenhouse", re.compile(r"(?<![\w.-])(?:job-boards|boards)\.greenhouse\.io/([A-Za-z0-9_]+)", re.I)),
     ("lever", re.compile(r"(?<![\w.-])jobs\.lever\.co/" + _SLUG, re.I)),
     ("lever", re.compile(r"(?<![\w.-])api\.lever\.co/v0/postings/" + _SLUG, re.I)),
@@ -52,6 +58,13 @@ SUPPORTED_LINKS: list[tuple[str, re.Pattern]] = [
     ("ashby", re.compile(r"api\.ashbyhq\.com/posting-api/job-board/" + _SLUG, re.I)),
 ]
 NOT_A_SLUG = {"embed", "api", "v1", "jobs", "job", "static", "assets", "js", "css"}
+
+# A Greenhouse board fetched with the token held in a variable, e.g.
+#   const company = "acme"; fetch("https://boards-api.greenhouse.io/v1/boards/" + company + ...)
+GREENHOUSE_DYNAMIC = re.compile(r"greenhouse\.io/v1/boards/[\"'`]\s*\+|greenhouse\.io/v1/boards/\$\{", re.I)
+BOARD_TOKEN_VAR = re.compile(
+    r"\b(?:company|board|boardToken|board_token|boardName|boardId|ghBoard|greenhouseBoard(?:Token)?)"
+    r"\s*[:=]\s*[\"'`]([A-Za-z0-9_]{2,40})[\"'`]", re.I)
 
 # Job systems we can recognize but have no adapter for. Each pattern matches
 # host (and sometimes the first path segment); the rest of the URL is kept.
@@ -76,6 +89,7 @@ UNSUPPORTED_SYSTEMS: list[tuple[str, str]] = [
     ("avature", r"(?!www\.)[\w-]+\.avature\.net"),
     ("pinpoint", r"(?!www\.)[\w-]+\.pinpointhq\.com"),
     ("dover", r"app\.dover\.com/[\w-]+/careers|jobs\.dover\.com/[\w-]+"),
+    ("paycom", r"(?:www\.)?paycomonline\.net/v4/ats/web\.php/(?:portal|jobs)/[A-Za-z0-9]+"),
     ("greenhouse-eu", r"(?:job-boards|boards)\.eu\.greenhouse\.io/[\w-]+"),
     ("lever-eu", r"jobs\.eu\.lever\.co/[\w.-]+"),
 ]
@@ -83,7 +97,34 @@ UNSUPPORTED_LINKS = [
     (system, re.compile(r"(?<![\w.-])(?:" + pattern + r")[^\s\"'<>\\)]*", re.I))
     for system, pattern in UNSUPPORTED_SYSTEMS
 ]
-CUSTOM = "custom"  # a careers page on the company's own site with no known job system
+CUSTOM = "custom"  # a hand-recorded "they built their own"; never assigned automatically
+
+# Marks a job system leaves in a page even when it gives no board link:
+# embed scripts, API hosts, CSS hooks. They identify the system, not the board.
+# Keep these free of leading wildcards: they run over megabytes of minified script.
+FINGERPRINTS: list[tuple[str, re.Pattern]] = [(system, re.compile(pattern, re.I)) for system, pattern in [
+    ("greenhouse", r"(?:boards-)?api\.greenhouse\.io|boards\.greenhouse\.io/embed|\bgrnhse_|"
+                   r"greenhouse[_-]job|js-greenhouse|[?&]gh_jid="),
+    ("lever", r"api\.lever\.co/v0/postings|jobs\.lever\.co"),
+    ("ashby", r"(?:jobs|api)\.ashbyhq\.com|_ashby_embed|ashby_jid"),
+    ("workable", r"workable\.com/assets/embed\.js|\bwhr_embed\s*\("),
+    ("paycom", r"paycomonline\.net/v4/ats"),
+    ("rippling", r"ats\.rippling\.com"),
+    ("workday", r"myworkday(?:jobs|site)\.com"),
+    ("smartrecruiters", r"(?:static|api|jobs|careers)\.smartrecruiters\.com"),
+    ("eightfold", r"\.eightfold\.ai|eightfold-careers"),
+    ("icims", r"\.icims\.com"),
+    ("jobvite", r"jobs\.jobvite\.com|jobvite\.com/(?:CompanyJobs|careers)"),
+    ("bamboohr", r"\.bamboohr\.com/(?:careers|jobs|js/embed)"),
+    ("teamtailor", r"\.teamtailor\.com|teamtailor-cdn"),
+    ("phenom", r"cdn\.phenompeople\.com|phenompeople\.com/CareerConnectResources"),
+    ("gem", r"jobs\.gem\.com"),
+    ("personio", r"\.jobs\.personio\."),
+    ("recruitee", r"(?<!www)\.recruitee\.com"),
+]]
+
+OPEN_ROLES_HINT = re.compile(r"open|roles|positions|openings|search|listing|vacanc|/jobs", re.I)
+LOCALE_SEGMENT = re.compile(r"/[a-z]{2}(?:-[a-z]{2})?(?:/|$)", re.I)
 
 CAREERS_HREF = re.compile(
     r"career|/jobs?(?:[/?#]|$)|join-?us|work-with-us|open-(?:roles|positions)|openings|we-are-hiring", re.I)
@@ -186,6 +227,9 @@ def scan_for_boards(text: str) -> tuple[dict[tuple[str, str], None], dict[str, s
                 slug = slug.lower()
             if slug and slug.lower() not in NOT_A_SLUG:
                 supported.setdefault((source, slug))
+    if GREENHOUSE_DYNAMIC.search(text):
+        for match in BOARD_TOKEN_VAR.finditer(text):
+            supported.setdefault(("greenhouse", match.group(1).lower()))
     unsupported: dict[str, str] = {}
     for system, pattern in UNSUPPORTED_LINKS:
         match = pattern.search(text)
@@ -194,9 +238,55 @@ def scan_for_boards(text: str) -> tuple[dict[tuple[str, str], None], dict[str, s
     return supported, unsupported
 
 
-def careers_links(page_html: str, page_url: str, own_domains: set[str]) -> list[str]:
-    """Links on a page that look like they lead to the company's careers page."""
+def scan_for_fingerprints(text: str) -> dict[str, str]:
+    """Job systems a page shows signs of, as {system: the text that gave it away}."""
+    text = _normalize(text)
+    found: dict[str, str] = {}
+    for system, pattern in FINGERPRINTS:
+        match = pattern.search(text)
+        if match:
+            found[system] = match.group(0).strip("?&=( ")
+    return found
+
+
+def own_scripts(page_html: str, page_url: str, own_domains: set[str]) -> list[str]:
+    """Script files the page loads from the company's own domain, in page order."""
+    urls: dict[str, None] = {}
+    for src in re.findall(r"<script[^>]+src=[\"']([^\"']+)[\"']", page_html, re.I):
+        url = urljoin(page_url, html.unescape(src))
+        if registrable_domain(url) in own_domains and urlparse(url).path.endswith(".js"):
+            urls.setdefault(url)
+    return list(urls)
+
+
+def rank_deeper_links(links: list[str], company: str) -> list[str]:
+    """Order second-hop links: ones naming the company or "open roles" first,
+    translated copies of the careers page last."""
+    name = re.sub(r"[^a-z0-9]+", "-", company.lower()).strip("-")
+
+    def score(url: str) -> int:
+        path = urlparse(url).path.lower()
+        points = 0
+        if name and len(name) > 3 and (name in path or name.replace("-", "") in path.replace("-", "")):
+            points += 2
+        if OPEN_ROLES_HINT.search(path):
+            points += 1
+        if LOCALE_SEGMENT.search(path):
+            points -= 2
+        return points
+    return sorted(links, key=lambda u: -score(u))  # stable: keeps the earlier order within a score
+
+
+def careers_links(page_html: str, page_url: str, own_domains: set[str], company: str = "") -> list[str]:
+    """Links on a page that look like they lead to the company's careers page.
+
+    A link to another site needs more than "career" in its path, or a news
+    article about careers would qualify: its link text must say careers or
+    jobs, its host must (jobs.example.com, examplecareers.com), or its path
+    must name the company (parent.com/careers/company-name).
+    """
     found: dict[str, int] = {}
+    name = re.sub(r"[^a-z0-9]+", "-", company.lower()).strip("-")
     soup = BeautifulSoup(page_html, "html.parser")
     for anchor in soup.find_all("a", href=True):
         href = anchor["href"].strip()
@@ -213,6 +303,10 @@ def careers_links(page_html: str, page_url: str, own_domains: set[str]) -> list[
         if not (by_href or by_text):
             continue
         own = registrable_domain(url) in own_domains
+        if not own and not (
+                by_text or re.search(r"career|jobs", parsed.hostname, re.I)
+                or (len(name) > 3 and name in parsed.path.lower())):
+            continue
         # Prefer links on the company's own domain, then ones matching on both.
         score = (2 if own else 0) + by_href + by_text
         if url.rstrip("/") != page_url.rstrip("/"):
@@ -262,16 +356,16 @@ class Resolver:
         rules = self._robots[origin]
         return rules is None or rules.can_fetch(USER_AGENT, url)
 
-    def _page(self, url: str, res: Resolution) -> tuple[str, str] | None:
-        """(final URL, HTML) or None. Never raises."""
+    def _page(self, url: str, res: Resolution, *,
+              accept: str = "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5") -> tuple[str, str] | None:
+        """(final URL, body) or None. Never raises."""
         if not self._allowed(url, res):
             res.notes.append(f"robots.txt disallows {url}; skipped")
             return None
         res.requests += 1
         try:
             resp = self.session.get(
-                url, timeout=PAGE_TIMEOUT,
-                headers={"Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5"})
+                url, timeout=PAGE_TIMEOUT, headers={"Accept": accept})
         except requests.RequestException as exc:
             res.notes.append(f"could not fetch {url}: {type(exc).__name__}")
             return None
@@ -280,19 +374,28 @@ class Resolver:
             return None
         return (resp.url or url), (resp.text or "")[:PAGE_MAX_CHARS]
 
-    def _site_evidence(self, website: str, res: Resolution, own_domains: set[str]):
-        """Read the homepage and up to two careers pages. Returns
-        (supported {(source, slug): found_on}, unsupported {system: (url, found_on)})."""
+    def _site_evidence(self, company: str, website: str, res: Resolution, own_domains: set[str]):
+        """Read the homepage, up to two careers pages, one page further in, and
+        if still nothing names a board, up to two of the site's own scripts.
+
+        Returns (supported {(source, slug): found_on},
+                 unsupported {system: (url, found_on)},
+                 fingerprints {system: (matched text, found_on)}).
+        """
         supported: dict[tuple[str, str], str] = {}
         unsupported: dict[str, tuple[str, str]] = {}
+        fingerprints: dict[str, tuple[str, str]] = {}
 
         def scan(final_url: str, body: str) -> None:
             # The final URL counts too: /careers often redirects to the job system.
-            boards, systems = scan_for_boards(final_url + "\n" + body)
+            text = final_url + "\n" + body
+            boards, systems = scan_for_boards(text)
             for key in boards:
                 supported.setdefault(key, final_url)
             for system, url in systems.items():
                 unsupported.setdefault(system, (url, final_url))
+            for system, matched in scan_for_fingerprints(text).items():
+                fingerprints.setdefault(system, (matched, final_url))
 
         home = self._page(website, res)
         candidates: list[str] = []
@@ -300,13 +403,14 @@ class Resolver:
             own_domains.add(registrable_domain(home[0]))
             own_domains.discard("")
             scan(*home)
-            candidates = careers_links(home[1], home[0], own_domains)
+            candidates = careers_links(home[1], home[0], own_domains, company)
         if not candidates:
             base = home[0] if home else website
             candidates = [urljoin(base, path) for path in FALLBACK_CAREERS_PATHS]
 
         visited = {home[0].rstrip("/")} if home else set()
         deeper: list[str] = []
+        careers_pages: list[tuple[str, str]] = []
         fetched = 0
         for url in candidates:
             if fetched >= MAX_CAREERS_PAGES or supported:
@@ -321,15 +425,27 @@ class Resolver:
             visited.add(page[0].rstrip("/"))
             if res.careers_url is None:
                 res.careers_url = page[0]
+            careers_pages.append(page)
             scan(*page)
-            deeper += [u for u in careers_links(page[1], page[0], own_domains)
+            deeper += [u for u in careers_links(page[1], page[0], own_domains, company)
                        if u.rstrip("/") not in visited]
         # One more hop: "Careers" often leads to an "Open roles" page that holds the board.
         if not supported and not unsupported and deeper:
-            page = self._page(deeper[0], res)
+            page = self._page(rank_deeper_links(list(dict.fromkeys(deeper)), company)[0], res)
             if page:
+                careers_pages.append(page)
                 scan(*page)
-        return supported, unsupported
+        # Still no board: the token is often in the site's own script bundle.
+        if not supported and not unsupported:
+            scripts = [u for body_url, body in reversed(careers_pages)
+                       for u in own_scripts(body, body_url, own_domains)]
+            for url in list(dict.fromkeys(scripts))[:MAX_OWN_SCRIPTS]:
+                script = self._page(url, res, accept="*/*")
+                if script:
+                    scan(url, script[1])
+                if supported:
+                    break
+        return supported, unsupported, fingerprints
 
     # -- boards
 
@@ -383,9 +499,10 @@ class Resolver:
     def resolve(self, company: str, website: str) -> Resolution:
         res = Resolution(company=company)
         own_domains = {registrable_domain(website)} - {""}
-        supported, unsupported = {}, {}
+        supported, unsupported, fingerprints = {}, {}, {}
         if website:
-            supported, unsupported = self._site_evidence(website, res, own_domains)
+            supported, unsupported, fingerprints = self._site_evidence(
+                company, website, res, own_domains)
         else:
             res.notes.append("no website on record; only slug guesses are possible")
 
@@ -410,18 +527,30 @@ class Resolver:
             return res
 
         # 2. The site points at a job system we have no adapter for: that is
-        #    evidence too, and it outranks a slug guess.
+        #    evidence too, and it outranks a slug guess. A URL on that system
+        #    beats a bare fingerprint.
         if unsupported:
             system, (url, _) = next(iter(unsupported.items()))
             res.outcome, res.job_system, res.job_system_url = "unsupported", system, url
             for other, (other_url, _) in list(unsupported.items())[1:]:
                 res.notes.append(f"also found {other}: {other_url}")
             return res
+        foreign = {k: v for k, v in fingerprints.items() if k not in ADAPTERS}
+        if foreign:
+            system, (matched, found_on) = next(iter(foreign.items()))
+            res.outcome, res.job_system, res.job_system_url = "unsupported", system, found_on
+            res.notes.append(f"identified as {system} by {matched!r} on {found_on}")
+            for other, (other_matched, _) in list(foreign.items())[1:]:
+                res.notes.append(f"also shows signs of {other}: {other_matched!r}")
+            return res
 
-        # 3. Slug guesses, accepted only with confirmation.
+        # 3. Slug guesses, accepted only with confirmation. If the site shows a
+        #    supported system's fingerprint, only that system is tried.
+        known = [k for k in fingerprints if k in ADAPTERS]
+        sources = tuple(known) or GUESS_SOURCES
         tried = set(supported)
         for ref in slug_guesses(company, website):
-            for source in GUESS_SOURCES:
+            for source in sources:
                 if (source, ref) in tried:
                     continue
                 tried.add((source, ref))
@@ -436,49 +565,121 @@ class Resolver:
                     res.outcome = "mapped"
                     return res
 
-        if res.careers_url:
-            res.job_system, res.job_system_url = CUSTOM, res.careers_url
-        if any(c.status == "unconfirmed" for c in res.candidates):
+        if known:
+            # The system is one we support; only the board name is missing.
+            system = known[0]
+            matched, found_on = fingerprints[system]
+            res.job_system, res.job_system_url = system, found_on
+            res.notes.append(
+                f"{found_on} uses {system} ({matched!r}), but the board name was not found; "
+                f"map it by hand: rolescout companies map \"{company}\" {system} BOARD")
             res.outcome = "needs_review"
-        elif res.job_system:
-            res.outcome = "unsupported"
+        elif any(c.status == "unconfirmed" for c in res.candidates):
+            res.outcome = "needs_review"
+        elif res.careers_url:
+            res.notes.append(f"careers page {res.careers_url} names no job system we recognize")
         return res
 
 
 # --- storage -----------------------------------------------------------------
 
 def save_resolution(conn: sqlite3.Connection, res: Resolution) -> None:
-    """Save confirmed boards and record what was found."""
+    """Save confirmed boards and record what was found.
+
+    A job system recorded by hand (``set_job_system``) is never overwritten:
+    boards are still saved, but the hand-written finding stays.
+    """
+    company_id = conn.execute(
+        "SELECT id FROM companies WHERE name = ?", (res.company,)).fetchone()["id"]
+    already = {(b["source"], b["ref"]) for b in conn.execute(
+        "SELECT source, ref FROM boards WHERE company_id = ?", (company_id,))}
     for cand in res.to_save:
+        if (cand.source, cand.ref) in already:
+            continue  # re-resolved to the board it already has
         try:
             add_board(conn, res.company, cand.source, cand.ref, origin=cand.kind, evidence=cand.detail)
             cand.saved = True
         except CompanyError as exc:
             cand.status = "unconfirmed"
             res.notes.append(str(exc))
-    if res.outcome == "mapped" and not any(c.saved for c in res.candidates):
+    if res.outcome == "mapped" and not res.to_save:
         res.outcome = "needs_review"
-    company_id = conn.execute(
-        "SELECT id FROM companies WHERE name = ?", (res.company,)).fetchone()["id"]
+    manual = conn.execute(
+        "SELECT manual FROM company_resolutions WHERE company_id = ?", (company_id,)).fetchone()
+    if manual is not None and manual["manual"]:
+        res.notes.append("job system was recorded by hand; automatic findings were not saved over it")
+        return
     evidence = {"candidates": [asdict(c) for c in res.candidates], "notes": res.notes}
     with transaction(conn):
         conn.execute(
             "INSERT OR REPLACE INTO company_resolutions (company_id, resolved_at, outcome, "
-            "job_system, job_system_url, careers_url, evidence) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "job_system, job_system_url, careers_url, evidence, manual) VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
             (company_id, utc_now(), res.outcome, res.job_system, res.job_system_url,
              res.careers_url, json.dumps(evidence, ensure_ascii=False)))
+
+
+def set_job_system(conn: sqlite3.Connection, name: str, system: str, url: str, note: str = "") -> None:
+    """Record by hand which job system a company uses. Survives every later resolve."""
+    row = conn.execute("SELECT id, name FROM companies WHERE name = ?", (name.strip(),)).fetchone()
+    if row is None:
+        raise CompanyError(f"no company named {name!r}")
+    system = re.sub(r"[^a-z0-9]+", "-", system.strip().lower()).strip("-")
+    url = url.strip()
+    if not system:
+        raise CompanyError("job system name is empty")
+    if system in ADAPTERS:
+        raise CompanyError(
+            f"{system} is a supported source: map the board instead with "
+            f"rolescout companies map \"{row['name']}\" {system} BOARD")
+    if urlparse(url).scheme not in ("http", "https"):
+        raise CompanyError(f"URL must start with http:// or https://, got {url!r}")
+    evidence = {"candidates": [], "notes": [note.strip()] if note.strip() else []}
+    with transaction(conn):
+        conn.execute(
+            "INSERT OR REPLACE INTO company_resolutions (company_id, resolved_at, outcome, "
+            "job_system, job_system_url, careers_url, evidence, manual) "
+            "VALUES (?, ?, 'unsupported', ?, ?, "
+            "(SELECT careers_url FROM company_resolutions WHERE company_id = ?), ?, 1)",
+            (row["id"], utc_now(), system, url, row["id"], json.dumps(evidence, ensure_ascii=False)))
+
+
+def clear_job_system(conn: sqlite3.Connection, name: str) -> bool:
+    """Forget a hand-recorded job system so automatic detection applies again."""
+    row = conn.execute("SELECT id FROM companies WHERE name = ?", (name.strip(),)).fetchone()
+    if row is None:
+        raise CompanyError(f"no company named {name!r}")
+    with transaction(conn):
+        return conn.execute(
+            "DELETE FROM company_resolutions WHERE company_id = ? AND manual = 1",
+            (row["id"],)).rowcount > 0
+
+
+def recheck_targets(conn: sqlite3.Connection, failing: list[dict]) -> list[sqlite3.Row]:
+    """Who the periodic re-check looks at: active companies with no board
+    (unless their job system was recorded by hand), plus the owners of
+    ``failing`` boards (see ``ops.failing_boards``)."""
+    names = {b["company"] for b in failing}
+    rows = conn.execute(
+        "SELECT c.name, c.website, "
+        "EXISTS (SELECT 1 FROM boards b WHERE b.company_id = c.id) AS mapped, "
+        "COALESCE((SELECT manual FROM company_resolutions r WHERE r.company_id = c.id), 0) AS manual "
+        "FROM companies c WHERE c.active = 1 ORDER BY c.tier IS NULL, c.tier, c.name").fetchall()
+    return [r for r in rows if r["name"] in names or (not r["mapped"] and not r["manual"])]
 
 
 def resolve_companies(
     conn: sqlite3.Connection,
     *,
     names: list[str] | None = None,
+    failing: list[dict] | None = None,
     dry_run: bool = False,
     delay: float = 1.0,
     resolver: Resolver | None = None,
     on_company: Callable[[Resolution], None] | None = None,
 ) -> list[Resolution]:
-    """Resolve the named companies, or every active company with no board.
+    """Resolve the named companies; or, with none named, every active company
+    that has no board and no hand-recorded job system, plus the owners of any
+    ``failing`` boards.
 
     With ``dry_run`` the same lookups run but nothing is written.
     """
@@ -491,10 +692,7 @@ def resolve_companies(
                 raise CompanyError(f"no company named {name!r}")
             targets.append(row)
     else:
-        targets = conn.execute(
-            "SELECT c.name, c.website FROM companies c WHERE c.active = 1 AND NOT EXISTS "
-            "(SELECT 1 FROM boards b WHERE b.company_id = c.id) "
-            "ORDER BY c.tier IS NULL, c.tier, c.name").fetchall()
+        targets = recheck_targets(conn, failing or [])
     resolver = resolver or Resolver(delay=delay)
     results = []
     for target in targets:
@@ -512,36 +710,25 @@ def resolve_companies(
 
 def mapping_report(conn: sqlite3.Connection) -> dict:
     """Where every active company stands: mapped, unsupported system, or unresolved."""
-    companies = conn.execute(
-        "SELECT c.id, c.name, c.website, r.outcome, r.job_system, r.job_system_url, "
-        "r.careers_url, r.evidence, r.resolved_at FROM companies c "
-        "LEFT JOIN company_resolutions r ON r.company_id = c.id WHERE c.active = 1 "
-        "ORDER BY c.name").fetchall()
-    boards: dict[int, list[sqlite3.Row]] = {}
-    for b in conn.execute("SELECT * FROM boards ORDER BY id"):
-        boards.setdefault(b["company_id"], []).append(b)
+    from rolescout.gaps import classify  # gaps builds on this module's tables
 
-    report = {"total": len(companies), "mapped": {}, "unsupported": {}, "unresolved": []}
-    for c in companies:
-        if c["id"] in boards:
-            for b in boards[c["id"]]:
-                report["mapped"].setdefault(b["source"], []).append({
-                    "company": c["name"], "ref": b["ref"], "origin": b["origin"],
-                    "evidence": b["evidence"]})
-            continue
-        evidence = json.loads(c["evidence"]) if c["evidence"] else {"candidates": [], "notes": []}
-        pending = [x for x in evidence["candidates"] if x["status"] == "unconfirmed"]
-        if c["job_system"] and not pending:
-            report["unsupported"].setdefault(c["job_system"], []).append({
-                "company": c["name"], "url": c["job_system_url"]})
-            continue
-        if c["outcome"] is None:
-            reason = "not resolved yet"
-        elif pending:
-            reason = "needs review"
-        else:
-            reason = "; ".join(evidence["notes"][:2]) or "no careers page or board found"
-        report["unresolved"].append({
-            "company": c["name"], "website": c["website"], "reason": reason,
-            "candidates": evidence["candidates"]})
+    states = {e["company"]: e for e in classify(conn)}
+    report = {"total": len(states), "mapped": {}, "unsupported": {}, "unresolved": []}
+    for b in conn.execute(
+            "SELECT b.*, c.name FROM boards b JOIN companies c ON c.id = b.company_id "
+            "WHERE c.active = 1 ORDER BY c.name, b.id"):
+        report["mapped"].setdefault(b["source"], []).append({
+            "company": b["name"], "ref": b["ref"], "origin": b["origin"], "evidence": b["evidence"]})
+    for name in sorted(states):
+        e = states[name]
+        if e["state"] == "unsupported":
+            report["unsupported"].setdefault(e["system"], []).append({"company": name, "url": e["url"]})
+        elif e["state"] == "needs_mapping":
+            report["unresolved"].append({
+                "company": name, "website": e["website"], "reason": "needs review",
+                "candidates": e["candidates"], "notes": e["notes"]})
+        elif e["state"] == "unidentified" and not e["failing_boards"]:
+            report["unresolved"].append({
+                "company": name, "website": e["website"], "reason": e["reason"],
+                "candidates": [], "notes": e["notes"]})
     return report

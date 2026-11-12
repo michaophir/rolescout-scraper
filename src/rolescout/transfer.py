@@ -38,7 +38,8 @@ def export_companies(conn: sqlite3.Connection) -> dict:
             entry["resolution"] = {
                 "resolved_at": r["resolved_at"], "outcome": r["outcome"],
                 "job_system": r["job_system"], "job_system_url": r["job_system_url"],
-                "careers_url": r["careers_url"], "evidence": json.loads(r["evidence"])}
+                "careers_url": r["careers_url"], "evidence": json.loads(r["evidence"]),
+                "manual": bool(r["manual"])}
         companies.append(entry)
     return {"format": FORMAT, "version": FORMAT_VERSION, "exported_at": utc_now(),
             "companies": companies}
@@ -107,11 +108,12 @@ def import_companies(conn: sqlite3.Connection, data: object) -> dict:
                 if r:
                     conn.execute(
                         "INSERT OR REPLACE INTO company_resolutions (company_id, resolved_at, outcome, "
-                        "job_system, job_system_url, careers_url, evidence) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        "job_system, job_system_url, careers_url, evidence, manual) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                         (company_id, r.get("resolved_at") or now, r.get("outcome") or "unresolved",
                          r.get("job_system"), r.get("job_system_url"), r.get("careers_url"),
                          json.dumps(r.get("evidence") or {"candidates": [], "notes": []},
-                                    ensure_ascii=False)))
+                                    ensure_ascii=False), int(bool(r.get("manual")))))
     except (AttributeError, TypeError, sqlite3.Error) as exc:
         raise TransferError(f"export file is malformed: {exc}") from exc
     return result
