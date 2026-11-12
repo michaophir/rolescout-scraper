@@ -20,8 +20,12 @@ even when no board link is present.
 import html
 import json
 import re
+import signal
 import sqlite3
+import threading
+import time
 from collections.abc import Callable
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from urllib.parse import unquote, urljoin, urlparse
 from urllib.robotparser import RobotFileParser
@@ -35,7 +39,18 @@ from rolescout.db import transaction, utc_now
 from rolescout.http import USER_AGENT, make_session
 
 PAGE_TIMEOUT = 20
-PAGE_MAX_CHARS = 3_000_000
+
+# --- limits: resolving one company is bounded whatever a page contains -------
+# Structural limits make the work small; the time budgets are the backstop.
+PAGE_MAX_BYTES = 2_000_000          # downloaded and scanned per page or script
+COMPANY_SCAN_MAX_CHARS = 8_000_000  # scanned per company, all pages together
+# Longest unbroken run of letters, digits, _ % - kept before scanning. A real
+# hostname label is at most 63 characters; what is longer is encoded data
+# (one site embeds a 110,000-character base64 blob), and unbroken runs are
+# what make a pattern slow.
+MAX_TOKEN_CHARS = 80
+COMPANY_WALL_SECONDS = 60.0         # per company, start to finish
+COMPANY_CPU_SECONDS = 15.0          # per company, processor time
 MAX_CAREERS_PAGES = 2          # careers pages followed from the homepage
 MAX_OWN_SCRIPTS = 2            # the site's own script files read when the pages name no board
 MAX_LINKED_BOARDS = 2          # more distinct boards than this on one site is suspicious
@@ -164,6 +179,7 @@ class Resolution:
     candidates: list[Candidate] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     requests: int = 0
+    over_budget: bool = False     # stopped by the per-company time budget
 
     @property
     def to_save(self) -> list[Candidate]:
@@ -210,15 +226,84 @@ def slug_guesses(name: str, website: str) -> list[str]:
     return [s for s in dict.fromkeys([base, base.replace("-", ""), label]) if len(s) >= 2]
 
 
+_LONG_TOKEN = re.compile(r"([\w%-]{" + str(MAX_TOKEN_CHARS) + r"})[\w%-]+")
+
+
 def _normalize(text: str) -> str:
-    """Undo the escaping that hides URLs inside HTML attributes and inline JSON."""
+    """Undo the escaping that hides URLs inside HTML attributes and inline JSON,
+    and cut unbroken runs of word characters down to ``MAX_TOKEN_CHARS``."""
     text = html.unescape(text)
-    return text.replace("\\/", "/").replace("\\u002F", "/").replace("\\u002f", "/")
+    text = text.replace("\\/", "/").replace("\\u002F", "/").replace("\\u002f", "/")
+    return _LONG_TOKEN.sub(r"\1", text)
 
 
-def scan_for_boards(text: str) -> tuple[dict[tuple[str, str], None], dict[str, str]]:
+class BudgetExceeded(Exception):
+    """Resolving one company went over its time budget."""
+
+
+@contextmanager
+def time_budget(wall: float, cpu: float):
+    """Interrupt the enclosed block with ``BudgetExceeded`` once it has run for
+    ``wall`` seconds or used ``cpu`` seconds of processor time.
+
+    Uses interval timers, so it can stop a slow download or a slow pattern
+    match that would never reach a cooperative check. Timers need the main
+    thread on a Unix system; elsewhere this does nothing and the resolver's
+    own checks between steps (``Resolver._tick``) are the only budget.
+    """
+    usable = (hasattr(signal, "setitimer")
+              and threading.current_thread() is threading.main_thread())
+    if not usable:
+        yield
+        return
+
+    def over_wall(signum, frame):
+        raise BudgetExceeded(f"took longer than {wall:g} seconds")
+
+    def over_cpu(signum, frame):
+        raise BudgetExceeded(f"used more than {cpu:g} seconds of processor time")
+
+    old_wall = signal.signal(signal.SIGALRM, over_wall)
+    old_cpu = signal.signal(signal.SIGVTALRM, over_cpu)
+    signal.setitimer(signal.ITIMER_REAL, wall)
+    signal.setitimer(signal.ITIMER_VIRTUAL, cpu)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.setitimer(signal.ITIMER_VIRTUAL, 0)
+        signal.signal(signal.SIGALRM, old_wall)
+        signal.signal(signal.SIGVTALRM, old_cpu)
+
+
+def read_body(resp, limit: int = PAGE_MAX_BYTES) -> str:
+    """At most ``limit`` bytes of a response, as text. Stops downloading there."""
+    if not hasattr(resp, "iter_content"):
+        return (resp.text or "")[:limit]
+    chunks, size = [], 0
+    try:
+        for chunk in resp.iter_content(65536):
+            chunks.append(chunk)
+            size += len(chunk)
+            if size >= limit:
+                break
+    finally:
+        resp.close()
+    data = b"".join(chunks)[:limit]
+    # Trust a charset the server states; never guess one (guessing reads the
+    # whole body and is slow on large files).
+    declared = "charset=" in (resp.headers.get("content-type") or "").lower()
+    try:
+        return data.decode((resp.encoding if declared else None) or "utf-8", errors="replace")
+    except LookupError:
+        return data.decode("utf-8", errors="replace")
+
+
+def scan_for_boards(text: str, *, normalized: bool = False
+                    ) -> tuple[dict[tuple[str, str], None], dict[str, str]]:
     """(supported boards as {(source, slug)}, unsupported systems as {system: url})."""
-    text = _normalize(text)
+    if not normalized:
+        text = _normalize(text)
     supported: dict[tuple[str, str], None] = {}
     for source, pattern in SUPPORTED_LINKS:
         for match in pattern.finditer(text):
@@ -238,9 +323,10 @@ def scan_for_boards(text: str) -> tuple[dict[tuple[str, str], None], dict[str, s
     return supported, unsupported
 
 
-def scan_for_fingerprints(text: str) -> dict[str, str]:
+def scan_for_fingerprints(text: str, *, normalized: bool = False) -> dict[str, str]:
     """Job systems a page shows signs of, as {system: the text that gave it away}."""
-    text = _normalize(text)
+    if not normalized:
+        text = _normalize(text)
     found: dict[str, str] = {}
     for system, pattern in FINGERPRINTS:
         match = pattern.search(text)
@@ -317,10 +403,24 @@ def careers_links(page_html: str, page_url: str, own_domains: set[str], company:
 # --- the resolver ------------------------------------------------------------
 
 class Resolver:
-    def __init__(self, session: requests.Session | None = None, delay: float = 1.0) -> None:
+    def __init__(self, session: requests.Session | None = None, delay: float = 1.0, *,
+                 wall_budget: float = COMPANY_WALL_SECONDS,
+                 cpu_budget: float = COMPANY_CPU_SECONDS) -> None:
         self.session = session or make_session(min_interval=delay)
+        self.wall_budget = wall_budget
+        self.cpu_budget = cpu_budget
         self._adapters: dict[str, object] = {}
         self._robots: dict[str, RobotFileParser | None] = {}
+        self._deadline = self._cpu_deadline = float("inf")
+        self._scanned = 0
+
+    def _tick(self) -> None:
+        """Budget check between steps. Works everywhere, including where the
+        interval timers of ``time_budget`` cannot be used."""
+        if time.monotonic() > self._deadline:
+            raise BudgetExceeded(f"took longer than {self.wall_budget:g} seconds")
+        if time.process_time() > self._cpu_deadline:
+            raise BudgetExceeded(f"used more than {self.cpu_budget:g} seconds of processor time")
 
     def adapter(self, source: str):
         if source not in self._adapters:
@@ -339,13 +439,15 @@ class Resolver:
         parsed = urlparse(url)
         origin = f"{parsed.scheme}://{parsed.netloc}"
         if origin not in self._robots:
+            self._tick()
             rules: RobotFileParser | None = RobotFileParser()
             res.requests += 1
             try:
                 resp = self.session.get(
-                    origin + "/robots.txt", timeout=PAGE_TIMEOUT, headers={"Accept": "text/plain,*/*"})
+                    origin + "/robots.txt", timeout=PAGE_TIMEOUT, stream=True,
+                    headers={"Accept": "text/plain,*/*"})
                 if resp.status_code == 200:
-                    rules.parse((resp.text or "")[:500_000].splitlines())
+                    rules.parse(read_body(resp, 500_000).splitlines())
                 elif resp.status_code >= 500:
                     rules.parse(["User-agent: *", "Disallow: /"])
                 else:
@@ -362,17 +464,19 @@ class Resolver:
         if not self._allowed(url, res):
             res.notes.append(f"robots.txt disallows {url}; skipped")
             return None
+        self._tick()
         res.requests += 1
         try:
             resp = self.session.get(
-                url, timeout=PAGE_TIMEOUT, headers={"Accept": accept})
+                url, timeout=PAGE_TIMEOUT, stream=True, headers={"Accept": accept})
+            body = read_body(resp) if resp.status_code == 200 else ""
         except requests.RequestException as exc:
             res.notes.append(f"could not fetch {url}: {type(exc).__name__}")
             return None
         if resp.status_code != 200:
             res.notes.append(f"could not fetch {url}: HTTP {resp.status_code}")
             return None
-        return (resp.url or url), (resp.text or "")[:PAGE_MAX_CHARS]
+        return (resp.url or url), body
 
     def _site_evidence(self, company: str, website: str, res: Resolution, own_domains: set[str]):
         """Read the homepage, up to two careers pages, one page further in, and
@@ -387,14 +491,21 @@ class Resolver:
         fingerprints: dict[str, tuple[str, str]] = {}
 
         def scan(final_url: str, body: str) -> None:
+            self._tick()
+            if self._scanned + len(body) > COMPANY_SCAN_MAX_CHARS:
+                res.notes.append(
+                    f"{final_url} not scanned: this company's pages already exceed "
+                    f"{COMPANY_SCAN_MAX_CHARS // 1_000_000} MB")
+                body = ""
+            self._scanned += len(body)
             # The final URL counts too: /careers often redirects to the job system.
-            text = final_url + "\n" + body
-            boards, systems = scan_for_boards(text)
+            text = _normalize(final_url + "\n" + body)  # once per page, shared by both scans
+            boards, systems = scan_for_boards(text, normalized=True)
             for key in boards:
                 supported.setdefault(key, final_url)
             for system, url in systems.items():
                 unsupported.setdefault(system, (url, final_url))
-            for system, matched in scan_for_fingerprints(text).items():
+            for system, matched in scan_for_fingerprints(text, normalized=True).items():
                 fingerprints.setdefault(system, (matched, final_url))
 
         home = self._page(website, res)
@@ -451,6 +562,7 @@ class Resolver:
 
     def _fetch_board(self, source: str, ref: str, res: Resolution):
         """Raw postings for a board, [] if empty, None if it does not exist."""
+        self._tick()
         res.requests += 1
         adapter = self.adapter(source)
         try:
@@ -465,7 +577,8 @@ class Resolver:
                      own_domains: set[str], res: Resolution) -> Candidate:
         """Decide whether a board found by guessing belongs to this company."""
         cand = Candidate(source, ref, "guess", "unconfirmed", "", roles=len(items))
-        texts = [_normalize(json.dumps(item, ensure_ascii=False)) for item in items]
+        self._tick()
+        texts = [_normalize(json.dumps(item, ensure_ascii=False)[:PAGE_MAX_BYTES]) for item in items]
         for domain in sorted(own_domains):
             pattern = domain_pattern(domain)
             hits = sum(1 for text in texts if pattern.search(text))
@@ -474,6 +587,7 @@ class Resolver:
                 cand.detail = f"{hits} of {len(items)} postings reference {domain}"
                 return cand
 
+        self._tick()
         res.requests += 1
         try:
             identity = self.adapter(source).identity(ref)
@@ -497,7 +611,28 @@ class Resolver:
     # -- one company
 
     def resolve(self, company: str, website: str) -> Resolution:
+        """Find the company's board, within the time budget.
+
+        If the budget runs out the company comes back unidentified, with a
+        note saying so; the caller carries on with the next company.
+        """
         res = Resolution(company=company)
+        self._scanned = 0
+        self._deadline = time.monotonic() + self.wall_budget
+        self._cpu_deadline = time.process_time() + self.cpu_budget
+        try:
+            with time_budget(self.wall_budget, self.cpu_budget):
+                self._resolve(res, company, website)
+        except BudgetExceeded as exc:
+            res.outcome, res.job_system, res.job_system_url = "unresolved", None, None
+            res.candidates = []
+            res.over_budget = True
+            res.notes.append(f"stopped: resolving this company {exc}; left unidentified")
+        finally:
+            self._deadline = self._cpu_deadline = float("inf")
+        return res
+
+    def _resolve(self, res: Resolution, company: str, website: str) -> Resolution:
         own_domains = {registrable_domain(website)} - {""}
         supported, unsupported, fingerprints = {}, {}, {}
         if website:
@@ -609,6 +744,19 @@ def save_resolution(conn: sqlite3.Connection, res: Resolution) -> None:
     if manual is not None and manual["manual"]:
         res.notes.append("job system was recorded by hand; automatic findings were not saved over it")
         return
+    if res.over_budget:
+        # Running out of time taught us nothing new: keep an earlier finding
+        # and add the note to it, rather than replace it with "unidentified".
+        earlier = conn.execute(
+            "SELECT evidence FROM company_resolutions WHERE company_id = ?", (company_id,)).fetchone()
+        if earlier is not None:
+            kept = json.loads(earlier["evidence"])
+            kept["notes"] = [n for n in kept.get("notes", []) if not n.startswith("stopped: ")]
+            kept["notes"].append(f"{utc_now()[:10]} {res.notes[-1]}")
+            with transaction(conn):
+                conn.execute("UPDATE company_resolutions SET evidence = ? WHERE company_id = ?",
+                             (json.dumps(kept, ensure_ascii=False), company_id))
+            return
     evidence = {"candidates": [asdict(c) for c in res.candidates], "notes": res.notes}
     with transaction(conn):
         conn.execute(
@@ -662,8 +810,12 @@ def recheck_targets(conn: sqlite3.Connection, failing: list[dict]) -> list[sqlit
     rows = conn.execute(
         "SELECT c.name, c.website, "
         "EXISTS (SELECT 1 FROM boards b WHERE b.company_id = c.id) AS mapped, "
-        "COALESCE((SELECT manual FROM company_resolutions r WHERE r.company_id = c.id), 0) AS manual "
-        "FROM companies c WHERE c.active = 1 ORDER BY c.tier IS NULL, c.tier, c.name").fetchall()
+        "COALESCE((SELECT manual FROM company_resolutions r WHERE r.company_id = c.id), 0) AS manual, "
+        "(SELECT resolved_at FROM company_resolutions r WHERE r.company_id = c.id) AS resolved_at "
+        # Longest-unchecked first, so a run cut short by its time limit
+        # reaches the rest next time instead of repeating the same ones.
+        "FROM companies c WHERE c.active = 1 "
+        "ORDER BY resolved_at IS NOT NULL, resolved_at, c.tier IS NULL, c.tier, c.name").fetchall()
     return [r for r in rows if r["name"] in names or (not r["mapped"] and not r["manual"])]
 
 
@@ -676,13 +828,21 @@ def resolve_companies(
     delay: float = 1.0,
     resolver: Resolver | None = None,
     on_company: Callable[[Resolution], None] | None = None,
+    time_limit: float | None = None,
+    not_checked: list[str] | None = None,
 ) -> list[Resolution]:
     """Resolve the named companies; or, with none named, every active company
     that has no board and no hand-recorded job system, plus the owners of any
     ``failing`` boards.
 
     With ``dry_run`` the same lookups run but nothing is written.
+
+    ``time_limit`` (seconds) bounds the whole pass: once it has passed, no
+    further company is started and the names left over are appended to
+    ``not_checked``. With the per-company budget, the pass ends within
+    ``time_limit`` plus one company's budget.
     """
+    started = time.monotonic()
     if names:
         targets = []
         for name in names:
@@ -695,7 +855,11 @@ def resolve_companies(
         targets = recheck_targets(conn, failing or [])
     resolver = resolver or Resolver(delay=delay)
     results = []
-    for target in targets:
+    for position, target in enumerate(targets):
+        if time_limit is not None and time.monotonic() - started >= time_limit:
+            if not_checked is not None:
+                not_checked.extend(t["name"] for t in targets[position:])
+            break
         try:
             res = resolver.resolve(target["name"], target["website"])
         except Exception as exc:  # one company's failure must not stop the rest

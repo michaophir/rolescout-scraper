@@ -138,8 +138,11 @@ ssh mac '~/.rolescout/venv/bin/rolescout status'
 `status` also prints one `Coverage gaps:` line. Gaps are companies rolescout
 cannot fetch yet; they never change the exit code. About once a week the
 daily run re-checks them by itself: it re-resolves companies with no board
-and companies whose board has failed three or more runs in a row. To see the
-detail, or to record a job system found by hand:
+and companies whose board has failed three or more runs in a row. The re-check
+runs after the scout and the backup, each company gets at most 60 seconds,
+and the whole re-check stops after 15 minutes; companies it did not reach go
+first the following week. To see the detail, or to record a job system found
+by hand:
 
 ```sh
 rolescout gaps

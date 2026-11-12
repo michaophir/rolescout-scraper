@@ -188,6 +188,8 @@ def _print_resolution(res: Resolution, dry_run: bool) -> None:
                 else "needs review")
     elif res.outcome == "unsupported":
         line = f"unsupported: {res.job_system} ({res.job_system_url})"
+    elif res.over_budget:
+        line = "stopped at its time budget, left unidentified"
     else:
         line = "unresolved"
     print(f"  {res.company} ... {line}", flush=True)
@@ -248,9 +250,11 @@ def _cmd_companies_resolve(args) -> int:
     if failing and not args.json:
         print("Also re-resolving companies whose board has failed three or more runs in a row: "
               + ", ".join(sorted({b["company"] for b in failing})))
+    left: list[str] = []
     results = resolve_companies(
         conn, names=None if recheck else args.names, failing=failing, dry_run=args.dry_run,
-        delay=args.delay, on_company=None if args.json else lambda r: _print_resolution(r, args.dry_run))
+        delay=args.delay, on_company=None if args.json else lambda r: _print_resolution(r, args.dry_run),
+        time_limit=args.max_minutes * 60 if args.max_minutes else None, not_checked=left)
     if recheck and not args.dry_run:
         mark_rechecked(conn)
     if args.json:
@@ -261,6 +265,8 @@ def _cmd_companies_resolve(args) -> int:
         print("Nothing to resolve: every active company has a board or a recorded job system.")
         return 0
     _print_resolve_summary(results, args.dry_run)
+    if left:
+        print(f"Stopped at the {args.max_minutes:g}-minute limit; not checked ({len(left)}): {', '.join(left)}")
     return 0
 
 
@@ -461,13 +467,20 @@ def _weekly_recheck(conn, args) -> None:
               + (": includes boards failing three or more runs in a row ("
                  + ", ".join(f"{b['company']} {b['source']}/{b['ref']}" for b in failing) + ")"
                  if failing else ""))
+        left: list[str] = []
         results = resolve_companies(conn, failing=failing, delay=args.delay,
-                                    on_company=lambda r: _print_resolution(r, False))
+                                    on_company=lambda r: _print_resolution(r, False),
+                                    time_limit=args.recheck_minutes * 60, not_checked=left)
+        # Marked even when cut short: the weekly cost stays bounded, and the
+        # companies left over are first in line next week.
         mark_rechecked(conn)
         if results:
             _print_resolve_summary(results, False)
         else:
             print("Nothing to re-check.")
+        if left:
+            print(f"Re-check stopped at its {args.recheck_minutes:g}-minute limit; not checked this "
+                  f"week, first in line next week ({len(left)}): {', '.join(left)}")
         for board in failing:
             added = [c for r in results if r.company == board["company"] for c in r.candidates if c.saved]
             if added:
@@ -508,10 +521,12 @@ def _cmd_daily(args) -> int:
             else:
                 print(f"Every board failed on all {args.attempts} attempts.")
                 code = 1
-        if code == 0 and recheck_due(conn, args.recheck_days):
-            _weekly_recheck(conn, args)
+        # Backup before the re-check: the day's essential work is finished
+        # and safe before the optional part starts.
         if args.backup_dir:
             _print_backup(conn, args.backup_dir, args.keep)
+        if code == 0 and recheck_due(conn, args.recheck_days):
+            _weekly_recheck(conn, args)
     except Exception as exc:  # the log must say why an unattended run died
         print(f"error: {type(exc).__name__}: {exc}")
         code = 1
@@ -702,6 +717,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("names", nargs="*", metavar="NAME",
                    help="companies to resolve (default: every active company with no board)")
     p.add_argument("--dry-run", action="store_true", help="show what would be saved; write nothing")
+    p.add_argument("--max-minutes", type=float, metavar="MINUTES",
+                   help="stop starting new companies after this long (default: no limit)")
     p.add_argument("--delay", type=float, default=1.0, metavar="SECONDS",
                    help="minimum pause between requests (default: 1.0)")
     p.add_argument("--json", action="store_true")
@@ -712,6 +729,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="resolve unmapped companies and companies whose board keeps failing "
              "(the daily job does this weekly)")
     p.add_argument("--dry-run", action="store_true", help="show what would be saved; write nothing")
+    p.add_argument("--max-minutes", type=float, metavar="MINUTES",
+                   help="stop starting new companies after this long (default: no limit)")
     p.add_argument("--delay", type=float, default=1.0, metavar="SECONDS")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=_cmd_companies_resolve, recheck=True, names=[])
@@ -796,6 +815,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--recheck-days", type=float, default=7.0, metavar="DAYS",
                    help="re-check coverage (resolve unmapped companies and failing boards) "
                         "this often; 0 turns it off (default: 7)")
+    p.add_argument("--recheck-minutes", type=float, default=15.0, metavar="MINUTES",
+                   help="upper limit on one coverage re-check (default: 15)")
     p.set_defaults(func=_cmd_daily)
 
     query = commands.add_parser(
