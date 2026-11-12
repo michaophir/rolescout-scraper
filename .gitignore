@@ -15,3 +15,6 @@ companies.txt
 
 # Company list exports (personal data: your target companies)
 rolescout-companies*.json
+
+# Ranking config (personal: the roles you want). It belongs next to the database.
+ranking.toml

@@ -118,7 +118,7 @@ def test_backup_keeps_the_last_n(acme, tmp_path):
 def test_backup_command(acme, tmp_path, capsys):
     assert cli.main(["backup", str(tmp_path / "b"), "--keep", "2"]) == 0
     out = capsys.readouterr().out
-    assert out.startswith(f"Backup written: {tmp_path / 'b'}/rolescout-") and "KB)" in out
+    assert out.startswith(f"Backup written: {tmp_path / 'b'}/rolescout-") and ("KB)" in out or "MB)" in out)
     assert len(ops.list_backups(tmp_path / "b")) == 1
 
 

@@ -82,6 +82,27 @@ unsupported and unresolved counts as on your own machine.
 Importing again later is safe: it adds new companies and boards and updates
 details, and never removes anything.
 
+### The shortlist ranking
+
+The shortlist is ranked by `~/.rolescout/ranking.toml`, a personal file that
+lives next to the database and is not part of the repository. Without it the
+scout still runs and simply builds no shortlist. Either copy yours across
+(on your own machine):
+
+```sh
+scp ~/.rolescout/ranking.toml mac:.rolescout/ranking.toml
+```
+
+or create a starter on the Mac and edit it:
+
+```sh
+cd ~/rolescout-scraper && rolescout shortlist init
+```
+
+After changing the file, `rolescout shortlist rebuild` re-ranks at once, with
+no network call. Marks (dismissed, saved, applied) are stored in the database
+on the machine where you make them.
+
 ## 4. First run
 
 Run one scout by hand so problems show up now, not at the scheduled time:

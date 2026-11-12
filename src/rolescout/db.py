@@ -136,6 +136,41 @@ MIGRATIONS: list[list[str]] = [
         # Small facts about the database itself, e.g. when coverage was last re-checked.
         "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
     ],
+    [
+        """
+        -- What you decided about a role. One mark per role; personal data.
+        -- A saved or applied role keeps its description after it closes.
+        CREATE TABLE role_marks (
+            role_id    INTEGER PRIMARY KEY REFERENCES roles(id) ON DELETE CASCADE,
+            status     TEXT NOT NULL CHECK (status IN ('dismissed', 'saved', 'applied')),
+            note       TEXT NOT NULL DEFAULT '',
+            marked_at  TEXT NOT NULL
+        )
+        """,
+        """
+        -- One ranked shortlist per local calendar day (a rebuild on the same
+        -- day replaces it), kept for 30 days so lists can be compared.
+        CREATE TABLE shortlists (
+            id           INTEGER PRIMARY KEY,
+            list_date    TEXT NOT NULL UNIQUE,     -- local date, YYYY-MM-DD
+            built_at     TEXT NOT NULL,            -- UTC
+            run_id       INTEGER,                  -- the scout it followed, if any
+            config_hash  TEXT NOT NULL DEFAULT '',
+            eligible     INTEGER NOT NULL DEFAULT 0  -- roles that qualified before the cut
+        )
+        """,
+        """
+        CREATE TABLE shortlist_entries (
+            shortlist_id  INTEGER NOT NULL REFERENCES shortlists(id) ON DELETE CASCADE,
+            rank          INTEGER NOT NULL,
+            role_id       INTEGER NOT NULL REFERENCES roles(id),
+            score         REAL NOT NULL,
+            reasons       TEXT NOT NULL,           -- JSON array of plain-language reasons
+            PRIMARY KEY (shortlist_id, rank)
+        )
+        """,
+        "CREATE INDEX shortlist_entries_role ON shortlist_entries (role_id)",
+    ],
 ]
 
 SCHEMA_VERSION = len(MIGRATIONS)

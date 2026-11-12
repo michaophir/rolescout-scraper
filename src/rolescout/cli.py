@@ -25,6 +25,8 @@ from rolescout.resolve import (
     Resolution, clear_job_system, mapping_report, resolve_companies, set_job_system,
 )
 from rolescout.scout import BoardResult, ScoutAlreadyRunning, run_scout
+from rolescout import shortlist as ranking
+from rolescout.shortlist import ConfigError, MarkError
 from rolescout.transfer import TransferError, export_companies, import_companies
 
 DESCRIPTION_PREVIEW_CHARS = 400
@@ -399,6 +401,7 @@ def _scout_once(conn, args, *, as_json: bool = False):
             "boards": [vars(b) for b in summary.boards],
             "companies": [vars(s) for s in summary.snapshots],
         }, indent=2, ensure_ascii=False))
+        _rebuild_after_scout(conn, args, summary.run_id, quiet=True)
         return summary
     print(f"\nRun {summary.run_id} {summary.status}: {summary.started_at} -> {summary.finished_at}")
     if summary.boards:
@@ -425,7 +428,240 @@ def _scout_once(conn, args, *, as_json: bool = False):
               "(or: rolescout companies map NAME SOURCE REF)")
     if summary.unmapped:
         print(f"\nSkipped {summary.unmapped} active companies with no board mapping.")
+    _rebuild_after_scout(conn, args, summary.run_id)
     return summary
+
+
+# --- shortlist --------------------------------------------------------------
+
+def _ranking_path(args) -> Path:
+    return ranking.config_path(resolve_db_path(args.db), getattr(args, "config", None))
+
+
+def _built_line(result: dict) -> str:
+    line = (f"Shortlist rebuilt: {result['listed']} roles "
+            f"(of {result['eligible']} that qualify)")
+    if result["previous_date"]:
+        line += f", {result['new']} new since {result['previous_date']}"
+    return line + ". See: rolescout shortlist"
+
+
+def _rebuild_after_scout(conn, args, run_id: int, quiet: bool = False) -> None:
+    """Rebuild the shortlist at the end of a scout. Never fails the scout."""
+    path = _ranking_path(args)
+    try:
+        if not path.exists():
+            if not quiet:
+                print(f"\nNo shortlist: there is no ranking config at {path}. "
+                      "Create one with: rolescout shortlist init")
+            return
+        result = ranking.build_shortlist(conn, ranking.load_config(path), run_id=run_id)
+        if not quiet:
+            print("\n" + _built_line(result))
+    except Exception as exc:
+        if not quiet:
+            print(f"\nShortlist not rebuilt, the previous one is kept: {exc}")
+
+
+def _silent_rebuild(conn, args) -> None:
+    """After a mark changes: refresh today's list if there is a config. Best effort."""
+    try:
+        path = _ranking_path(args)
+        if path.exists():
+            ranking.build_shortlist(conn, ranking.load_config(path))
+    except Exception:
+        pass
+
+
+def _cmd_shortlist_init(args) -> int:
+    path = _ranking_path(args)
+    if path.exists() and not args.force:
+        print(f"error: {path} already exists. Edit it, or pass --force to replace it "
+              "(your changes would be lost).", file=sys.stderr)
+        return 1
+    filters = Path(args.filters).expanduser() if args.filters else Path("role_filters.csv")
+    titles, seniority, seeded = [], [], ""
+    if filters.exists():
+        titles, seniority = ranking.read_filters_csv(filters)
+        seeded = filters.name
+    elif args.filters:
+        raise FileNotFoundError(f"no such file: {filters}")
+    text = ranking.starter_config(titles, seniority, seeded)
+    ranking.parse_config(text)  # a starter that does not load would be a bug
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(text)
+    if seeded:
+        print(f"Wrote {path}: {len(titles)} title phrases and {len(seniority)} seniority words "
+              f"from {filters}.")
+    else:
+        print(f"Wrote {path} with example titles only (no role_filters.csv here; "
+              "pass --filters PATH to seed from one). Edit the titles before relying on it.")
+    print("Next: edit it if you like, then run: rolescout shortlist rebuild")
+    repo = _inside_git_repo(path)
+    if repo:
+        print(f"warning: {path} is inside the git repository at {repo}. It is personal data; "
+              "keep it out of commits.", file=sys.stderr)
+    return 0
+
+
+def _cmd_shortlist_rebuild(args) -> int:
+    conn = connect(args.db)
+    cfg = ranking.load_config(_ranking_path(args))
+    print(_built_line(ranking.build_shortlist(conn, cfg)))
+    return 0
+
+
+def _flags(entry: dict, new_ids: set[int]) -> str:
+    return " ".join(flag for flag, on in (("saved", entry["mark"] == "saved"),
+                                           ("new", entry["id"] in new_ids)) if on)
+
+
+def _cmd_shortlist(args) -> int:
+    conn = connect(args.db)
+    current = ranking.latest_shortlist(conn)
+    path = _ranking_path(args)
+    if current is None:
+        print("No shortlist yet. " + (
+            "Run: rolescout shortlist rebuild" if path.exists()
+            else "Create a ranking config with: rolescout shortlist init"))
+        return 0
+    try:
+        previous, new_ids = ranking.new_since(conn, current["id"], args.since)
+    except ValueError:
+        print(f"error: --since must be a date like 2026-01-31, got {args.since!r}", file=sys.stderr)
+        return 1
+    entries = ranking.shortlist_entries(conn, current["id"])
+    total = len(entries)
+    if args.new:
+        entries = [e for e in entries if e["id"] in new_ids]
+    if args.top:
+        entries = entries[:args.top]
+    for e in entries:
+        e["new"] = e["id"] in new_ids and previous is not None
+
+    stale = ""
+    try:
+        if path.exists() and ranking.load_config(path).digest != current["config_hash"]:
+            stale = "The ranking config has changed since this list was built; run: rolescout shortlist rebuild"
+    except ConfigError as exc:
+        stale = f"The ranking config cannot be read ({exc}); this is the last list built."
+
+    if args.json:
+        print(json.dumps({
+            "list_date": current["list_date"], "built_at": current["built_at"],
+            "eligible": current["eligible"], "size": total,
+            "compared_with": previous["list_date"] if previous else None,
+            "config_changed_since_build": bool(stale), "entries": entries,
+        }, indent=2, ensure_ascii=False))
+        return 0
+
+    compared = f"new since {previous['list_date']}: {len(new_ids)}" if previous else "no earlier list to compare with"
+    print(f"Shortlist for {current['list_date']}: {total} roles of {current['eligible']} that qualify; {compared}")
+    if stale:
+        print(stale)
+    if args.new and previous is None:
+        print("\nNothing to show: there is no earlier list, so nothing can be new yet.")
+        return 0
+    if not entries:
+        print("\nNo roles to show.")
+        return 0
+    print()
+    widths = {"Title": 52, "Location": 26, "Company": 18}
+    if args.by_company:
+        groups: dict[str, list[dict]] = {}
+        for e in entries:
+            groups.setdefault(e["company"], []).append(e)
+        # Entries arrive in rank order, so groups are already ordered by their best role.
+        for company, members in groups.items():
+            tier = f"tier {members[0]['tier']}" if members[0]["tier"] is not None else "no tier"
+            print(f"{company} ({tier}): {len(members)} role{'' if len(members) == 1 else 's'}, "
+                  f"best rank {members[0]['rank']}")
+            print(format_table(
+                ["Rank", "ID", "Score", "Title", "Location", "Flags", "URL"],
+                [[e["rank"], e["id"], f"{e['score']:g}", e["title"], e["location"],
+                  _flags(e, new_ids), e["url"]] for e in members], widths))
+            print()
+    else:
+        print(format_table(
+            ["Rank", "ID", "Score", "Company", "Tier", "Title", "Location", "Flags", "URL"],
+            [[e["rank"], e["id"], f"{e['score']:g}", e["company"], _tier(e["tier"]), e["title"],
+              e["location"], _flags(e, new_ids), e["url"]] for e in entries], widths))
+        print()
+    print("Why a role ranks where it does: rolescout why ID.  "
+          "Mark one: rolescout mark ID dismissed|saved|applied")
+    return 0
+
+
+def _cmd_mark(args) -> int:
+    conn = connect(args.db)
+    role_id = ranking.parse_role_id(args.id)
+    role = ranking.mark_role(conn, role_id, args.status, args.note or "")
+    _silent_rebuild(conn, args)
+    effect = {"dismissed": "it will not be shortlisted again",
+              "applied": "it will not be shortlisted again, and its description is kept after it closes",
+              "saved": "it stays on the shortlist, flagged, and its description is kept after it closes"}
+    print(f"Marked {args.status}: {role['company']}, {role['title']} (ID {role_id}); {effect[args.status]}.")
+    if role["closed_at"] and args.status in ranking.KEEP_DESCRIPTION_MARKS:
+        print("Note: this role had already closed, so its description was already deleted.")
+    return 0
+
+
+def _cmd_unmark(args) -> int:
+    conn = connect(args.db)
+    role_id = ranking.parse_role_id(args.id)
+    was = ranking.unmark_role(conn, role_id)
+    role = ranking.get_role(conn, role_id)
+    _silent_rebuild(conn, args)
+    if was:
+        print(f"Removed the {was} mark from {role['company']}, {role['title']} (ID {role_id}).")
+    else:
+        print(f"{role['company']}, {role['title']} (ID {role_id}) had no mark.")
+    return 0
+
+
+def _cmd_marks(args) -> int:
+    marks = ranking.list_marks(connect(args.db), args.status)
+    if args.json:
+        print(json.dumps(marks, indent=2, ensure_ascii=False))
+        return 0
+    rows = [[m["id"], m["status"], m["marked_at"][:10], m["company"], m["title"],
+             "closed " + m["closed_at"][:10] if m["closed_at"] else "open",
+             "yes" if m["has_description"] else "no", m["note"]] for m in marks]
+    print(format_table(["ID", "Mark", "Marked", "Company", "Title", "Role", "Description kept", "Note"],
+                       rows, {"Title": 50, "Note": 50}))
+    print(f"\n{len(marks)} marked role{'' if len(marks) == 1 else 's'}.")
+    return 0
+
+
+def _cmd_why(args) -> int:
+    conn = connect(args.db)
+    info = ranking.explain(conn, ranking.parse_role_id(args.id), ranking.load_config(_ranking_path(args)))
+    if args.json:
+        print(json.dumps(info, indent=2, ensure_ascii=False))
+        return 0
+    role = info["role"]
+    tier = f"tier {role['tier']}" if role["tier"] is not None else "no tier"
+    print(f"{role['title']}  (ID {role['id']})")
+    print(f"{role['company']} ({tier}) | {role['location'] or 'no location given'} | {role['url']}")
+    if role["mark"]:
+        print(f"Marked {role['mark']}" + (f": {role['mark_note']}" if role["mark_note"] else ""))
+    print()
+    if info["rank"]:
+        print(f"Rank {info['rank']} of {info['list_size']} on the shortlist for {info['list_date']}.")
+    else:
+        print(f"Not on the shortlist: {info['why_not']}.")
+    print(f"\nScore {info['score']:g}, from:")
+    for line in info["detail"]:
+        print(f"  {line}")
+    if info["rank"] and info["listed_score"] != info["score"]:
+        print(f"\nThe list was built with a score of {info['listed_score']:g}; the config or the "
+              "date has changed since. Run: rolescout shortlist rebuild")
+    elif info["config_changed"]:
+        print("\nThe ranking config has changed since the list was built; "
+              "run: rolescout shortlist rebuild")
+    return 0
 
 
 def _cmd_scout(args) -> int:
@@ -762,6 +998,62 @@ def build_parser() -> argparse.ArgumentParser:
     scout.add_argument("--json", action="store_true", help="print the run summary as JSON")
     scout.set_defaults(func=_cmd_scout)
 
+    config = argparse.ArgumentParser(add_help=False)
+    config.add_argument(
+        "--config", metavar="PATH",
+        help=f"ranking config (default: ${ranking.CONFIG_ENV_VAR}, else {ranking.CONFIG_NAME} next to the database)")
+
+    sl = commands.add_parser(
+        "shortlist", parents=[db, config],
+        help="the top open roles to look at first (rebuilt after every scout)")
+    sl.add_argument("--top", type=int, metavar="N", help="show only the first N")
+    sl.add_argument("--by-company", action="store_true",
+                    help="group by company, companies with the best-ranked roles first")
+    sl.add_argument("--new", action="store_true", help="only roles that were not on the previous list")
+    sl.add_argument("--since", metavar="YYYY-MM-DD",
+                    help="compare with the list of this day instead of the previous one (30 days are kept)")
+    sl.add_argument("--json", action="store_true")
+    sl.set_defaults(func=_cmd_shortlist)
+    slsub = sl.add_subparsers(dest="subcommand", metavar="SUBCOMMAND")
+    # The same two flags, accepted after the subcommand as well. No default
+    # here, so a value given before the subcommand is not wiped out.
+    late = argparse.ArgumentParser(add_help=False)
+    late.add_argument("--db", metavar="PATH", default=argparse.SUPPRESS, help="database file")
+    late.add_argument("--config", metavar="PATH", default=argparse.SUPPRESS, help="ranking config")
+    p = slsub.add_parser("init", parents=[late], help="create a starter ranking config")
+    p.add_argument("--filters", metavar="CSV",
+                   help="seed titles and seniority from a role_filters.csv-style file "
+                        "(default: role_filters.csv in the current folder, if present)")
+    p.add_argument("--force", action="store_true", help="replace an existing config")
+    p.set_defaults(func=_cmd_shortlist_init)
+    p = slsub.add_parser("rebuild", parents=[late],
+                         help="re-rank now from the database and the config (no network)")
+    p.set_defaults(func=_cmd_shortlist_rebuild)
+
+    p = commands.add_parser(
+        "mark", parents=[db, config],
+        help="mark a role dismissed, saved or applied")
+    p.add_argument("id", help="the role's ID, from the ID column")
+    p.add_argument("status", choices=ranking.MARKS)
+    p.add_argument("--note", help="anything you want to remember about it")
+    p.set_defaults(func=_cmd_mark)
+
+    p = commands.add_parser("unmark", parents=[db, config], help="remove a role's mark")
+    p.add_argument("id")
+    p.set_defaults(func=_cmd_unmark)
+
+    p = commands.add_parser("marks", parents=[db], help="list the roles you have marked")
+    p.add_argument("--status", choices=ranking.MARKS)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=_cmd_marks)
+
+    p = commands.add_parser(
+        "why", parents=[db, config],
+        help="explain a role's score and its place on the shortlist")
+    p.add_argument("id")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=_cmd_why)
+
     p = commands.add_parser(
         "gaps", parents=[db],
         help="companies we cannot fetch, grouped by job system, with connectors worth building")
@@ -846,7 +1138,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return args.func(args)
     except (CompanyError, SchemaError, FileNotFoundError, TransferError, BackupError,
-            launchd.ScheduleError, GapsError) as exc:
+            launchd.ScheduleError, GapsError, ConfigError, MarkError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:

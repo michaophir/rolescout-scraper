@@ -128,7 +128,8 @@ def apply_fetch(conn: sqlite3.Connection, company_id: int, board_id: int,
     Must run inside a transaction. Every fetched role is inserted or updated
     and marked seen; a closed role that shows up again reopens. Open roles of
     the board that were not fetched get one more miss, and close on the
-    second: the description is deleted, the one-line row is kept.
+    second: the description is deleted (unless the role is marked saved or
+    applied), the one-line row is kept.
     """
     new = reopened = 0
     seen: set[int] = set()
@@ -170,7 +171,10 @@ def apply_fetch(conn: sqlite3.Connection, company_id: int, board_id: int,
     closing = [(r["id"],) for r in conn.execute(
         "SELECT id FROM roles WHERE board_id = ? AND closed_at IS NULL AND missed_fetches >= ?",
         (board_id, MISSES_TO_CLOSE))]
-    conn.executemany("DELETE FROM role_descriptions WHERE role_id = ?", closing)
+    # A role you saved or applied to keeps its description after it closes.
+    conn.executemany(
+        "DELETE FROM role_descriptions WHERE role_id = ? AND role_id NOT IN "
+        "(SELECT role_id FROM role_marks WHERE status IN ('saved', 'applied'))", closing)
     conn.executemany("UPDATE roles SET closed_at = ? WHERE id = ?", [(now, *c) for c in closing])
     return new, reopened, len(closing)
 

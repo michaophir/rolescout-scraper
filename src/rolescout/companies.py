@@ -120,7 +120,8 @@ def remove_board(conn, name: str, source: str, ref: str) -> int:
     with transaction(conn):
         conn.execute(
             "DELETE FROM role_descriptions WHERE role_id IN "
-            "(SELECT id FROM roles WHERE board_id = ? AND closed_at IS NULL)", (board["id"],))
+            "(SELECT id FROM roles WHERE board_id = ? AND closed_at IS NULL) AND role_id NOT IN "
+            "(SELECT role_id FROM role_marks WHERE status IN ('saved', 'applied'))", (board["id"],))
         closed = conn.execute(
             "UPDATE roles SET closed_at = ? WHERE board_id = ? AND closed_at IS NULL",
             (now, board["id"])).rowcount
