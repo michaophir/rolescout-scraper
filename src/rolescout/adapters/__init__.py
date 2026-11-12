@@ -3,7 +3,7 @@
 import requests
 
 from rolescout.adapters.ashby import AshbyAdapter
-from rolescout.adapters.base import BoardNotFound, SourceAdapter, SourceError
+from rolescout.adapters.base import BoardIdentity, BoardNotFound, SourceAdapter, SourceError
 from rolescout.adapters.greenhouse import GreenhouseAdapter
 from rolescout.adapters.lever import LeverAdapter
 
@@ -22,6 +22,6 @@ def get_adapter(source: str, session: requests.Session | None = None) -> SourceA
 
 
 __all__ = [
-    "ADAPTERS", "BoardNotFound", "SourceAdapter", "SourceError", "get_adapter",
+    "ADAPTERS", "BoardIdentity", "BoardNotFound", "SourceAdapter", "SourceError", "get_adapter",
     "AshbyAdapter", "GreenhouseAdapter", "LeverAdapter",
 ]

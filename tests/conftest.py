@@ -37,6 +37,40 @@ class FakeSession:
         return self.response
 
 
+class FakeWeb:
+    """A whole fake internet: serves pages and API responses by URL, 404 otherwise.
+
+    ``pages`` maps a URL to an HTML string, a JSON-able object, or a
+    ``(final_url, body)`` tuple to simulate a redirect.
+    """
+
+    def __init__(self, pages):
+        self.pages = dict(pages)
+        self.urls = []
+
+    def get(self, url, **kwargs):
+        self.urls.append(url)
+        if url not in self.pages:
+            return FakeWebResponse(url, None, 404)
+        body = self.pages[url]
+        if isinstance(body, tuple):
+            url, body = body
+        return FakeWebResponse(url, body, 200)
+
+
+class FakeWebResponse:
+    def __init__(self, url, body, status_code):
+        self.url = url
+        self.status_code = status_code
+        self._body = body
+        self.text = body if isinstance(body, str) else json.dumps(body)
+
+    def json(self):
+        if isinstance(self._body, str):
+            raise ValueError("not JSON")
+        return self._body
+
+
 @pytest.fixture
 def load_fixture():
     def load(name):

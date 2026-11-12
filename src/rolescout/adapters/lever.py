@@ -1,8 +1,10 @@
 """Lever job boards (api.lever.co postings API)."""
 
+import html
+import re
 from datetime import datetime, timezone
 
-from rolescout.adapters.base import SourceAdapter, SourceError
+from rolescout.adapters.base import BoardIdentity, SourceAdapter, SourceError
 from rolescout.models import Role
 from rolescout.text import html_to_lines, normalize_workplace_type, strip_html
 
@@ -33,16 +35,30 @@ def _full_description(item: dict) -> str:
 class LeverAdapter(SourceAdapter):
     name = "lever"
 
-    def fetch(self, ref: str, *, company: str | None = None) -> list[Role]:
+    def board_url(self, ref: str) -> str:
         # The list call already carries description, comp text and workplace type.
-        url = f"https://api.lever.co/v0/postings/{ref}?mode=json"
-        return self.parse(self._get_json(url, ref), ref, company=company)
+        return f"https://api.lever.co/v0/postings/{ref}?mode=json"
 
-    def parse(self, payload: object, ref: str, *, company: str | None = None) -> list[Role]:
+    def items(self, payload: object, ref: str) -> list[dict]:
         if not isinstance(payload, list):
             raise SourceError(f"{self.name}: unexpected response shape for {ref!r}")
+        return payload
+
+    def identity(self, ref: str) -> BoardIdentity:
+        # The API has no company fields; the hosted page has a title and a
+        # logo link that some companies point at their own site.
+        page = self._get_text(f"https://jobs.lever.co/{ref}", ref)
+        title = re.search(r"<title>(.*?)</title>", page, re.S)
+        logo = re.search(r'<a[^>]*href="([^"]+)"[^>]*class="main-header-logo"', page)
+        website = html.unescape(logo.group(1)) if logo else ""
+        if "lever.co" in website:
+            website = ""
+        return BoardIdentity(
+            name=html.unescape(title.group(1)).strip() if title else "", website=website)
+
+    def parse(self, payload: object, ref: str, *, company: str | None = None) -> list[Role]:
         roles = []
-        for item in payload:
+        for item in self.items(payload, ref):
             categories = item.get("categories") or {}
             roles.append(Role(
                 source=self.name,

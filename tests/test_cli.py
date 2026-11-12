@@ -81,7 +81,7 @@ def test_scout_and_query_commands(monkeypatch, capsys):
                       bolt=[BoardNotFound("lever: no board found for 'bolt'")])
 
     def scripted_scout(conn, **kwargs):
-        return scout.run_scout(conn, adapter_for=script, on_company=kwargs.get("on_company"))
+        return scout.run_scout(conn, adapter_for=script, on_board=kwargs.get("on_board"))
     monkeypatch.setattr(cli, "run_scout", scripted_scout)
 
     run(capsys, "companies", "add", "Acme")
@@ -93,6 +93,7 @@ def test_scout_and_query_commands(monkeypatch, capsys):
     code, out, _ = run(capsys, "scout")
     assert code == 0  # a partial failure is recorded, not fatal
     assert "Run 1 completed" in out
+    assert "2 roles (baseline)" in out
     assert "FAILED: lever: no board found for 'bolt'" in out
     assert "1 ok, 1 failed" in out
     assert "Skipped 1 active companies with no board mapping." in out
@@ -105,6 +106,11 @@ def test_scout_and_query_commands(monkeypatch, capsys):
     code, out, _ = run(capsys, "query", "--company", "acme", "--json")
     assert [r["title"] for r in json.loads(out)] == ["Engineer", "Product Manager"]
     assert run(capsys, "query", "--closed")[1].endswith("\n0 roles.\n")
+    run(capsys, "companies", "deactivate", "Acme")
+    assert run(capsys, "query")[1].endswith("\n0 roles.\n")
+    assert run(capsys, "query", "--include-inactive")[1].endswith("\n2 roles.\n")
+    assert run(capsys, "companies", "unmap", "Acme", "greenhouse", "acme")[1] == (
+        "Removed greenhouse/acme from Acme; 2 open roles closed.\n")
     assert run(capsys, "query", "--company", "Nope")[0] == 1
     assert run(capsys, "query", "--since", "yesterday")[0] == 1
 

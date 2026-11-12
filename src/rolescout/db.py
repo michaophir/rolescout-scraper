@@ -26,23 +26,29 @@ MIGRATIONS: list[list[str]] = [
         )
         """,
         """
-        CREATE TABLE company_sources (
-            company_id       INTEGER PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,
+        -- A company may have several boards; a board belongs to one company.
+        CREATE TABLE boards (
+            id               INTEGER PRIMARY KEY,
+            company_id       INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
             source           TEXT NOT NULL,           -- adapter name
             ref              TEXT NOT NULL,           -- board reference (slug)
+            origin           TEXT NOT NULL DEFAULT 'manual',  -- manual | link | guess
+            evidence         TEXT NOT NULL DEFAULT '',        -- why resolve trusted it
             mapped_at        TEXT NOT NULL,
-            last_success_at  TEXT,
+            last_success_at  TEXT,                    -- NULL until the baseline fetch
             last_error       TEXT,                    -- cleared by the next success
             last_error_at    TEXT,
             UNIQUE (source, ref)
         )
         """,
+        "CREATE INDEX boards_company ON boards (company_id)",
         """
         CREATE TABLE roles (
             id                 INTEGER PRIMARY KEY,
             source             TEXT NOT NULL,
             source_job_id      TEXT NOT NULL,
             company_id         INTEGER NOT NULL REFERENCES companies(id),
+            board_id           INTEGER REFERENCES boards(id) ON DELETE SET NULL,
             title              TEXT NOT NULL DEFAULT '',
             department         TEXT NOT NULL DEFAULT '',
             location           TEXT NOT NULL DEFAULT '',
@@ -58,6 +64,7 @@ MIGRATIONS: list[list[str]] = [
         )
         """,
         "CREATE INDEX roles_company_open ON roles (company_id, closed_at)",
+        "CREATE INDEX roles_board_open ON roles (board_id, closed_at)",
         "CREATE INDEX roles_first_seen ON roles (first_seen_at)",
         """
         CREATE TABLE role_descriptions (
@@ -67,20 +74,23 @@ MIGRATIONS: list[list[str]] = [
         """,
         """
         CREATE TABLE runs (
-            id                INTEGER PRIMARY KEY,
-            started_at        TEXT NOT NULL,
-            finished_at       TEXT,
-            status            TEXT NOT NULL DEFAULT 'running',  -- running | completed | interrupted
-            companies_total   INTEGER NOT NULL DEFAULT 0,
-            companies_ok      INTEGER NOT NULL DEFAULT 0,
-            companies_failed  INTEGER NOT NULL DEFAULT 0,
-            roles_open        INTEGER NOT NULL DEFAULT 0,
-            roles_opened      INTEGER NOT NULL DEFAULT 0,
-            roles_closed      INTEGER NOT NULL DEFAULT 0
+            id               INTEGER PRIMARY KEY,
+            started_at       TEXT NOT NULL,
+            finished_at      TEXT,
+            status           TEXT NOT NULL DEFAULT 'running',  -- running | completed | interrupted
+            companies_total  INTEGER NOT NULL DEFAULT 0,
+            boards_total     INTEGER NOT NULL DEFAULT 0,
+            boards_ok        INTEGER NOT NULL DEFAULT 0,
+            boards_failed    INTEGER NOT NULL DEFAULT 0,
+            roles_open       INTEGER NOT NULL DEFAULT 0,
+            roles_opened     INTEGER NOT NULL DEFAULT 0,   -- excludes baseline fetches
+            roles_closed     INTEGER NOT NULL DEFAULT 0
         )
         """,
         """
-        CREATE TABLE run_companies (
+        -- One row per board fetched in a run. Source and ref are copied so the
+        -- history survives a board being unmapped.
+        CREATE TABLE run_boards (
             run_id         INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
             company_id     INTEGER NOT NULL REFERENCES companies(id),
             source         TEXT NOT NULL,
@@ -88,8 +98,9 @@ MIGRATIONS: list[list[str]] = [
             status         TEXT NOT NULL,             -- ok | error
             error          TEXT,
             roles_fetched  INTEGER,                   -- NULL when the fetch failed
+            baseline       INTEGER NOT NULL DEFAULT 0,  -- 1 = this board's first successful fetch
             duration_ms    INTEGER NOT NULL DEFAULT 0,
-            PRIMARY KEY (run_id, company_id)
+            PRIMARY KEY (run_id, source, ref)
         )
         """,
         """
@@ -97,11 +108,24 @@ MIGRATIONS: list[list[str]] = [
             run_id              INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
             company_id          INTEGER NOT NULL REFERENCES companies(id),
             taken_at            TEXT NOT NULL,
+            baseline            INTEGER NOT NULL DEFAULT 0,  -- 1 = includes a board's first fetch
             open_roles          INTEGER NOT NULL,
-            opened              INTEGER NOT NULL,     -- new or reopened in this run
+            opened              INTEGER NOT NULL,     -- new or reopened; baseline roles not counted
             closed              INTEGER NOT NULL,     -- closed in this run
             open_by_department  TEXT NOT NULL,        -- JSON object: department -> count
             PRIMARY KEY (run_id, company_id)
+        )
+        """,
+        """
+        -- What `companies resolve` last found for a company (one row each).
+        CREATE TABLE company_resolutions (
+            company_id      INTEGER PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,
+            resolved_at     TEXT NOT NULL,
+            outcome         TEXT NOT NULL,   -- mapped | needs_review | unsupported | unresolved
+            job_system      TEXT,            -- e.g. workday, smartrecruiters, custom
+            job_system_url  TEXT,
+            careers_url     TEXT,
+            evidence        TEXT NOT NULL    -- JSON: candidates and notes
         )
         """,
     ],

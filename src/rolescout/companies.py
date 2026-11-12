@@ -85,36 +85,65 @@ def set_active(conn, name: str, active: bool) -> None:
         conn.execute("UPDATE companies SET active = ? WHERE id = ?", (int(active), company["id"]))
 
 
-def set_mapping(conn, name: str, source: str, ref: str) -> None:
-    """Point a company at a board. Replaces any previous mapping."""
+def add_board(conn, name: str, source: str, ref: str, *, origin: str = "manual",
+              evidence: str = "") -> int:
+    """Map a company to a board. A company may have several; a board has one owner."""
     company = get_company(conn, name)
     ref = ref.strip()
     if source not in ADAPTERS:
         raise CompanyError(f"unknown source {source!r}; expected one of {', '.join(sorted(ADAPTERS))}")
     if not ref:
         raise CompanyError("board reference is empty")
-    try:
-        with transaction(conn):
-            conn.execute("DELETE FROM company_sources WHERE company_id = ?", (company["id"],))
-            conn.execute(
-                "INSERT INTO company_sources (company_id, source, ref, mapped_at) VALUES (?, ?, ?, ?)",
-                (company["id"], source, ref, utc_now()))
-    except sqlite3.IntegrityError:
-        other = conn.execute(
-            "SELECT c.name FROM company_sources s JOIN companies c ON c.id = s.company_id "
-            "WHERE s.source = ? AND s.ref = ?", (source, ref)).fetchone()
-        raise CompanyError(f"{source}/{ref} is already mapped to {other['name']!r}") from None
+    owner = conn.execute(
+        "SELECT c.name FROM boards b JOIN companies c ON c.id = b.company_id "
+        "WHERE b.source = ? AND b.ref = ?", (source, ref)).fetchone()
+    if owner is not None:
+        raise CompanyError(f"{source}/{ref} is already mapped to {owner['name']!r}")
+    with transaction(conn):
+        return conn.execute(
+            "INSERT INTO boards (company_id, source, ref, origin, evidence, mapped_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (company["id"], source, ref, origin, evidence, utc_now())).lastrowid
+
+
+def remove_board(conn, name: str, source: str, ref: str) -> int:
+    """Unmap a board. Its open roles are closed now, since nothing will fetch
+    them again; their one-line rows stay. Returns how many roles were closed.
+    """
+    company = get_company(conn, name)
+    board = conn.execute(
+        "SELECT id FROM boards WHERE company_id = ? AND source = ? AND ref = ?",
+        (company["id"], source, ref.strip())).fetchone()
+    if board is None:
+        raise CompanyError(f"{company['name']} has no board {source}/{ref.strip()}")
+    now = utc_now()
+    with transaction(conn):
+        conn.execute(
+            "DELETE FROM role_descriptions WHERE role_id IN "
+            "(SELECT id FROM roles WHERE board_id = ? AND closed_at IS NULL)", (board["id"],))
+        closed = conn.execute(
+            "UPDATE roles SET closed_at = ? WHERE board_id = ? AND closed_at IS NULL",
+            (now, board["id"])).rowcount
+        conn.execute("DELETE FROM boards WHERE id = ?", (board["id"],))
+    return closed
 
 
 def list_companies(conn, *, active_only: bool = False) -> list[dict]:
     rows = conn.execute(
         """
-        SELECT c.name, c.website, c.tier, c.tags, c.active,
-               s.source, s.ref, s.last_success_at, s.last_error, s.last_error_at,
+        SELECT c.id, c.name, c.website, c.tier, c.tags, c.active,
                (SELECT COUNT(*) FROM roles r WHERE r.company_id = c.id AND r.closed_at IS NULL)
                    AS open_roles
-        FROM companies c LEFT JOIN company_sources s ON s.company_id = c.id
+        FROM companies c
         WHERE c.active = 1 OR NOT ?
         ORDER BY c.tier IS NULL, c.tier, c.name
         """, (active_only,)).fetchall()
-    return [{**dict(r), "tags": json.loads(r["tags"]), "active": bool(r["active"])} for r in rows]
+    boards: dict[int, list[dict]] = {}
+    for b in conn.execute(
+            "SELECT company_id, source, ref, origin, evidence, last_success_at, last_error, "
+            "last_error_at FROM boards ORDER BY id"):
+        board = dict(b)
+        boards.setdefault(board.pop("company_id"), []).append(board)
+    return [{**{k: r[k] for k in ("name", "website", "tier", "open_roles")},
+             "tags": json.loads(r["tags"]), "active": bool(r["active"]),
+             "boards": boards.get(r["id"], [])} for r in rows]

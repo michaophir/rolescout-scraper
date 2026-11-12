@@ -23,8 +23,8 @@ def test_connect_creates_versioned_wal_database(tmp_path):
     assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
     assert db.schema_version(conn) == db.SCHEMA_VERSION >= 1
     tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
-    assert tables >= {"companies", "company_sources", "roles", "role_descriptions",
-                      "runs", "run_companies", "company_snapshots"}
+    assert tables >= {"companies", "boards", "roles", "role_descriptions", "runs",
+                      "run_boards", "company_snapshots", "company_resolutions"}
     conn.close()
     db.connect(path).close()  # reopening an up-to-date database is a no-op
 

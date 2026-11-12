@@ -18,7 +18,7 @@ def test_import_csv_adds_then_updates(conn, tmp_path):
     csv_path.write_text("company_name,website,tier\nAcme,https://acme.com,1\nBolt,https://bolt.com,2\n")
     assert companies.import_csv(conn, csv_path) == (2, 0)
 
-    companies.set_mapping(conn, "Acme", "greenhouse", "acme")
+    companies.add_board(conn, "Acme", "greenhouse", "acme")
     companies.set_active(conn, "Bolt", False)
     csv_path.write_text("company_name,website,tier\nacme,https://acme.io,3\nCobalt,,\n")
     assert companies.import_csv(conn, csv_path) == (1, 1)
@@ -26,7 +26,7 @@ def test_import_csv_adds_then_updates(conn, tmp_path):
     listed = by_name(conn)
     assert set(listed) == {"Acme", "Bolt", "Cobalt"}
     assert (listed["Acme"]["website"], listed["Acme"]["tier"]) == ("https://acme.io", 3)
-    assert (listed["Acme"]["source"], listed["Acme"]["ref"]) == ("greenhouse", "acme")  # kept
+    assert [(b["source"], b["ref"]) for b in listed["Acme"]["boards"]] == [("greenhouse", "acme")]  # kept
     assert listed["Bolt"]["active"] is False  # not reactivated by a re-import
     assert listed["Cobalt"]["tier"] is None
 
@@ -65,16 +65,43 @@ def test_add_deactivate_activate(conn):
         companies.set_active(conn, "Nope", False)
 
 
-def test_mapping_rules(conn):
+def test_a_company_can_have_several_boards_but_a_board_has_one_owner(conn):
     companies.add_company(conn, "Acme")
     companies.add_company(conn, "Bolt")
-    companies.set_mapping(conn, "Acme", "greenhouse", "acme")
-    companies.set_mapping(conn, "Acme", "lever", "acme-co")  # remap replaces
-    assert (by_name(conn)["Acme"]["source"], by_name(conn)["Acme"]["ref"]) == ("lever", "acme-co")
-    assert conn.execute("SELECT COUNT(*) FROM company_sources").fetchone()[0] == 1
+    companies.add_board(conn, "Acme", "greenhouse", "acme")
+    companies.add_board(conn, "acme", "lever", "acme-eu", origin="link", evidence="linked from x")
+    boards = by_name(conn)["Acme"]["boards"]
+    assert [(b["source"], b["ref"], b["origin"]) for b in boards] == [
+        ("greenhouse", "acme", "manual"), ("lever", "acme-eu", "link")]
+    assert boards[1]["evidence"] == "linked from x"
 
     with pytest.raises(CompanyError, match="already mapped to 'Acme'"):
-        companies.set_mapping(conn, "Bolt", "lever", "acme-co")
+        companies.add_board(conn, "Bolt", "lever", "acme-eu")
+    with pytest.raises(CompanyError, match="already mapped to 'Acme'"):
+        companies.add_board(conn, "Acme", "lever", "acme-eu")
     with pytest.raises(CompanyError, match="unknown source"):
-        companies.set_mapping(conn, "Bolt", "workday", "bolt")
-    assert by_name(conn)["Bolt"]["source"] is None
+        companies.add_board(conn, "Bolt", "workday", "bolt")
+    assert by_name(conn)["Bolt"]["boards"] == []
+
+
+def test_unmapping_a_board_closes_its_open_roles(conn):
+    from rolescout.db import transaction
+    from rolescout.scout import apply_fetch
+    from tests.test_scout import role
+
+    company_id = companies.add_company(conn, "Acme")
+    keep = companies.add_board(conn, "Acme", "greenhouse", "acme")
+    drop = companies.add_board(conn, "Acme", "lever", "acme")
+    with transaction(conn):
+        apply_fetch(conn, company_id, keep, [role("K1")], "2026-01-01T00:00:00Z")
+        apply_fetch(conn, company_id, drop, [role("D1", source="lever"), role("D2", source="lever")],
+                    "2026-01-01T00:00:00Z")
+
+    assert companies.remove_board(conn, "Acme", "lever", "acme") == 2
+    rows = {r["source_job_id"]: r for r in conn.execute("SELECT * FROM roles")}
+    assert rows["K1"]["closed_at"] is None
+    assert rows["D1"]["closed_at"] and rows["D1"]["board_id"] is None  # row kept, board gone
+    assert conn.execute("SELECT COUNT(*) FROM role_descriptions").fetchone()[0] == 1
+    assert [b["ref"] for b in by_name(conn)["Acme"]["boards"]] == ["acme"]
+    with pytest.raises(CompanyError, match="has no board"):
+        companies.remove_board(conn, "Acme", "lever", "acme")

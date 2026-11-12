@@ -9,16 +9,17 @@ from tests.test_scout import role
 
 @pytest.fixture
 def populated(conn):
-    ids = {}
+    ids, boards = {}, {}
     for name in ("Acme", "Bolt"):
         ids[name] = companies.add_company(conn, name)
+        boards[name] = companies.add_board(conn, name, "greenhouse", name.lower())
     with transaction(conn):
-        apply_fetch(conn, ids["Acme"], [
+        apply_fetch(conn, ids["Acme"], boards["Acme"], [
             role("A1", title="Senior Product Manager, Growth"),
             role("A2", title="Product Marketing Manager"),
             role("A3", title="Staff Engineer"),
         ], "2026-03-01T00:00:00Z")
-        apply_fetch(conn, ids["Bolt"], [
+        apply_fetch(conn, ids["Bolt"], boards["Bolt"], [
             role("B1", title="product manager", source="lever"),
             role("B2", title="100% Remote_Role"),
         ], "2026-03-10T00:00:00Z")
@@ -26,7 +27,7 @@ def populated(conn):
     keep = [role("A1", title="Senior Product Manager, Growth"), role("A2", title="Product Marketing Manager")]
     for day in ("05", "06"):
         with transaction(conn):
-            apply_fetch(conn, ids["Acme"], keep, f"2026-03-{day}T00:00:00Z")
+            apply_fetch(conn, ids["Acme"], boards["Acme"], keep, f"2026-03-{day}T00:00:00Z")
     return conn
 
 
@@ -66,3 +67,14 @@ def test_company_status_since_and_limit(populated):
     assert titles(query_roles(populated, company="Acme", title=["manager"], since="2026-03-02")) == []
     with pytest.raises(ValueError):
         query_roles(populated, since="yesterday")
+
+
+def test_open_roles_of_deactivated_companies_are_hidden_by_default(populated):
+    companies.set_active(populated, "Acme", False)
+    assert {r["company"] for r in query_roles(populated)} == {"Bolt"}
+    assert {r["company"] for r in query_roles(populated, include_inactive=True)} == {"Acme", "Bolt"}
+    # Closed roles are history, not stale state: they stay visible.
+    assert titles(query_roles(populated, status="closed")) == ["Staff Engineer"]
+    assert len(query_roles(populated, status="all")) == 3            # Bolt's 2 open + Acme's closed
+    assert len(query_roles(populated, status="all", include_inactive=True)) == 5
+    assert query_roles(populated, company="Acme") == []

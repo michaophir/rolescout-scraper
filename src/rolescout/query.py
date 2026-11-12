@@ -16,14 +16,21 @@ def query_roles(
     title: list[str] | None = None,
     status: str = "open",          # open | closed | all
     since: str | None = None,      # YYYY-MM-DD: first seen on or after this date
+    include_inactive: bool = False,
     limit: int | None = None,
 ) -> list[dict]:
     """Roles matching every given filter, ordered by company then title.
 
     ``title`` is a list of phrases; a role matches if its title contains any
     one of them (case-insensitive).
+
+    Open roles of deactivated companies are left out unless
+    ``include_inactive`` is set: nothing refreshes them, so "open" is stale.
+    Their closed roles are history and always included.
     """
     where, params = [], []
+    if not include_inactive:
+        where.append("(c.active = 1 OR r.closed_at IS NOT NULL)")
     if company:
         where.append("c.name = ?")
         params.append(company.strip())

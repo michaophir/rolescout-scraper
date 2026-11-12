@@ -37,23 +37,27 @@ class Scripted:
 
 
 class Clock:
-    """Each run gets a distinct timestamp: T1 for run 1, T2 for run 2, ..."""
+    """Each run gets a distinct timestamp: 2026-01-01 for run 1, 01-02 for run 2, ..."""
 
     def __init__(self):
         self.run = 0
 
     def start(self):
         self.run += 1
-        return f"2026-01-{self.run:02d}T00:00:00Z"
+        return self()
 
     def __call__(self):
         return f"2026-01-{self.run:02d}T00:00:00Z"
 
 
+def day(n):
+    return f"2026-01-{n:02d}T00:00:00Z"
+
+
 @pytest.fixture
 def acme(conn):
     companies.add_company(conn, "Acme")
-    companies.set_mapping(conn, "Acme", "greenhouse", "acme")
+    companies.add_board(conn, "Acme", "greenhouse", "acme")
     return conn
 
 
@@ -70,92 +74,121 @@ def stored(conn, job_id):
 
 
 def snapshot(conn, run_id, company="Acme"):
+    """(open, opened, closed, baseline) for a company in a run."""
     row = conn.execute(
-        "SELECT s.open_roles, s.opened, s.closed, s.open_by_department FROM company_snapshots s "
-        "JOIN companies c ON c.id = s.company_id WHERE s.run_id = ? AND c.name = ?",
-        (run_id, company)).fetchone()
-    return (row["open_roles"], row["opened"], row["closed"], json.loads(row["open_by_department"]))
+        "SELECT s.* FROM company_snapshots s JOIN companies c ON c.id = s.company_id "
+        "WHERE s.run_id = ? AND c.name = ?", (run_id, company)).fetchone()
+    return (row["open_roles"], row["opened"], row["closed"], bool(row["baseline"]))
+
+
+def departments(conn, run_id, company="Acme"):
+    row = conn.execute(
+        "SELECT s.open_by_department FROM company_snapshots s JOIN companies c "
+        "ON c.id = s.company_id WHERE s.run_id = ? AND c.name = ?", (run_id, company)).fetchone()
+    return json.loads(row["open_by_department"])
 
 
 def test_full_lifecycle(acme):
     conn, clock = acme, Clock()
-    a, b = role("A", department="Eng"), role("B", department="Sales")
+    a, b, c = role("A", department="Eng"), role("B", department="Sales"), role("C", department="Eng")
     script = Scripted(acme=[
-        [a, b],                 # run 1: both new
-        [a, b],                 # run 2: still open
-        [a],                    # run 3: B missing once
-        SourceError("boom"),    # run 4: failed fetch
-        [a],                    # run 5: B missing twice -> closed
-        [a, b],                 # run 6: B reappears -> reopened
+        [a, b],                 # run 1: baseline
+        [a, b, c],              # run 2: C is new
+        [a, b, c],              # run 3: still open
+        [a, c],                 # run 4: B missing once
+        SourceError("boom"),    # run 5: failed fetch
+        [a, c],                 # run 6: B missing twice -> closed
+        [a, b, c],              # run 7: B reappears -> reopened
     ])
 
-    # Run 1 — new roles.
+    # Run 1 — baseline: roles are stored with first-seen dates but not counted as opened.
     run = scout(conn, script, clock)
     assert (run.status, run.ok, run.failed) == ("completed", 1, 0)
-    assert snapshot(conn, 1) == (2, 2, 0, {"Eng": 1, "Sales": 1})
+    assert run.boards[0].baseline is True
+    assert snapshot(conn, 1) == (2, 0, 0, True)
+    assert departments(conn, 1) == {"Eng": 1, "Sales": 1}
     b_row = stored(conn, "B")
-    assert b_row["first_seen_at"] == b_row["last_seen_at"] == "2026-01-01T00:00:00Z"
+    assert b_row["first_seen_at"] == b_row["last_seen_at"] == day(1)
     assert (b_row["closed_at"], b_row["description"]) == (None, "Description of B")
     assert (b_row["title"], b_row["department"], b_row["location"], b_row["workplace_type"],
             b_row["url"], b_row["date_posted"], b_row["compensation_text"]) == (
         "Engineer", "Sales", "NYC", "hybrid", "https://example.com/B", "2026-01-01", "$1")
 
-    # Run 2 — still open: last_seen moves, first_seen does not.
-    scout(conn, script, clock)
-    assert snapshot(conn, 2) == (2, 0, 0, {"Eng": 1, "Sales": 1})
-    b_row = stored(conn, "B")
-    assert (b_row["first_seen_at"], b_row["last_seen_at"]) == (
-        "2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z")
+    # Run 2 — a new role after the baseline counts as opened.
+    run = scout(conn, script, clock)
+    assert run.boards[0].baseline is False
+    assert snapshot(conn, 2) == (3, 1, 0, False)
+    assert departments(conn, 2) == {"Eng": 2, "Sales": 1}
+    assert stored(conn, "C")["first_seen_at"] == day(2)
 
-    # Run 3 — missing once: stays open, description kept.
+    # Run 3 — still open: last_seen moves, first_seen does not.
     scout(conn, script, clock)
-    assert snapshot(conn, 3) == (2, 0, 0, {"Eng": 1, "Sales": 1})
+    assert snapshot(conn, 3) == (3, 0, 0, False)
+    b_row = stored(conn, "B")
+    assert (b_row["first_seen_at"], b_row["last_seen_at"]) == (day(1), day(3))
+
+    # Run 4 — missing once: stays open, description kept.
+    scout(conn, script, clock)
+    assert snapshot(conn, 4) == (3, 0, 0, False)
     b_row = stored(conn, "B")
     assert (b_row["closed_at"], b_row["missed_fetches"]) == (None, 1)
     assert b_row["description"] == "Description of B"
-    assert b_row["last_seen_at"] == "2026-01-02T00:00:00Z"
+    assert b_row["last_seen_at"] == day(3)
 
-    # Run 4 — failed fetch: nothing closes, nothing is counted as a miss.
+    # Run 5 — failed fetch: nothing closes, nothing is counted as a miss.
     run = scout(conn, script, clock)
-    assert (run.ok, run.failed, run.companies[0].error) == (0, 1, "boom")
-    assert snapshot(conn, 4) == (2, 0, 0, {"Eng": 1, "Sales": 1})
+    assert (run.ok, run.failed, run.boards[0].error) == (0, 1, "boom")
+    assert snapshot(conn, 5) == (3, 0, 0, False)
     assert stored(conn, "B")["missed_fetches"] == 1
-    assert stored(conn, "A")["last_seen_at"] == "2026-01-03T00:00:00Z"
-    mapping = conn.execute("SELECT * FROM company_sources").fetchone()
-    assert (mapping["last_success_at"], mapping["last_error"], mapping["last_error_at"]) == (
-        "2026-01-03T00:00:00Z", "boom", "2026-01-04T00:00:00Z")
+    assert stored(conn, "A")["last_seen_at"] == day(4)
+    board = conn.execute("SELECT * FROM boards").fetchone()
+    assert (board["last_success_at"], board["last_error"], board["last_error_at"]) == (
+        day(4), "boom", day(5))
 
-    # Run 5 — missing from a second successful fetch: closed, description deleted, row kept.
+    # Run 6 — missing from a second successful fetch: closed, description deleted, row kept.
     scout(conn, script, clock)
-    assert snapshot(conn, 5) == (1, 0, 1, {"Eng": 1})
+    assert snapshot(conn, 6) == (2, 0, 1, False)
+    assert departments(conn, 6) == {"Eng": 2}
     b_row = stored(conn, "B")
-    assert b_row["closed_at"] == "2026-01-05T00:00:00Z"
+    assert b_row["closed_at"] == day(6)
     assert b_row["description"] is None
-    assert (b_row["title"], b_row["last_seen_at"]) == ("Engineer", "2026-01-02T00:00:00Z")
-    assert conn.execute("SELECT COUNT(*) FROM role_descriptions").fetchone()[0] == 1
-    mapping = conn.execute("SELECT * FROM company_sources").fetchone()
-    assert (mapping["last_success_at"], mapping["last_error"]) == ("2026-01-05T00:00:00Z", None)
+    assert (b_row["title"], b_row["last_seen_at"]) == ("Engineer", day(3))
+    assert conn.execute("SELECT COUNT(*) FROM role_descriptions").fetchone()[0] == 2
+    board = conn.execute("SELECT * FROM boards").fetchone()
+    assert (board["last_success_at"], board["last_error"]) == (day(6), None)
 
-    # Run 6 — reappears: reopens with its original first_seen and a fresh description.
+    # Run 7 — reappears: reopens with its original first_seen and a fresh description.
     scout(conn, script, clock)
-    assert snapshot(conn, 6) == (2, 1, 0, {"Eng": 1, "Sales": 1})
+    assert snapshot(conn, 7) == (3, 1, 0, False)
     b_row = stored(conn, "B")
     assert (b_row["closed_at"], b_row["missed_fetches"]) == (None, 0)
-    assert (b_row["first_seen_at"], b_row["last_seen_at"]) == (
-        "2026-01-01T00:00:00Z", "2026-01-06T00:00:00Z")
+    assert (b_row["first_seen_at"], b_row["last_seen_at"]) == (day(1), day(7))
     assert b_row["description"] == "Description of B"
-    assert conn.execute("SELECT COUNT(*) FROM roles").fetchone()[0] == 2  # never duplicated
+    assert conn.execute("SELECT COUNT(*) FROM roles").fetchone()[0] == 3  # never duplicated
 
     # Every run is on record.
     runs = conn.execute(
-        "SELECT status, companies_ok, companies_failed, roles_open, roles_opened, roles_closed "
+        "SELECT status, boards_ok, boards_failed, roles_open, roles_opened, roles_closed "
         "FROM runs ORDER BY id").fetchall()
     assert [tuple(r) for r in runs] == [
-        ("completed", 1, 0, 2, 2, 0), ("completed", 1, 0, 2, 0, 0), ("completed", 1, 0, 2, 0, 0),
-        ("completed", 0, 1, 2, 0, 0), ("completed", 1, 0, 1, 0, 1), ("completed", 1, 0, 2, 1, 0)]
+        ("completed", 1, 0, 2, 0, 0), ("completed", 1, 0, 3, 1, 0), ("completed", 1, 0, 3, 0, 0),
+        ("completed", 1, 0, 3, 0, 0), ("completed", 0, 1, 3, 0, 0), ("completed", 1, 0, 2, 0, 1),
+        ("completed", 1, 0, 3, 1, 0)]
     results = conn.execute(
-        "SELECT status, error, roles_fetched FROM run_companies ORDER BY run_id").fetchall()
-    assert [tuple(r) for r in results][3:5] == [("error", "boom", None), ("ok", None, 1)]
+        "SELECT status, error, roles_fetched, baseline FROM run_boards ORDER BY run_id").fetchall()
+    assert [tuple(r) for r in results][0] == ("ok", None, 2, 1)
+    assert [tuple(r) for r in results][4:6] == [("error", "boom", None, 0), ("ok", None, 2, 0)]
+
+
+def test_baseline_waits_for_the_first_successful_fetch(acme):
+    conn, clock = acme, Clock()
+    script = Scripted(acme=[SourceError("down"), [role("A")], [role("A"), role("B")]])
+    scout(conn, script, clock)
+    assert snapshot(conn, 1) == (0, 0, 0, False)  # a failure is not a baseline
+    scout(conn, script, clock)
+    assert snapshot(conn, 2) == (1, 0, 0, True)
+    scout(conn, script, clock)
+    assert snapshot(conn, 3) == (2, 1, 0, False)
 
 
 def test_a_miss_is_forgiven_when_the_role_comes_back(acme):
@@ -167,7 +200,7 @@ def test_a_miss_is_forgiven_when_the_role_comes_back(acme):
     assert stored(conn, "B")["closed_at"] is None  # two misses, but not consecutive
     assert stored(conn, "B")["missed_fetches"] == 1
     scout(conn, script, clock)
-    assert stored(conn, "B")["closed_at"] == "2026-01-05T00:00:00Z"
+    assert stored(conn, "B")["closed_at"] == day(5)
 
 
 def test_empty_board_needs_two_fetches_to_close_everything(acme):
@@ -175,9 +208,10 @@ def test_empty_board_needs_two_fetches_to_close_everything(acme):
     script = Scripted(acme=[[role("A"), role("B")], [], []])
     scout(conn, script, clock)
     scout(conn, script, clock)
-    assert snapshot(conn, 2)[:3] == (2, 0, 0)
+    assert snapshot(conn, 2) == (2, 0, 0, False)
     scout(conn, script, clock)
-    assert snapshot(conn, 3) == (0, 0, 2, {})
+    assert snapshot(conn, 3) == (0, 0, 2, False)
+    assert departments(conn, 3) == {}
     assert conn.execute("SELECT COUNT(*) FROM role_descriptions").fetchone()[0] == 0
     assert conn.execute("SELECT COUNT(*) FROM roles").fetchone()[0] == 2
 
@@ -192,53 +226,98 @@ def test_changed_fields_and_description_are_updated(acme):
     scout(conn, script, clock)
     row = stored(conn, "A")
     assert (row["title"], row["description"]) == ("Senior Engineer", "new")
-    assert snapshot(conn, 2)[:3] == (1, 0, 0)
+    assert snapshot(conn, 2) == (1, 0, 0, False)
+
+
+def test_company_with_two_boards(conn):
+    conn_clock = Clock()
+    companies.add_company(conn, "Acme")
+    companies.add_board(conn, "Acme", "greenhouse", "acme")
+    companies.add_board(conn, "Acme", "lever", "acme-eu")
+    eu1, eu2 = role("EU1", source="lever"), role("EU2", source="lever")
+    script = Scripted(**{
+        "acme":    [[role("A1")], [role("A1"), role("A2")], [role("A1"), role("A2")], [role("A1"), role("A2")]],
+        "acme-eu": [[eu1, eu2],   SourceError("eu down"),   [eu1],                    [eu1]],
+    })
+
+    # Run 1 — both boards baseline; one snapshot for the company.
+    run = scout(conn, script, conn_clock)
+    assert [(b.ref, b.baseline) for b in run.boards] == [("acme", True), ("acme-eu", True)]
+    assert snapshot(conn, 1) == (3, 0, 0, True)
+    assert len(run.snapshots) == 1
+
+    # Run 2 — one board fails: the other's new role still counts, nothing on the failed board moves.
+    run = scout(conn, script, conn_clock)
+    assert [(b.ref, b.status) for b in run.boards] == [("acme", "ok"), ("acme-eu", "error")]
+    assert snapshot(conn, 2) == (4, 1, 0, False)
+    assert stored(conn, "EU2")["missed_fetches"] == 0
+
+    # Runs 3 and 4 — a role closes after two misses on its own board only.
+    scout(conn, script, conn_clock)
+    assert snapshot(conn, 3) == (4, 0, 0, False)
+    scout(conn, script, conn_clock)
+    assert snapshot(conn, 4) == (3, 0, 1, False)
+    assert stored(conn, "EU2")["closed_at"] == day(4)
+    assert stored(conn, "A2")["closed_at"] is None
+
+
+def test_a_board_added_later_gets_its_own_baseline(acme):
+    conn, clock = acme, Clock()
+    script = Scripted(**{
+        "acme": [[role("A1")], [role("A1"), role("A2")]],
+        "acme-eu": [[role("EU1", source="lever"), role("EU2", source="lever")]],
+    })
+    scout(conn, script, clock)
+    companies.add_board(conn, "Acme", "lever", "acme-eu")
+    scout(conn, script, clock)
+    # A2 is genuinely new (opened 1); the new board's two roles are baseline, not opened.
+    assert snapshot(conn, 2) == (4, 1, 0, True)
+    assert stored(conn, "EU1")["first_seen_at"] == day(2)
 
 
 def test_one_failure_does_not_stop_the_run(conn):
     for name, ref in (("Acme", "acme"), ("Bolt", "bolt"), ("Cobalt", "cobalt")):
         companies.add_company(conn, name)
-        companies.set_mapping(conn, name, "greenhouse", ref)
+        companies.add_board(conn, name, "greenhouse", ref)
     script = Scripted(
         acme=[[role("A1")]], bolt=[RuntimeError("unexpected crash")], cobalt=[[role("C1"), role("C2")]])
     seen = []
     clock = Clock()
     clock.start()
-    run = run_scout(conn, adapter_for=script, clock=clock, on_company=seen.append)
+    run = run_scout(conn, adapter_for=script, clock=clock, on_board=seen.append)
 
     assert script.calls == ["acme", "bolt", "cobalt"]
-    assert [(c.company, c.status, c.roles_fetched) for c in run.companies] == [
+    assert [(b.company, b.status, b.roles_fetched) for b in run.boards] == [
         ("Acme", "ok", 1), ("Bolt", "error", None), ("Cobalt", "ok", 2)]
-    assert seen == run.companies
+    assert seen == run.boards
     assert (run.status, run.ok, run.failed) == ("completed", 2, 1)
-    assert run.companies[1].error == "unexpected crash"
-    assert snapshot(conn, 1, "Bolt") == (0, 0, 0, {})
-    assert snapshot(conn, 1, "Cobalt")[:3] == (2, 2, 0)
+    assert run.boards[1].error == "unexpected crash"
+    assert snapshot(conn, 1, "Bolt") == (0, 0, 0, False)
+    assert snapshot(conn, 1, "Cobalt") == (2, 0, 0, True)
 
 
 def test_only_active_mapped_companies_are_fetched(conn):
     companies.add_company(conn, "Mapped")
-    companies.set_mapping(conn, "Mapped", "lever", "mapped")
+    companies.add_board(conn, "Mapped", "lever", "mapped")
     companies.add_company(conn, "Unmapped")
     companies.add_company(conn, "Inactive")
-    companies.set_mapping(conn, "Inactive", "lever", "inactive")
+    companies.add_board(conn, "Inactive", "lever", "inactive")
     companies.set_active(conn, "Inactive", False)
     script = Scripted(mapped=[[role("M1", source="lever")]])
-    clock = Clock()
-    run = scout(conn, script, clock)
+    run = scout(conn, script, Clock())
     assert script.calls == ["mapped"]
     assert run.unmapped == 1
-    assert conn.execute("SELECT companies_total FROM runs").fetchone()[0] == 1
+    assert tuple(conn.execute("SELECT companies_total, boards_total FROM runs").fetchone()) == (1, 1)
 
 
 def test_interrupted_run_is_recorded_and_keeps_finished_companies(conn):
     for name, ref in (("Acme", "acme"), ("Bolt", "bolt")):
         companies.add_company(conn, name)
-        companies.set_mapping(conn, name, "greenhouse", ref)
+        companies.add_board(conn, name, "greenhouse", ref)
     script = Scripted(acme=[[role("A1")]], bolt=[KeyboardInterrupt()])
     with pytest.raises(KeyboardInterrupt):
         scout(conn, script, Clock())
-    run = conn.execute("SELECT status, companies_ok, finished_at FROM runs").fetchone()
-    assert (run["status"], run["companies_ok"]) == ("interrupted", 1)
+    run = conn.execute("SELECT status, boards_ok, finished_at FROM runs").fetchone()
+    assert (run["status"], run["boards_ok"]) == ("interrupted", 1)
     assert run["finished_at"]
     assert stored(conn, "A1") is not None
