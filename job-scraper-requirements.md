@@ -419,5 +419,4 @@ rolescout-scraper/
 - JS-rendered career pages (no Playwright integration yet — handled by failing fast)
 - Semantic or ML-based matching
 - Weighted title scoring by seniority level
-- Hosted scraper trigger (planned for V1.5 with FastAPI on Railway)
 - DuckDB in-memory data layer (planned for V1.5)

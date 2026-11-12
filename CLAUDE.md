@@ -3,8 +3,10 @@
 Python scraper that fetches open roles from target companies via ATS APIs
 (Greenhouse, Lever, Ashby) and scores them against a candidate profile.
 
-Part of the RoleScout pipeline. Hosted on Railway as a FastAPI service.
-Web app: https://getrolescout.com
+Part of the RoleScout pipeline. Runs locally as a command-line tool; there is
+no hosted service.
+Web app: https://getrolescout.com (loads the data files at the repo root as
+demo data from raw GitHub URLs on main — do not move, rename or edit them)
 
 ---
 
@@ -77,16 +79,6 @@ Google and Meta are unsupported (JS-rendered job boards).
 - Domain match: +5 per match, max 25
 - Skill match: +1 per match, max 15
 - Blank description → blank score (not 0)
-
----
-
-## Railway FastAPI Service
-
-Endpoint: POST /run-scraper
-Accepts: { "profile": candidate_profile }
-Returns: SSE stream of progress events + done event with CSV payload
-
-Health check: GET /health
 
 ---
 

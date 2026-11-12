@@ -7,3 +7,8 @@ errors.log
 .venv/
 .envrc
 companies.txt
+
+# Local SQLite databases (public repo: never commit)
+*.db
+*.db-wal
+*.db-shm
