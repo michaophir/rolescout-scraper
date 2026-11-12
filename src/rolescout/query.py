@@ -18,6 +18,7 @@ def query_roles(
     since: str | None = None,      # YYYY-MM-DD: first seen on or after this date
     include_inactive: bool = False,
     limit: int | None = None,
+    offset: int = 0,
 ) -> list[dict]:
     """Roles matching every given filter, ordered by company then title.
 
@@ -49,7 +50,7 @@ def query_roles(
         params.append(date.fromisoformat(since).isoformat())
 
     sql = (
-        "SELECT c.name AS company, r.title, r.department, r.location, r.workplace_type, "
+        "SELECT r.id, c.name AS company, r.title, r.department, r.location, r.workplace_type, "
         "r.compensation_text, r.date_posted, r.first_seen_at, r.last_seen_at, r.closed_at, "
         "CASE WHEN r.closed_at IS NULL THEN 'open' ELSE 'closed' END AS status, "
         "r.url, r.source, r.source_job_id "
@@ -57,7 +58,7 @@ def query_roles(
         + (" WHERE " + " AND ".join(where) if where else "")
         + " ORDER BY c.name COLLATE NOCASE, r.title COLLATE NOCASE, r.id"
     )
-    if limit is not None:
-        sql += " LIMIT ?"
-        params.append(limit)
+    if limit is not None or offset:
+        sql += " LIMIT ? OFFSET ?"
+        params.extend([-1 if limit is None else limit, max(0, offset)])
     return [dict(row) for row in conn.execute(sql, params)]

@@ -51,6 +51,7 @@ def _phrase(phrase: str) -> re.Pattern:
 @dataclass
 class RankingConfig:
     size: int = 100
+    max_per_company: int = 5       # slots one company may take; 0 = no cap
     tier_points: dict[int, float] = field(default_factory=dict)
     wanted: dict[str, float] = field(default_factory=dict)       # title phrase -> points
     exclude: list[str] = field(default_factory=list)             # title phrases never wanted
@@ -110,7 +111,8 @@ def parse_config(text: str, source: str = "") -> RankingConfig:
         raw = tomllib.loads(text)
     except tomllib.TOMLDecodeError as exc:
         raise ConfigError(f"{source or 'ranking config'} is not valid TOML: {exc}") from None
-    raw = _only(raw, {"size", "tier_points", "title", "seniority", "location", "recency"},
+    raw = _only(raw, {"size", "max_per_company", "tier_points", "title", "seniority", "location",
+                      "recency"},
                 "top level")
     title = _only(raw.get("title"), {"wanted", "exclude"}, "title")
     location = _only(raw.get("location"), {"preferred", "remote_points"}, "location")
@@ -119,6 +121,9 @@ def parse_config(text: str, source: str = "") -> RankingConfig:
     size = raw.get("size", 100)
     if isinstance(size, bool) or not isinstance(size, int) or size < 1:
         raise ConfigError(f"size must be a whole number of 1 or more, got {size!r}")
+    cap = raw.get("max_per_company", 5)
+    if isinstance(cap, bool) or not isinstance(cap, int) or cap < 0:
+        raise ConfigError(f"max_per_company must be a whole number, 0 for no cap, got {cap!r}")
     exclude = title.get("exclude", [])
     if not isinstance(exclude, list) or not all(isinstance(x, str) and x.strip() for x in exclude):
         raise ConfigError("title.exclude must be a list of phrases")
@@ -132,7 +137,7 @@ def parse_config(text: str, source: str = "") -> RankingConfig:
     if zero <= full:
         raise ConfigError("recency.zero_days must be larger than recency.full_days")
     return RankingConfig(
-        size=size, tier_points=tiers,
+        size=size, max_per_company=cap, tier_points=tiers,
         wanted=_points_table(title.get("wanted"), "[title.wanted]"),
         exclude=[x.strip() for x in exclude],
         seniority=_points_table(_only(raw.get("seniority"), {"words"}, "seniority").get("words"),
@@ -190,6 +195,12 @@ def starter_config(titles: list[str] | None = None, seniority: list[str] | None 
 # How many roles the shortlist holds.
 size = 100
 
+# The most slots one company may take, so a company with many matching roles
+# cannot crowd out the rest: its best-scoring roles get the slots and the
+# others are held back. Roles you marked saved are never held back.
+# 0 means no cap.
+max_per_company = 5
+
 # Points for the company's tier. A company with no tier gets none.
 [tier_points]
 1 = 30
@@ -223,8 +234,12 @@ remote_points = 10
 # gets the larger of the two, not both.
 [location.preferred]
 
-# Newer roles first: a role first seen within `full_days` gets `max_points`,
-# fading evenly to nothing by `zero_days`.
+# Newer roles first. A role's age is counted from the date the company posted
+# it. When the board gives no posted date, the date rolescout first saw it is
+# used instead, except for roles already there when a company was first
+# fetched: their age is unknown, so they get no points here.
+# A role up to `full_days` old gets `max_points`, fading evenly to nothing
+# by `zero_days`.
 [recency]
 max_points = 15
 full_days = 3
@@ -256,8 +271,28 @@ def _days_since(stamp: str, today: date) -> int:
     return max(0, (today - date.fromisoformat(stamp[:10])).days)
 
 
-def evaluate(role, cfg: RankingConfig, today: date) -> Evaluation:
-    """Score one role. ``role`` needs title, location, workplace_type, first_seen_at, tier."""
+def role_age(role, today: date, baseline: bool = False) -> tuple[int | None, str]:
+    """(age in days or None if unknown, which date it was counted from).
+
+    The board's posted date when there is a usable one, else the day the role
+    was first seen. A role first seen in its board's baseline fetch was already
+    open before we looked, so without a posted date its age is unknown.
+    """
+    posted = (role["date_posted"] or "")[:10]
+    try:
+        if posted and date.fromisoformat(posted) <= today + timedelta(days=1):
+            return _days_since(posted, today), "posted"
+    except ValueError:
+        pass
+    if baseline:
+        return None, "baseline"
+    return _days_since(role["first_seen_at"], today), "first_seen"
+
+
+def evaluate(role, cfg: RankingConfig, today: date, baseline: bool = False) -> Evaluation:
+    """Score one role. ``role`` needs title, location, workplace_type, date_posted,
+    first_seen_at and tier. ``baseline`` says the role was first seen in its
+    board's baseline fetch."""
     title = role["title"] or ""
     ev = Evaluation(eligible=True)
 
@@ -303,23 +338,43 @@ def evaluate(role, cfg: RankingConfig, today: date) -> Evaluation:
         add(0.0, "", "Remote, but remote earns no points" if remote
             else "Not remote and not in a preferred location")
 
-    days = _days_since(role["first_seen_at"], today)
-    if days <= cfg.recency_full_days:
-        share = 1.0
-    elif days >= cfg.recency_zero_days:
-        share = 0.0
+    days, counted_from = role_age(role, today, baseline)
+    if days is None:
+        ev.detail.append("No posted date, and it was already open when the company was first "
+                         "fetched, so its age is unknown (+0)")
     else:
-        share = (cfg.recency_zero_days - days) / (cfg.recency_zero_days - cfg.recency_full_days)
-    seen = "today" if days == 0 else "yesterday" if days == 1 else f"{days} days ago"
-    add(round(cfg.recency_max_points * share, 1), f"First seen {seen}", f"First seen {seen}")
+        if days <= cfg.recency_full_days:
+            share = 1.0
+        elif days >= cfg.recency_zero_days:
+            share = 0.0
+        else:
+            share = (cfg.recency_zero_days - days) / (cfg.recency_zero_days - cfg.recency_full_days)
+        when = "today" if days == 0 else "yesterday" if days == 1 else f"{days} days ago"
+        label = f"Posted {when}" if counted_from == "posted" else f"First seen {when} (no posted date)"
+        add(round(cfg.recency_max_points * share, 1), label, label)
     ev.score = round(ev.score, 1)
     return ev
 
 
 # --- building and reading lists ----------------------------------------------
 
+def baseline_fetches(conn: sqlite3.Connection) -> dict[int, set[str]]:
+    """For each board, the start time of its baseline run(s): a role whose
+    first-seen time is one of these was already open when we first looked."""
+    found: dict[int, set[str]] = {}
+    for row in conn.execute(
+            "SELECT b.id, ru.started_at FROM boards b JOIN run_boards rb ON rb.source = b.source "
+            "AND rb.ref = b.ref AND rb.baseline = 1 JOIN runs ru ON ru.id = rb.run_id"):
+        found.setdefault(row["id"], set()).add(row["started_at"])
+    return found
+
+
+def in_baseline(role, baselines: dict[int, set[str]]) -> bool:
+    return role["first_seen_at"] in baselines.get(role["board_id"], ())
+
+
 ROLE_SELECT = (
-    "SELECT r.id, r.title, r.department, r.location, r.workplace_type, r.url, r.date_posted, "
+    "SELECT r.id, r.board_id, r.title, r.department, r.location, r.workplace_type, r.url, r.date_posted, "
     "r.compensation_text, r.first_seen_at, r.closed_at, c.name AS company, c.tier, c.active, "
     "m.status AS mark, m.note AS mark_note "
     "FROM roles r JOIN companies c ON c.id = r.company_id "
@@ -331,26 +386,44 @@ def build_shortlist(conn: sqlite3.Connection, cfg: RankingConfig, *, run_id: int
     """Rank every open role and store the top ``cfg.size`` as today's shortlist.
 
     Left out: closed roles, roles of deactivated companies, roles marked
-    dismissed or applied, and roles that fail the title rules. A list built
+    dismissed or applied, and roles that fail the title rules. No company
+    takes more than ``cfg.max_per_company`` slots; roles that scored high
+    enough but lost out to that cap are recorded as held back. A list built
     earlier the same local day is replaced; lists older than 30 days are dropped.
     """
     now = now or datetime.now().astimezone()
     list_date = now.date().isoformat()
     today = now.astimezone(timezone.utc).date()
 
+    baselines = baseline_fetches(conn)
     ranked = []
     for role in conn.execute(
             ROLE_SELECT + "WHERE r.closed_at IS NULL AND c.active = 1 "
             "AND (m.status IS NULL OR m.status NOT IN ('dismissed', 'applied'))"):
-        ev = evaluate(role, cfg, today)
+        baseline = in_baseline(role, baselines)
+        ev = evaluate(role, cfg, today, baseline)
         if ev.eligible:
-            ranked.append((role, ev))
+            age = role_age(role, today, baseline)[0]
+            ranked.append((role, ev, age if age is not None else 10 ** 6))
     # Best score first; between equals: newer, better tier, then a fixed order.
-    ranked.sort(key=lambda pair: (
-        -pair[1].score, -date.fromisoformat(pair[0]["first_seen_at"][:10]).toordinal(),
-        pair[0]["tier"] if pair[0]["tier"] is not None else 99,
-        pair[0]["company"].lower(), pair[0]["title"].lower(), pair[0]["id"]))
-    top = ranked[:cfg.size]
+    ranked.sort(key=lambda item: (
+        -item[1].score, item[2],
+        item[0]["tier"] if item[0]["tier"] is not None else 99,
+        item[0]["company"].lower(), item[0]["title"].lower(), item[0]["id"]))
+    ranked = [(role, ev) for role, ev, _ in ranked]
+
+    top, held, taken = [], [], {}
+    for role, ev in ranked:
+        if len(top) >= cfg.size:
+            break
+        company = role["company"]
+        # A saved role is never held back, but it does use one of the slots.
+        if cfg.max_per_company and taken.get(company, 0) >= cfg.max_per_company \
+                and role["mark"] != "saved":
+            held.append((role, ev))
+            continue
+        taken[company] = taken.get(company, 0) + 1
+        top.append((role, ev))
 
     cutoff = (now.date() - timedelta(days=KEEP_DAYS)).isoformat()
     with transaction(conn):
@@ -365,9 +438,13 @@ def build_shortlist(conn: sqlite3.Connection, cfg: RankingConfig, *, run_id: int
             "VALUES (?, ?, ?, ?, ?)",
             [(shortlist_id, rank, role["id"], ev.score, json.dumps(ev.reasons, ensure_ascii=False))
              for rank, (role, ev) in enumerate(top, start=1)])
+        conn.executemany(
+            "INSERT INTO shortlist_held (shortlist_id, role_id, score) VALUES (?, ?, ?)",
+            [(shortlist_id, role["id"], ev.score) for role, ev in held])
     previous, new_ids = new_since(conn, shortlist_id)
     return {"shortlist_id": shortlist_id, "list_date": list_date, "listed": len(top),
-            "eligible": len(ranked), "new": len(new_ids) if previous else None,
+            "eligible": len(ranked), "held_back": len(held),
+            "new": len(new_ids) if previous else None,
             "previous_date": previous["list_date"] if previous else None}
 
 
@@ -404,6 +481,16 @@ def shortlist_entries(conn: sqlite3.Connection, shortlist_id: int) -> list[dict]
         "JOIN companies c ON c.id = r.company_id LEFT JOIN role_marks m ON m.role_id = r.id "
         "WHERE e.shortlist_id = ? ORDER BY e.rank", (shortlist_id,))
     return [{**dict(r), "reasons": json.loads(r["reasons"])} for r in rows]
+
+
+def held_back(conn: sqlite3.Connection, shortlist_id: int) -> list[dict]:
+    """Roles kept off this list by the per-company cap, best score first."""
+    rows = conn.execute(
+        "SELECT h.score, r.id, r.title, r.location, r.url, c.name AS company, c.tier "
+        "FROM shortlist_held h JOIN roles r ON r.id = h.role_id "
+        "JOIN companies c ON c.id = r.company_id WHERE h.shortlist_id = ? "
+        "ORDER BY h.score DESC, c.name, r.title, r.id", (shortlist_id,))
+    return [dict(r) for r in rows]
 
 
 # --- marks -------------------------------------------------------------------
@@ -467,10 +554,14 @@ def explain(conn: sqlite3.Connection, role_id: int, cfg: RankingConfig,
     """Why a role ranks where it does, or why it is not on the list."""
     now = now or datetime.now().astimezone()
     role = get_role(conn, role_id)
-    ev = evaluate(role, cfg, now.astimezone(timezone.utc).date())
+    ev = evaluate(role, cfg, now.astimezone(timezone.utc).date(),
+                  in_baseline(role, baseline_fetches(conn)))
     current = latest_shortlist(conn)
-    entry = cutoff = None
+    entry = cutoff = held = None
     if current is not None:
+        held = conn.execute(
+            "SELECT score FROM shortlist_held WHERE shortlist_id = ? AND role_id = ?",
+            (current["id"], role_id)).fetchone()
         entry = conn.execute(
             "SELECT rank, score FROM shortlist_entries WHERE shortlist_id = ? AND role_id = ?",
             (current["id"], role_id)).fetchone()
@@ -486,6 +577,10 @@ def explain(conn: sqlite3.Connection, role_id: int, cfg: RankingConfig,
         why_not = f"you marked it {role['mark']}"
     elif not ev.eligible:
         why_not = ev.why_not
+    elif entry is None and held is not None:
+        why_not = (f"held back by the cap of {cfg.max_per_company} roles per company: "
+                   f"{role['company']} already has that many higher-ranked roles on the list. "
+                   f"It scores {ev.score:g}, enough to be listed otherwise")
     elif entry is None and current is not None and cutoff is not None and cutoff["rank"] >= cfg.size:
         why_not = (f"{cutoff['rank']} roles rank above it: it scores {ev.score:g} and the last "
                    f"role on the list scores {cutoff['score']:g}")
@@ -500,5 +595,8 @@ def explain(conn: sqlite3.Connection, role_id: int, cfg: RankingConfig,
         "list_date": current["list_date"] if current else None,
         "list_size": cutoff["rank"] if cutoff else 0,
         "config_changed": bool(current) and current["config_hash"] != cfg.digest,
+        "held_back_by_cap": bool(held is not None and entry is None and ev.eligible
+                                 and not role["closed_at"] and role["active"]
+                                 and role["mark"] not in HIDDEN_MARKS),
         "why_not": why_not,
     }

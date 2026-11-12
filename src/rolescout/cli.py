@@ -441,6 +441,8 @@ def _ranking_path(args) -> Path:
 def _built_line(result: dict) -> str:
     line = (f"Shortlist rebuilt: {result['listed']} roles "
             f"(of {result['eligible']} that qualify)")
+    if result["held_back"]:
+        line += f", {result['held_back']} held back by the per-company cap"
     if result["previous_date"]:
         line += f", {result['new']} new since {result['previous_date']}"
     return line + ". See: rolescout shortlist"
@@ -553,12 +555,18 @@ def _cmd_shortlist(args) -> int:
             "list_date": current["list_date"], "built_at": current["built_at"],
             "eligible": current["eligible"], "size": total,
             "compared_with": previous["list_date"] if previous else None,
-            "config_changed_since_build": bool(stale), "entries": entries,
+            "config_changed_since_build": bool(stale), "held_back_by_cap": len(ranking.held_back(conn, current["id"])),
+            "entries": entries,
         }, indent=2, ensure_ascii=False))
         return 0
 
     compared = f"new since {previous['list_date']}: {len(new_ids)}" if previous else "no earlier list to compare with"
-    print(f"Shortlist for {current['list_date']}: {total} roles of {current['eligible']} that qualify; {compared}")
+    held = ranking.held_back(conn, current["id"])
+    held_by_company: dict[str, int] = {}
+    for h in held:
+        held_by_company[h["company"]] = held_by_company.get(h["company"], 0) + 1
+    print(f"Shortlist for {current['list_date']}: {total} roles of {current['eligible']} that qualify; {compared}"
+          + (f"; {len(held)} held back by the per-company cap" if held else ""))
     if stale:
         print(stale)
     if args.new and previous is None:
@@ -576,8 +584,10 @@ def _cmd_shortlist(args) -> int:
         # Entries arrive in rank order, so groups are already ordered by their best role.
         for company, members in groups.items():
             tier = f"tier {members[0]['tier']}" if members[0]["tier"] is not None else "no tier"
+            more = held_by_company.get(company, 0)
             print(f"{company} ({tier}): {len(members)} role{'' if len(members) == 1 else 's'}, "
-                  f"best rank {members[0]['rank']}")
+                  f"best rank {members[0]['rank']}"
+                  + (f"; {more} more held back by the per-company cap" if more else ""))
             print(format_table(
                 ["Rank", "ID", "Score", "Title", "Location", "Flags", "URL"],
                 [[e["rank"], e["id"], f"{e['score']:g}", e["title"], e["location"],
@@ -661,6 +671,55 @@ def _cmd_why(args) -> int:
     elif info["config_changed"]:
         print("\nThe ranking config has changed since the list was built; "
               "run: rolescout shortlist rebuild")
+    return 0
+
+
+# --- MCP server -------------------------------------------------------------
+
+def _cmd_serve(args) -> int:
+    """Serve the database to MCP clients. Output goes to stderr: on stdio, stdout is the protocol."""
+    from rolescout import mcp_server
+
+    def say(message: str) -> None:
+        print(message, file=sys.stderr, flush=True)
+
+    db_path = resolve_db_path(args.db)
+    if not db_path.exists():
+        say(f"error: no database at {db_path}. Run a scout first, or pass --db.")
+        return 1
+    try:
+        server = mcp_server.build_server(db_path, args.config, read_only=args.read_only)
+    except RuntimeError as exc:
+        say(f"error: {exc}")
+        return 1
+    mode = "read-only" if args.read_only else "read-write"
+    if not args.http:
+        if args.host or args.port or args.allow_host or args.token_file:
+            say("error: --host, --port, --allow-host and --token-file only apply with --http.")
+            return 1
+        say(f"rolescout MCP server on stdio, {mode}, database {db_path}")
+        mcp_server.serve_stdio(server)
+        return 0
+
+    host, port = args.host or "127.0.0.1", args.port or mcp_server.DEFAULT_PORT
+    try:
+        token = mcp_server._token_from_env_or_file(args.token_file)
+    except OSError as exc:
+        say(f"error: cannot read the token file: {exc}")
+        return 1
+    if not token:
+        say(f"error: HTTP needs a token. Set ${mcp_server.TOKEN_ENV_VAR} or pass --token-file PATH. "
+            "Create one with: python3 -c 'import secrets; print(secrets.token_urlsafe(32))'")
+        return 1
+    if len(token) < mcp_server.MIN_TOKEN_CHARS:
+        say(f"error: the token must be at least {mcp_server.MIN_TOKEN_CHARS} characters.")
+        return 1
+    say(f"rolescout MCP server on http://{host}:{port}/mcp, {mode}, database {db_path}")
+    say("Accepting Host: " + ", ".join(mcp_server.allowed_hosts(host, port, args.allow_host)))
+    if host in ("0.0.0.0", "::"):
+        say("warning: listening on every network interface. This server is meant for localhost "
+            "or a private network such as Tailscale; bind to that address instead.")
+    mcp_server.serve_http(server, token, host=host, port=port, allow_hosts=args.allow_host)
     return 0
 
 
@@ -1053,6 +1112,26 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("id")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=_cmd_why)
+
+    p = commands.add_parser(
+        "serve", parents=[db, config],
+        help="run the MCP server over the database (needs: pip install \"rolescout[mcp]\")")
+    p.add_argument("--http", action="store_true",
+                   help="serve over HTTP for clients on other machines (default: stdio, for a "
+                        "client on this machine that starts the server itself)")
+    p.add_argument("--host", metavar="ADDRESS",
+                   help="with --http: address to listen on (default: 127.0.0.1, this machine only). "
+                        "For Tailscale pass this machine's tailnet address")
+    p.add_argument("--port", type=int, metavar="PORT", help="with --http: port (default: 8765)")
+    p.add_argument("--allow-host", action="append", metavar="NAME",
+                   help="with --http: an extra hostname clients may use, e.g. a Tailscale name "
+                        "(mac.tailnet.ts.net). Repeatable")
+    p.add_argument("--token-file", metavar="PATH",
+                   help="with --http: read the access token from this file instead of "
+                        "$ROLESCOUT_MCP_TOKEN")
+    p.add_argument("--read-only", action="store_true",
+                   help="offer only the tools that read; every tool that changes anything is absent")
+    p.set_defaults(func=_cmd_serve)
 
     p = commands.add_parser(
         "gaps", parents=[db],

@@ -46,10 +46,10 @@ zero_days = 11
 """
 
 
-def mk(job_id, title, location="Austin", workplace="", source="greenhouse"):
+def mk(job_id, title, location="Austin", workplace="", source="greenhouse", posted=""):
     return Role(source=source, source_job_id=job_id, company="x", title=title, department="Product",
                 location=location, workplace_type=workplace, url=f"https://example.com/{job_id}",
-                date_posted="2026-03-01", compensation_text="", description=f"About {job_id}")
+                date_posted=posted, compensation_text="", description=f"About {job_id}")
 
 
 def day(n, hour=12):
@@ -112,13 +112,13 @@ def test_ranking_order_from_a_small_config(conn, world):
     (top,) = [e for e in ranking.shortlist_entries(conn, result["shortlist_id"]) if e["rank"] == 1]
     assert top["reasons"] == [
         "Tier 1 company (+30)", 'Title matches "Product Manager" (+30)',
-        'Seniority: "Senior" (+10)', 'Location matches "New York" (+10)', "First seen today (+10)"]
+        'Seniority: "Senior" (+10)', 'Location matches "New York" (+10)', "First seen today (no posted date) (+10)"]
     assert (top["company"], top["tier"], top["id"]) == ("Alpha", 1, role_id(conn, "a1"))
 
 
 def test_phrases_match_whole_words_only():
     c = cfg()
-    base = {"location": "", "workplace_type": "", "first_seen_at": stamp(10), "tier": 1}
+    base = {"location": "", "workplace_type": "", "first_seen_at": stamp(10), "tier": 1, "date_posted": ""}
     def ev(title):
         return ranking.evaluate({**base, "title": title}, c, day(10).date())
     assert ev("Product Manager (Technical)").eligible
@@ -131,10 +131,113 @@ def test_phrases_match_whole_words_only():
 
 def test_recency_fades_evenly():
     c = cfg()
-    role = {"title": "Product Manager", "location": "", "workplace_type": "", "tier": None}
+    role = {"title": "Product Manager", "location": "", "workplace_type": "", "tier": None, "date_posted": ""}
     def points(first_seen_day, today):
         return ranking.evaluate({**role, "first_seen_at": stamp(first_seen_day)}, c, day(today).date()).score - 30
     assert [points(1, 1), points(1, 2), points(1, 7), points(1, 12), points(1, 30)] == [10, 10, 5, 0, 0]
+
+
+def test_recency_counts_from_the_posted_date_when_there_is_one():
+    c = cfg()   # 10 points up to 1 day old, fading to 0 at 11 days
+    role = {"title": "Product Manager", "location": "", "workplace_type": "", "tier": None,
+            "first_seen_at": stamp(10)}
+    def ev(posted, baseline=False):
+        return ranking.evaluate({**role, "date_posted": posted}, c, day(10).date(), baseline)
+    # Seen for the first time today, but posted six days ago: scored as six days old.
+    old = ev("2026-03-04")
+    assert old.score == 30 + 5 and old.reasons[-1] == "Posted 6 days ago (+5)"
+    assert ev("2026-03-10").reasons[-1] == "Posted today (+10)"
+    assert ev("2026-01-01").detail[-1] == "Posted 68 days ago (+0)"
+    # No posted date: first seen is used...
+    assert ev("").reasons[-1] == "First seen today (no posted date) (+10)"
+    # ...unless the role came with the baseline fetch: then its age is unknown.
+    unknown = ev("", baseline=True)
+    assert unknown.score == 30
+    assert unknown.detail[-1] == ("No posted date, and it was already open when the company was first "
+                                  "fetched, so its age is unknown (+0)")
+    assert ev("2026-03-09", baseline=True).reasons[-1] == "Posted yesterday (+10)"   # a posted date still counts
+    # Dates that cannot be right fall back to first seen.
+    assert ev("not a date").reasons[-1] == "First seen today (no posted date) (+10)"
+    assert ev("2031-01-01").reasons[-1] == "First seen today (no posted date) (+10)"
+
+
+def test_baseline_roles_are_not_new_but_later_ones_are(conn):
+    companies.add_company(conn, "Alpha", tier=1)
+    companies.add_board(conn, "Alpha", "greenhouse", "alpha")
+    script = Scripted(alpha=[
+        [mk("old", "Product Manager"), mk("dated", "Product Manager", posted="2025-12-31")],
+        [mk("old", "Product Manager"), mk("dated", "Product Manager", posted="2025-12-31"),
+         mk("fresh", "Product Manager")]])
+    clock = Clock()                              # run 1 on 2026-01-01, run 2 on 2026-01-02
+    for _ in range(2):
+        clock.start()
+        scout.run_scout(conn, adapter_for=script, clock=clock)
+    ranking.build_shortlist(conn, cfg(), now=datetime(2026, 1, 2, 12, tzinfo=timezone.utc))
+    entries = {e["id"]: e for e in ranking.shortlist_entries(conn, ranking.latest_shortlist(conn)["id"])}
+    by_job = {job: entries[role_id(conn, job)] for job in ("old", "dated", "fresh")}
+    assert by_job["fresh"]["score"] == 70 and by_job["fresh"]["rank"] == 1       # +10: seen after the baseline
+    assert by_job["old"]["score"] == 60                                          # baseline, no date: no recency
+    assert by_job["dated"]["score"] == 69                                        # posted 2 days ago: 9 of 10
+    assert not any("First seen" in reason for reason in by_job["old"]["reasons"])
+
+
+# --- the per-company cap -----------------------------------------------------
+
+CAPPED = SMALL_CONFIG.replace("size = 3", "size = 4\nmax_per_company = 2")
+
+
+def test_per_company_cap_holds_back_the_extra_roles(conn, world, capsys, isolated_db_path):
+    world("Alpha", [mk("a1", "Staff Product Manager"), mk("a2", "Senior Product Manager"),
+                    mk("a3", "Senior Product Manager, Growth"), mk("a4", "Product Manager")], on_day=10)
+    world("Beta", [mk("b1", "Product Manager")], on_day=10)
+    world("Gamma", [mk("g1", "Product Manager")], on_day=10)
+    config = isolated_db_path.parent / "ranking.toml"
+    config.write_text(CAPPED)
+    assert cli.main(["shortlist", "rebuild"]) == 0
+    assert "4 roles (of 6 that qualify), 2 held back by the per-company cap" in capsys.readouterr().out
+    # Alpha's two best take its slots; lower-scoring roles of other companies fill the rest.
+    assert [(e["company"], e["title"]) for e in ranking.shortlist_entries(
+        conn, ranking.latest_shortlist(conn)["id"])] == [
+        ("Alpha", "Staff Product Manager"), ("Alpha", "Senior Product Manager"),
+        ("Beta", "Product Manager"), ("Gamma", "Product Manager")]
+    held = ranking.held_back(conn, ranking.latest_shortlist(conn)["id"])
+    assert [h["title"] for h in held] == ["Senior Product Manager, Growth", "Product Manager"]
+
+    assert cli.main(["shortlist", "--by-company"]) == 0
+    out = capsys.readouterr().out
+    assert "2 held back by the per-company cap" in out.splitlines()[0]
+    assert "Alpha (tier 1): 2 roles, best rank 1; 2 more held back by the per-company cap" in out
+    assert "Beta (tier 2): 1 role, best rank 3\n" in out
+
+    assert cli.main(["why", str(role_id(conn, "a3"))]) == 0
+    out = capsys.readouterr().out
+    assert ("Not on the shortlist: held back by the cap of 2 roles per company: Alpha already has "
+            "that many higher-ranked roles on the list. It scores 70, enough to be listed otherwise.") in out
+    info = ranking.explain(conn, role_id(conn, "a3"), ranking.load_config(config))
+    assert info["held_back_by_cap"] is True and info["rank"] is None
+    assert ranking.explain(conn, role_id(conn, "a1"), ranking.load_config(config))["held_back_by_cap"] is False
+
+    # A saved role is never held back, and it uses one of the company's slots.
+    assert cli.main(["mark", str(role_id(conn, "a4")), "saved"]) == 0
+    capsys.readouterr()
+    alpha = [e["title"] for e in ranking.shortlist_entries(conn, ranking.latest_shortlist(conn)["id"])
+             if e["company"] == "Alpha"]
+    assert alpha == ["Staff Product Manager", "Senior Product Manager", "Product Manager"]
+
+    # 0 turns the cap off.
+    config.write_text(CAPPED.replace("max_per_company = 2", "max_per_company = 0"))
+    assert cli.main(["shortlist", "rebuild"]) == 0
+    assert "held back" not in capsys.readouterr().out
+    assert [e["company"] for e in ranking.shortlist_entries(
+        conn, ranking.latest_shortlist(conn)["id"])] == ["Alpha"] * 4
+
+
+def test_cap_defaults_to_five_and_is_validated():
+    assert cfg().max_per_company == 5                      # a config that predates the setting
+    assert cfg(ranking.starter_config()).max_per_company == 5
+    assert "max_per_company = 5" in ranking.starter_config()
+    with pytest.raises(ranking.ConfigError, match="max_per_company"):
+        cfg("max_per_company = -1")
 
 
 def test_excluded_title_phrase_never_makes_the_list(conn, world):

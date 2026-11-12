@@ -13,7 +13,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+# The MCP server (rolescout serve). The scraper and the scheduled job do not need it.
+mcp = ["mcp>=2.3,<3"]
+dev = ["pytest>=8", "mcp>=2.3,<3"]
 
 [project.scripts]
 rolescout = "rolescout.cli:main"

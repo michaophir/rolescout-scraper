@@ -171,6 +171,18 @@ MIGRATIONS: list[list[str]] = [
         """,
         "CREATE INDEX shortlist_entries_role ON shortlist_entries (role_id)",
     ],
+    [
+        """
+        -- Roles that scored high enough for a shortlist but were held back
+        -- because their company already had its full share of slots.
+        CREATE TABLE shortlist_held (
+            shortlist_id  INTEGER NOT NULL REFERENCES shortlists(id) ON DELETE CASCADE,
+            role_id       INTEGER NOT NULL REFERENCES roles(id),
+            score         REAL NOT NULL,
+            PRIMARY KEY (shortlist_id, role_id)
+        )
+        """,
+    ],
 ]
 
 SCHEMA_VERSION = len(MIGRATIONS)

@@ -99,6 +99,14 @@ or create a starter on the Mac and edit it:
 cd ~/rolescout-scraper && rolescout shortlist init
 ```
 
+Two things the ranking does that are worth knowing when you read the list:
+no company takes more than `max_per_company` slots (5 in the starter; roles
+held back by that cap are counted in the by-company view and named by
+`rolescout why ID`), and a role's age is counted from the date the company
+posted it, falling back to the date rolescout first saw it. Roles that were
+already open when a company was first fetched and carry no posted date get
+no points for being new.
+
 After changing the file, `rolescout shortlist rebuild` re-ranks at once, with
 no network call. Marks (dismissed, saved, applied) are stored in the database
 on the machine where you make them.
@@ -180,6 +188,12 @@ ls -lh ~/.rolescout/backups
 
 Each run in the log starts with `=== rolescout daily, <time> ===` and ends
 with `=== finished <time>, ok ===`.
+
+## Agents (MCP)
+
+To let an AI agent read the shortlist and work with rolescout without the
+command line, see [MCP.md](MCP.md). It needs one extra install step and is
+optional: the scraper and the scheduled job do not depend on it.
 
 ## 7. Update to a new version
 
