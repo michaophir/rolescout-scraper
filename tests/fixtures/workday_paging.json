@@ -1,0 +1,2965 @@
+{
+ "recorded_on": "2026-11-13",
+ "board": "acme/wd5/Careers",
+ "saved_role": "acme/careers/Account-Executive---SLED---NY-NJ_JR2140-1",
+ "wanted": "manager",
+ "descriptions": 3,
+ "exchanges": [
+  {
+   "method": "GET",
+   "url": "https://acme.wd5.myworkdayjobs.com/robots.txt",
+   "json": null,
+   "status": 200,
+   "body": "Sitemap: https://acme.wd5.myworkdayjobs.com/Careers/siteMap.xml\n\nUser-agent: *\nAllow: /Careers/\nDisallow: /AcmePrivate/\nDisallow: /refreshFacet/"
+  },
+  {
+   "method": "POST",
+   "url": "https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/Careers/jobs",
+   "json": {
+    "appliedFacets": {},
+    "limit": 20,
+    "offset": 0,
+    "searchText": ""
+   },
+   "status": 200,
+   "body": {
+    "total": 23,
+    "jobPostings": [
+     {
+      "title": "Customer Success Manager, International Public Sector",
+      "externalPath": "/job/London-UK/Customer-Success-Manager--International-Public-Sector_JR2144",
+      "locationsText": "3 Locations",
+      "postedOn": "Posted Yesterday",
+      "bulletFields": [
+       "JR2144"
+      ]
+     },
+     {
+      "title": "Product Manager III, Cybersecurity Integrations",
+      "externalPath": "/job/US-Remote/Product-Manager-III--Cybersecurity-Integrations_JR2130",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted Yesterday",
+      "bulletFields": [
+       "JR2130"
+      ]
+     },
+     {
+      "title": "Customer Success Manager",
+      "externalPath": "/job/New-York-NY/Customer-Success-Manager_JR2141",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted Yesterday",
+      "bulletFields": [
+       "JR2141"
+      ]
+     },
+     {
+      "title": "Account Executive, (SLED)  NY/NJ",
+      "externalPath": "/job/New-York-NY/Account-Executive---SLED---NY-NJ_JR2140-1",
+      "locationsText": "3 Locations",
+      "postedOn": "Posted Yesterday",
+      "bulletFields": [
+       "JR2140"
+      ]
+     },
+     {
+      "title": "Vice President, Product Marketing (Defense)",
+      "externalPath": "/job/Arlington-VA/Vice-President--Product-Marketing--Defense-_JR2136",
+      "locationsText": "Arlington, VA",
+      "postedOn": "Posted 7 Days Ago",
+      "bulletFields": [
+       "JR2136"
+      ]
+     },
+     {
+      "title": "Customer Success Manager, US DOD (Army)",
+      "externalPath": "/job/VA---Hybrid/Customer-Success-Manager--US-DOD_JR2117",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted 11 Days Ago",
+      "bulletFields": [
+       "JR2117"
+      ]
+     },
+     {
+      "title": "Senior Manager, Account Development",
+      "externalPath": "/job/London-UK/Senior-Manager--Account-Development_JR2124",
+      "locationsText": "London, UK",
+      "postedOn": "Posted 15 Days Ago",
+      "bulletFields": [
+       "JR2124"
+      ]
+     },
+     {
+      "title": "Senior Software Engineer, AI Research",
+      "externalPath": "/job/NY---Hybrid/Senior-Software-Engineer--AI-Research_JR2087-1",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted 16 Days Ago",
+      "bulletFields": [
+       "JR2087"
+      ]
+     },
+     {
+      "title": "Senior Research Scientist",
+      "externalPath": "/job/New-York-NY/Senior-Research-Scientist_JR2128-1",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted 21 Days Ago",
+      "bulletFields": [
+       "JR2128"
+      ]
+     },
+     {
+      "title": "Account Executive, Enterprise (TOLA)",
+      "externalPath": "/job/US-Remote/Account-Executive--Enterprise--TOLA-_JR2123",
+      "locationsText": "US Remote",
+      "postedOn": "Posted 23 Days Ago",
+      "bulletFields": [
+       "JR2123"
+      ]
+     },
+     {
+      "title": "Subject Matter Expert Domain Expert - MENA",
+      "externalPath": "/job/US-Remote/Subject-Matter-Expert-Domain-Expert---MENA_JR2108",
+      "locationsText": "US Remote",
+      "postedOn": "Posted 24 Days Ago",
+      "bulletFields": [
+       "JR2108"
+      ]
+     },
+     {
+      "title": "Technical Support Engineer",
+      "externalPath": "/job/London---Hybrid/Technical-Support-Engineer_JR2112",
+      "locationsText": "London - Hybrid",
+      "postedOn": "Posted 28 Days Ago",
+      "bulletFields": [
+       "JR2112"
+      ]
+     },
+     {
+      "title": "Account Executive, Federal Civilian (VA, HHS)",
+      "externalPath": "/job/VA---Hybrid/Account-Executive--Federal-Civilian--VA--DHHS-_JR2104",
+      "locationsText": "VA - Hybrid",
+      "postedOn": "Posted 28 Days Ago",
+      "bulletFields": [
+       "JR2104"
+      ]
+     },
+     {
+      "title": "Account Executive, International Defence",
+      "externalPath": "/job/London---Hybrid/Account-Executive--International-Defence_JR2064",
+      "locationsText": "3 Locations",
+      "postedOn": "Posted 28 Days Ago",
+      "bulletFields": [
+       "JR2064"
+      ]
+     },
+     {
+      "title": "Senior Account Executive, Corporate Security",
+      "externalPath": "/job/London-UK/Senior-Account-Executive--Corporate-Security_JR2102",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted 28 Days Ago",
+      "bulletFields": [
+       "JR2102"
+      ]
+     },
+     {
+      "title": "Customer Success Manager, Cyber",
+      "externalPath": "/job/VA---Remote/Customer-Success-Manager--Cyber_JR2113",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted 28 Days Ago",
+      "bulletFields": [
+       "JR2113"
+      ]
+     },
+     {
+      "title": "Forward Deployed Engineer",
+      "externalPath": "/job/UK/Forward-Deployed-Engineer_JR2082-1",
+      "locationsText": "UK",
+      "postedOn": "Posted 30 Days Ago",
+      "bulletFields": [
+       "JR2082"
+      ]
+     },
+     {
+      "title": "Senior Director, AI Engineering",
+      "externalPath": "/job/New-York-NY/Senior-Director--AI-Engineering_JR2086-1",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted 30+ Days Ago",
+      "bulletFields": [
+       "JR2086"
+      ]
+     },
+     {
+      "title": "Forward Deployed Engineer",
+      "externalPath": "/job/US-Remote/Forward-Deployed-Engineer_JR2111-1",
+      "locationsText": "US Remote",
+      "postedOn": "Posted 30+ Days Ago",
+      "bulletFields": [
+       "JR2111"
+      ]
+     },
+     {
+      "title": "Product Manager Cyber Intel",
+      "externalPath": "/job/US-Remote/Product-Manager-Cyber-Intel_JR2106-1",
+      "locationsText": "US Remote",
+      "postedOn": "Posted 30+ Days Ago",
+      "bulletFields": [
+       "JR2106"
+      ]
+     }
+    ],
+    "facets": [
+     {
+      "facetParameter": "jobFamilyGroup",
+      "descriptor": "Job Category",
+      "values": [
+       {
+        "descriptor": "Sales",
+        "id": "2b4a1545fce5100313d925570d3d0000",
+        "count": 11
+       },
+       {
+        "descriptor": "AI & Engineering",
+        "id": "2b4a1545fce5100313d918bb15fe0000",
+        "count": 6
+       },
+       {
+        "descriptor": "Product",
+        "id": "2b4a1545fce5100313d91bbc119b0000",
+        "count": 2
+       },
+       {
+        "descriptor": "Marketing",
+        "id": "2b4a1545fce5100313d9375a86fd0000",
+        "count": 2
+       },
+       {
+        "descriptor": "Domain Expert",
+        "id": "2b4a1545fce5100313d91e205fee0000",
+        "count": 2
+       }
+      ]
+     },
+     {
+      "facetParameter": "timeType",
+      "descriptor": "Time Type",
+      "values": [
+       {
+        "descriptor": "Full time",
+        "id": "b67def4bbbb11000b66ff5c34b2b0000",
+        "count": 23
+       }
+      ]
+     },
+     {
+      "facetParameter": "locationMainGroup",
+      "values": [
+       {
+        "facetParameter": "locations",
+        "descriptor": "Locations",
+        "values": [
+         {
+          "descriptor": "Arlington, VA",
+          "id": "d0a457db0c471001be448f1aeb660000",
+          "count": 6
+         },
+         {
+          "descriptor": "Australia - Remote",
+          "id": "d0a457db0c4710021689da92ab2c0000",
+          "count": 1
+         },
+         {
+          "descriptor": "Denmark - Remote",
+          "id": "d0a457db0c471002167872dc7c870000",
+          "count": 3
+         },
+         {
+          "descriptor": "DEN - Remote",
+          "id": "2b4a1545fce5100313fe02f535510000",
+          "count": 1
+         },
+         {
+          "descriptor": "Ireland - Remote",
+          "id": "d0a457db0c47100216aa840ae2010000",
+          "count": 1
+         },
+         {
+          "descriptor": "London, UK",
+          "id": "d0a457db0c471001bdd1a91a775f0000",
+          "count": 4
+         },
+         {
+          "descriptor": "London - Hybrid",
+          "id": "e7c51e2f8c3b10107939cb70deb50000",
+          "count": 2
+         },
+         {
+          "descriptor": "New York, NY",
+          "id": "d0a457db0c471001be3206b051aa0000",
+          "count": 5
+         },
+         {
+          "descriptor": "NY - Hybrid",
+          "id": "61a744d22f05100e5331e80a9f910000",
+          "count": 2
+         },
+         {
+          "descriptor": "NY - Remote",
+          "id": "2b4a1545fce5100313ff3bedd3ea0000",
+          "count": 1
+         },
+         {
+          "descriptor": "UK",
+          "id": "2b4a1545fce5100313fe08f6b9d80000",
+          "count": 1
+         },
+         {
+          "descriptor": "UK - Remote",
+          "id": "d0a457db0c471002166456d6d0700000",
+          "count": 3
+         },
+         {
+          "descriptor": "US Remote",
+          "id": "2b4a1545fce5100313ff0545e6dc0000",
+          "count": 6
+         },
+         {
+          "descriptor": "VA - Hybrid",
+          "id": "e7c51e2f8c3b1010795cb96acdd60000",
+          "count": 2
+         },
+         {
+          "descriptor": "VA - Remote",
+          "id": "2b4a1545fce5100313fd9422797a0000",
+          "count": 1
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "userAuthenticated": false
+   }
+  },
+  {
+   "method": "POST",
+   "url": "https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/Careers/jobs",
+   "json": {
+    "appliedFacets": {},
+    "limit": 20,
+    "offset": 20,
+    "searchText": ""
+   },
+   "status": 200,
+   "body": {
+    "total": 0,
+    "jobPostings": [
+     {
+      "title": "Subject Matter Expert Manager, Domain Expert - MENA",
+      "externalPath": "/job/Australia---Remote/Subject-Matter-Expert-Manager--Domain-Expert---MENA_JR2109",
+      "locationsText": "Australia - Remote",
+      "postedOn": "Posted 30+ Days Ago",
+      "bulletFields": [
+       "JR2109"
+      ]
+     },
+     {
+      "title": "Key Account Director, Public Sector (EMEA)",
+      "externalPath": "/job/London-UK/Key-Account-Director--Public-Sector--EMEA-_JR2095",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted 30+ Days Ago",
+      "bulletFields": [
+       "JR2095"
+      ]
+     },
+     {
+      "title": "Account Executive, International Defence (Iberia)",
+      "externalPath": "/job/UK---Remote/Account-Executive--International-Defence--Iberia-_JR2079",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted 30+ Days Ago",
+      "bulletFields": [
+       "JR2079"
+      ]
+     }
+    ],
+    "facets": [],
+    "userAuthenticated": false
+   }
+  },
+  {
+   "method": "GET",
+   "url": "https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/Careers/job/London-UK/Customer-Success-Manager--International-Public-Sector_JR2144",
+   "json": null,
+   "status": 200,
+   "body": {
+    "jobPostingInfo": {
+     "id": "7516e3b545031003f37fb9c2f9ac0000",
+     "title": "Customer Success Manager, International Public Sector",
+     "jobDescription": "<p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><b>See yourself at Acme</b></p>Acme is seeking a self-motivated Customer Success Manager who excels at building deep, meaningful relationships with customers at every level of an organisation: the operational (user) level, with the team leads who own the problem sets this role helps solve, and with key decision-makers. As a natural customer advocate and platform specialist, you listen, understand, and define customer operational needs with our software solutions, developing customer trust and understanding to the point where Acme Customer Success feels like a true mission partner to our EMEA clients. Your goal is to lead client engagements across the UK, Nordic, and wider European Public Sector (spanning Central Government, National Security, International Defence, and wider public safety and policing). Through tailored training, usage assessments, and executive business reviews, you will help customers get maximum value from our platforms while guiding them through our evolving product suite, advanced AI capabilities, data feeds, and partner integrations. You have a strong grasp of service culture, modern SaaS platforms, and account management tools, and you are excited to help transform how Public Sector and Defence clients use real-time intelligence in their daily operations.<p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><b><b>AI Innovation at Acme </b></b></p><p style=\"text-align:left\"><span>Working at Acme you’ll have the opportunity to tackle the most exciting trends in AI on a daily basis to power a revolutionary product that uncovers critical events around the world as they unfold.</span></p><p style=\"text-align:left\"><b><a href=\"https://www.acme.com/press/acme-unveils-acme-the-first-generative-ai-that-automatically-regenerates-in-real-time/\" target=\"_blank\"><u>Regenerative AI</u></a></b>:<span> our AI technology, Acme, is a new form of generative AI that automatically regenerates real-time Live Event Briefs as events unfold. Learn more </span><a href=\"https://www.acme.com/press/acme-ceo-discusses-future-of-real-time-information-at-imagination-in-action\" target=\"_blank\"><u>here</u></a><span>.</span></p><p style=\"text-align:left\"><b><a href=\"https://www.acme.com/press/announcement/acme-unveils-agentic-ai-roadmap/\" target=\"_blank\"><u>Agentic AI</u></a>:</b> <span>we recently launched our Agentic AI capability, what we’re calling our Intel Agents, that autonomously generates critical context for our clients on real-time events, threats, and risks allowing them to see the clearest, most accurate view of what’s happening on the ground. Learn more </span><a href=\"https://www.linkedin.com/video/live/urn:li:ugcPost:7322753117979115520/?utm_source&#61;linkedin&amp;utm_medium&#61;organic_social&amp;utm_campaign&#61;social-team-led_parent_2025&amp;utm_content&#61;event&amp;utm_asset&#61;&amp;utm_sector&#61;all&amp;utm_segment&#61;cyber&amp;utm_region&#61;global\" target=\"_blank\"><u>here</u></a></p><p style=\"text-align:left\"><b>Multimodal AI:</b><span> our platform detects events from many different types of data (images, video, sensor data, audio, and text in over 150 languages). Learn more </span><a href=\"https://www.acme.com/resources/blog/multi-modal-fusion-ai-for-real-time-event-detection/\" target=\"_blank\"><u>here</u></a><span>. </span></p><p style=\"text-align:inherit\"></p><p><b>The opportunity</b></p><ul><li style=\"color:#000000 !important\"><span style=\"color:#000000\"><b>Master the Product Line-up</b>: Serve as a knowledgeable expert across Acme&#39;s platforms, developing a strong command of our evolving AI capabilities and publicly available information (PAI) use cases.</span></li><li><span style=\"color:#000000\"><b>Embed Acme in Customer Workflows</b>: Understand each customer&#39;s structure, mission priorities, and operational processes to design and deliver onboarding and adoption programmes that make Acme an essential part of their daily workflow, whether through our web and mobile platforms or alongside their existing operational tools (such as mapping or common operating picture platforms).</span></li><li><span style=\"color:#000000\"><b>Drive Retention &amp; Account Growth</b>: Build trusted, multi-tiered relationships from watchfloor operators and team leads up to key decision-makers, partnering closely with Account Executives and Solutions Engineers across your regional pod to drive high customer retention, support upgrades across our platforms, and identify opportunities to expand Acme into new teams or integrations.</span></li><li><span style=\"color:#000000\"><b>Deliver High-Impact Customer Reviews</b>: Conduct regular, data-driven Executive Business Reviews (EBRs), user training sessions, and success planning to demonstrate operational value, address adoption gaps early, and uncover new use cases.</span></li><li><span style=\"color:#000000\"><b>Optimise Platform Configuration</b>: Build tailored alerting profiles and advanced search logic for customers, monitor usage trends, and spot opportunities where customers relying on manual processes could benefit from our automated feeds or partner connectors.</span></li><li><span style=\"color:#000000\"><b>Act as the Voice of the Customer</b>: Capture structured customer feedback on our platforms and new AI features, working closely with Solutions Engineering, Technical Support, and Product teams to ensure customer needs are understood and addressed.</span></li></ul><br /><p><b>What you bring</b></p><p>At Acme, we value you for who you are. We encourage you to apply for this role, even if you don&#39;t meet every qualification. Our candidates are reviewed on the basis of their skill and potential to succeed.</p><ul><li><b>Public Sector &amp; Defence Experience</b>: Experience working within or supporting UK, Nordic, or European Central Government, National Security, or International/NATO Defence organisations, with a practical understanding of publicly available information (PAI), OSINT, or threat and risk intelligence workflows.</li><li><b>Customer Success &amp; Relationship Track Record</b>: Bachelor&#39;s degree or equivalent operational, civil service, or military experience, plus at least 3 to 5 years of customer success, account management, or client-facing onboarding experience. You have a proven ability to build deep trust and credibility across all stakeholder tiers, from frontline operational users and problem-owning team leads to key decision-makers, positioning yourself as a true mission partner.</li><li><b>Modern SaaS &amp; Product Aptitude</b>: A genuinely tech-savvy mindset with the confidence to learn and demonstrate new AI features quickly. While this is not a hands-on engineering role, you should be comfortable discussing how SaaS platforms, data feeds (APIs), and third-party software integrations fit into a customer&#39;s wider operational environment, and collaborating with Solutions Engineers when deeper technical scoping is required.</li><li><b>Analytical &amp; Problem-Solving Skills</b>: Strong analytical approach with the ability to build complex Boolean search queries, interpret customer usage data to tell a clear value story, and translate new platform capabilities into straightforward operational benefits for frontline users and senior leadership alike.</li><li><b>Operational Discipline &amp; Communication</b>: Detail-oriented with strong organisation, CRM hygiene (e.g., Salesforce, Gainsight), and the ability to manage a varied portfolio of accounts with high accountability in a fast-paced environment. Full professional fluency in English is essential; proficiency in Danish or another Nordic language is a strong advantage.</li><li><b>Clearance &amp; Travel</b>: Must hold (or be eligible and willing to obtain) relevant National Security Vetting (e.g. UKSV, Danish security clearance, or NATO equivalent) to work across government and defence accounts, and be willing to travel domestically and internationally across EMEA as required (approximately 35% to 45% of the time).</li></ul><br /><p>#LI-WC1</p><p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><b>About Acme</b></p><p style=\"text-align:left\"><span>At Acme, we are a mission driven team of talented builders, creators and visionaries who have real-world impact on how organizations are able to respond to events. Acme’s groundbreaking, AI-powered, intelligence platform provides organizations with the earliest signals of emerging risks, events, and threats before they unfold. Trusted by two-thirds of the Fortune 50 and half of the Fortune 100, Acme’s platform analyzes billions of public data inputs spanning text, image, video, audio and sensor data across 150&#43; languages, empowering our clients to stay one step ahead in an increasingly complex world where every second counts. </span></p><p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><span>Founded in 2009, we have pioneered the world’s first real-time event detection platform, long before the recent Gen AI ‘boom.’ Acme operates all around the world united by our passion to use AI for the greater good, be agents of positive change and put our technology into the hands of clients charged with the responsibility to keep organizations running and keep people safe.</span></p><p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><span>As our employees focus on developing our revolutionary technology, we focus on our employees. Acme is proud to offer a variety of flexible work arrangements, offices all over the world to foster collaboration, generous PTO and sick leave, and more, as part of our competitive benefits package aimed at keeping all our employees happy and healthy. Explore all our benefits<b> </b></span><b><a href=\"https://www.acme.com/resources/blog/acme-provides-competitive-benefits-to-support-employee-wellness-and-well-being/\" target=\"_blank\"><u>here</u></a></b><span>. </span></p><p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><span>We believe our differences give us strength. Our employees are empowered to be their best, authentic selves through various opportunities, such as our robust employee resource group (ERG) network, manager development programming, professional development funds, and more.</span></p><p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><span>We serve a global community made up of many cultures and strive to reflect the world and clients we serve, with a workforce built on merit and equity. We actively condemn racism and discrimination in any form. We stand for social good, fostering a culture of allyship, and standing up for those who face systemic barriers to equality. We lead with empathy and strive to be agents of positive change in our company and in our communities.</span></p><p style=\"text-align:inherit\"></p><p style=\"text-align:left !important\"><i><b>Acme is an equal opportunity and affirmative action employer. Individuals seeking employment at Acme are considered without regards to race, sex, colour, creed, religion, national origin, age, disability, genetics, marital status, pregnancy, unemployment status, sexual orientation, citizenship status or veteran status.</b></i></p><p style=\"text-align:inherit !important\"></p><p style=\"text-align:left !important\"><i><b>Acme will collect and process your personal data in accordance with Acme’s candidate privacy notice available </b></i><a target=\"_blank\" href=\"https://urldefense.proofpoint.com/v2/url?u&#61;https-3A__www.acme.com_careers_candidate-2Dprivacy-2Dpolicy_&amp;d&#61;DwMFaQ&amp;c&#61;euGZstcaTDllvimEN8b7jXrwqOf-v5A_CdpgnVfiiMM&amp;r&#61;7JBoUYWRhbOlyz_l5FB61SPTeTRvne2D6JyWQzUHjyI&amp;m&#61;ucYRR8uTHF6f1iJQeFNVOn33CU5bvao8-eGWNiKToRCJyMtdCd7WihjBiyCxYkt3&amp;s&#61;npsMIg8Niv_hL3BAnS_iYgGrG-GNH2hy_Q7yNDQdbW8&amp;e&#61;\"><span style=\"color:#0000ff\"><i><b><u>here</u></b></i></span></a><i><b>. By providing your details and applying via our careers website, you acknowledge that you have read our candidate privacy notice. If you have any queries, please contact </b></i><a target=\"_blank\" href=\"mailto:recruiting&#64;acme.com\"><span style=\"color:#0000ff\"><i><b><u>recruiting&#64;acme.com</u></b></i></span></a><i><b> or </b></i><a target=\"_blank\" href=\"mailto:privacy&#64;acme.com\"><span style=\"color:#0000ff\"><i><b><u>privacy&#64;acme.com</u></b></i></span></a><i><b>.</b></i></p>",
+     "location": "London, UK",
+     "additionalLocations": [
+      "Denmark - Remote",
+      "DEN - Remote"
+     ],
+     "postedOn": "Posted Yesterday",
+     "startDate": "2026-11-12",
+     "timeType": "Full time",
+     "jobReqId": "JR2144",
+     "jobPostingId": "Customer-Success-Manager--International-Public-Sector_JR2144",
+     "jobPostingSiteId": "Careers",
+     "country": {
+      "descriptor": "United Kingdom",
+      "id": "29247e57dbaf46fb855b224e03170bc7"
+     },
+     "logoImage": {
+      "src": "/wday/cxs/acme/Careers/sidebarimage/1f036ac0665c1000dd35ca05152c0000",
+      "alt": "Acme Logo"
+     },
+     "canApply": true,
+     "posted": true,
+     "includeResumeParsing": true,
+     "jobRequisitionLocation": {
+      "descriptor": "UK",
+      "country": {
+       "descriptor": "United Kingdom",
+       "id": "29247e57dbaf46fb855b224e03170bc7",
+       "alpha2Code": "GB"
+      }
+     },
+     "externalUrl": "https://acme.wd5.myworkdayjobs.com/Careers/job/London-UK/Customer-Success-Manager--International-Public-Sector_JR2144",
+     "questionnaireId": "098a161cd3781006562b2fe716150000"
+    },
+    "hiringOrganization": {
+     "name": "Acme UK",
+     "url": ""
+    },
+    "similarJobs": [],
+    "userAuthenticated": false
+   }
+  },
+  {
+   "method": "GET",
+   "url": "https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/Careers/job/US-Remote/Product-Manager-III--Cybersecurity-Integrations_JR2130",
+   "json": null,
+   "status": 200,
+   "body": {
+    "jobPostingInfo": {
+     "id": "6a82773ee12c1003e4d67c0d82360000",
+     "title": "Product Manager III, Cybersecurity Integrations",
+     "jobDescription": "<p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><b>See yourself at Acme</b></p>At Acme, you will drive the creation of high-impact, mission critical cybersecurity product integrations as a Product Manager, Cybersecurity Integrations. This role is responsible for defining and executing integrations across our entire cybersecurity product portfolio and with a wide array of partner solutions. Everyday, our clients rely on these integrations to exchange real-time alerts, critical threat intelligence, indicators, asset data, and more with other top-tier industry tools. Collaborating with world class engineers and partner companies, you will transform conceptual ideas into new or enhanced integrations. We are looking for a builder who excels in a dynamic, high-velocity environment—an individual equally skilled at guiding high-level product strategy and deep-diving into complex partner API specifications. This US-based position offers the flexibility of remote work or can be located in our New York office<p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><b><b>AI Innovation at Acme </b></b></p><p style=\"text-align:left\"><span>Working at Acme you’ll have the opportunity to tackle the most exciting trends in AI on a daily basis to power a revolutionary product that uncovers critical events around the world as they unfold.</span></p><p style=\"text-align:left\"><b><a href=\"https://www.acme.com/press/acme-unveils-acme-the-first-generative-ai-that-automatically-regenerates-in-real-time/\" target=\"_blank\"><u>Regenerative AI</u></a>:</b><span> our AI technology, Acme, is a new form of generative AI that automatically regenerates real-time Live Event Briefs as events unfold. Learn more </span><a href=\"https://www.acme.com/press/acme-ceo-discusses-future-of-real-time-information-at-imagination-in-action\" target=\"_blank\"><u>here</u></a><span>.</span></p><p style=\"text-align:left\"><b><a href=\"https://www.acme.com/press/announcement/acme-unveils-agentic-ai-roadmap/\" target=\"_blank\"><u>Agentic AI</u></a>: </b><span>we recently launched our Agentic AI capability, what we’re calling our Intel Agents, that autonomously generates critical context for our clients on real-time events, threats, and risks allowing them to see the clearest, most accurate view of what’s happening on the ground. Learn more </span><a href=\"https://www.linkedin.com/video/live/urn:li:ugcPost:7322753117979115520/?utm_source&#61;linkedin&amp;utm_medium&#61;organic_social&amp;utm_campaign&#61;social-team-led_parent_2025&amp;utm_content&#61;event&amp;utm_asset&#61;&amp;utm_sector&#61;all&amp;utm_segment&#61;cyber&amp;utm_region&#61;global\" target=\"_blank\"><u>here</u></a></p><p style=\"text-align:left\"><b>Multimodal AI:</b><span><b> </b>our platform detects events from many different types of data (images, video, sensor data, audio, and text in over 150 languages). Learn more </span><a href=\"https://www.acme.com/resources/blog/multi-modal-fusion-ai-for-real-time-event-detection/\" target=\"_blank\"><u>here</u></a><span>. </span></p><p style=\"text-align:inherit\"></p><p><b>The opportunity</b></p><ul><li>Build solutions that scale. Lead the ideation, research, and validation of new product capabilities, turning novel concepts into highly valuable cybersecurity product integrations.</li><li>Lead execution from concept to launch. Partner with a world-class engineering team to define requirements, manage the product lifecycle, and deliver products that exceed customer expectations.</li><li>Collaborate and win. Work closely with sales, marketing, customer success, and partner teams to develop go-to-market strategies, create compelling enablement materials, and drive product adoption and growth.</li></ul><br /><p><b>What you bring</b></p><p>At Acme, we value you for who you are. We encourage you to apply for this role, even if you don&#39;t meet every qualification. Our candidates are reviewed on the basis of their skill and potential to succeed.</p><ul><li>Experience in cybersecurity, either as a practitioner or someone who has built cybersecurity products (in Product Management or Engineering).</li><li>Experience using or creating cybersecurity APIs. Experience using Postman, or other tools, to use APIs and analyze their output.</li><li>Ideally you understand and have built integrations for popular cybersecurity solutions, such as SIEMs, SOARs, threat intelligence feeds, TIPs, EDRs, XDRs, vulnerability management, or others. </li><li>Ideally you have experience using Claude Cowork, Claude Code, and/or Google Gemini.</li><li>A strategic thinker who can define a compelling product vision and roadmap, translating complex ideas into actionable plans and measurable business results.</li><li>A technical builder who understands the architecture of SaaS and on-prem platforms and is comfortable defining functional specifications for cybersecurity product integrations.</li><li>An exceptional communicator and leader with excellent organizational, written, and oral skills who can inspire and lead cross-functional teams and present to senior leadership.</li><li>Analytical and action-oriented, you break down complex problems, use data to drive decisions, and are resilient, resourceful, and relentless in your pursuit of product excellence.<br /></li></ul><p>#LI-SM</p><p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><b>About Acme</b></p><p style=\"text-align:left\"><span>At Acme, we are a mission driven team of talented builders, creators and visionaries who have real-world impact on how organizations are able to respond to events. Acme’s groundbreaking, AI-powered, intelligence platform provides organizations with the earliest signals of emerging risks, events, and threats before they unfold. Trusted by two-thirds of the Fortune 50 and half of the Fortune 100, Acme’s platform analyzes billions of public data inputs spanning text, image, video, audio and sensor data across 150&#43; languages, empowering our clients to stay one step ahead in an increasingly complex world where every second counts. </span></p><p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><span>Founded in 2009, we have pioneered the world’s first real-time event detection platform, long before the recent Gen AI ‘boom.’ Acme operates all around the world united by our passion to use AI for the greater good, be agents of positive change and put our technology into the hands of clients charged with the responsibility to keep organizations running and keep people safe.</span></p><p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><span>As our employees focus on developing our revolutionary technology, we focus on our employees. Acme is proud to offer a variety of flexible work arrangements, offices all over the world to foster collaboration, generous PTO and sick leave, and more, as part of our competitive benefits package aimed at keeping all our employees happy and healthy. Explore all our benefits </span><b><a href=\"https://www.acme.com/resources/blog/acme-provides-competitive-benefits-to-support-employee-wellness-and-well-being/\" target=\"_blank\"><u>here</u></a></b><span>. </span></p><p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><span>We believe our differences give us strength. Our employees are empowered to be their best, authentic selves through various opportunities, such as our robust employee resource group (ERG) network, manager development programming, professional development funds, and more.</span></p><p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><span>We serve a global community made up of many cultures and strive to reflect the world and clients we serve, with a workforce built on merit and equity. We actively condemn racism and discrimination in any form. We stand for social good, fostering a culture of allyship, and standing up for those who face systemic barriers to equality. We lead with empathy and strive to be agents of positive change in our company and in our communities.</span></p><p style=\"text-align:inherit\"></p>The annual base salary range for this position is $124,000 - $182,500. You will also be eligible to receive a discretionary bonus and Company equity. Actual salary will be based on a number of factors including, but not limited to, geographic location, applicant skills, and prior relevant experience.<p style=\"text-align:inherit !important\"></p><p style=\"text-align:left !important\"><i><b>Acme is an equal opportunity and affirmative action employer. Individuals seeking employment at Acme are considered without regards to race, sex, color, creed, religion, national origin, age, disability, genetics, marital status, pregnancy, unemployment status, sexual orientation, citizenship status or veteran status.</b></i></p><p style=\"text-align:inherit !important\"></p><p style=\"text-align:left !important\"><i><b>Acme will collect and process your personal data in accordance with Acme’s candidate privacy notice available </b></i><a target=\"_blank\" href=\"https://urldefense.proofpoint.com/v2/url?u&#61;https-3A__www.acme.com_careers_candidate-2Dprivacy-2Dpolicy_&amp;d&#61;DwMFaQ&amp;c&#61;euGZstcaTDllvimEN8b7jXrwqOf-v5A_CdpgnVfiiMM&amp;r&#61;7JBoUYWRhbOlyz_l5FB61SPTeTRvne2D6JyWQzUHjyI&amp;m&#61;ucYRR8uTHF6f1iJQeFNVOn33CU5bvao8-eGWNiKToRCJyMtdCd7WihjBiyCxYkt3&amp;s&#61;npsMIg8Niv_hL3BAnS_iYgGrG-GNH2hy_Q7yNDQdbW8&amp;e&#61;\"><span style=\"color:#0000ff\"><i><b><u>here</u></b></i></span></a><i><b>. By providing your details and applying via our careers website, you acknowledge that you have read our candidate privacy notice. If you have any queries, please contact </b></i><a target=\"_blank\" href=\"mailto:recruiting&#64;acme.com\"><span style=\"color:#0000ff\"><i><b><u>recruiting&#64;acme.com</u></b></i></span></a><i><b> or </b></i><a target=\"_blank\" href=\"mailto:privacy&#64;acme.com\"><span style=\"color:#0000ff\"><i><b><u>privacy&#64;acme.com</u></b></i></span></a><i><b>.</b></i></p><p></p><p><a target=\"_blank\" href=\"https://www.acme.com/automated-employment-decision-tools-in-new-york-city/\"><span style=\"color:#0000ff\"><i><b><u>Notice Regarding Automated Employment Decision Tools in New York City</u></b></i></span></a></p><p style=\"text-align:inherit !important\"></p>",
+     "location": "US Remote",
+     "additionalLocations": [
+      "New York, NY"
+     ],
+     "postedOn": "Posted Yesterday",
+     "startDate": "2026-11-12",
+     "timeType": "Full time",
+     "jobReqId": "JR2130",
+     "jobPostingId": "Product-Manager-III--Cybersecurity-Integrations_JR2130",
+     "jobPostingSiteId": "Careers",
+     "country": {
+      "descriptor": "United States of America",
+      "id": "bc33aa3152ec42d4995f4791a106ed09"
+     },
+     "logoImage": {
+      "src": "/wday/cxs/acme/Careers/sidebarimage/38372323dc3f1000dd46ea494fe90000",
+      "alt": "Acme Logo"
+     },
+     "canApply": true,
+     "posted": true,
+     "includeResumeParsing": true,
+     "jobRequisitionLocation": {
+      "descriptor": "NY - Remote",
+      "country": {
+       "descriptor": "United States of America",
+       "id": "bc33aa3152ec42d4995f4791a106ed09",
+       "alpha2Code": "US"
+      }
+     },
+     "externalUrl": "https://acme.wd5.myworkdayjobs.com/Careers/job/US-Remote/Product-Manager-III--Cybersecurity-Integrations_JR2130",
+     "questionnaireId": "098a161cd3781006562b2fe716150000"
+    },
+    "hiringOrganization": {
+     "name": "Acme, Inc.",
+     "url": ""
+    },
+    "similarJobs": [],
+    "userAuthenticated": false
+   }
+  },
+  {
+   "method": "GET",
+   "url": "https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/Careers/job/New-York-NY/Customer-Success-Manager_JR2141",
+   "json": null,
+   "status": 200,
+   "body": {
+    "jobPostingInfo": {
+     "id": "00629343f7aa1005fd6a8ded6b3c0000",
+     "title": "Customer Success Manager",
+     "jobDescription": "<p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><b>See yourself at Acme</b></p>As part of our Customer Success team, you’d serve as the platform expert and ensure value optimization for a portfolio of accounts. You will rely on scaled and strategic engagement techniques to support a diverse user base and interface with key stakeholders to align on business goals &amp; objectives. You have experience managing complex software solutions, multiple client stakeholders, and proactive account strategy. You leverage your consultative skills to identify customer needs to build long-term solutions that ensure strong retention outcomes along with opportunistic growth opportunities.<br><br>This role is based hybrid (NYC area) or hybrid (Northern VA/DC area)<p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><b><b>AI Innovation at Acme </b></b></p><p style=\"text-align:left\"><span>Working at Acme you’ll have the opportunity to tackle the most exciting trends in AI on a daily basis to power a revolutionary product that uncovers critical events around the world as they unfold.</span></p><p style=\"text-align:left\"><b><a href=\"https://www.acme.com/press/acme-unveils-acme-the-first-generative-ai-that-automatically-regenerates-in-real-time/\" target=\"_blank\"><u>Regenerative AI</u></a>:</b><span> our AI technology, Acme, is a new form of generative AI that automatically regenerates real-time Live Event Briefs as events unfold. Learn more </span><a href=\"https://www.acme.com/press/acme-ceo-discusses-future-of-real-time-information-at-imagination-in-action\" target=\"_blank\"><u>here</u></a><span>.</span></p><p style=\"text-align:left\"><b><a href=\"https://www.acme.com/press/announcement/acme-unveils-agentic-ai-roadmap/\" target=\"_blank\"><u>Agentic AI</u></a>: </b><span>we recently launched our Agentic AI capability, what we’re calling our Intel Agents, that autonomously generates critical context for our clients on real-time events, threats, and risks allowing them to see the clearest, most accurate view of what’s happening on the ground. Learn more </span><a href=\"https://www.linkedin.com/video/live/urn:li:ugcPost:7322753117979115520/?utm_source&#61;linkedin&amp;utm_medium&#61;organic_social&amp;utm_campaign&#61;social-team-led_parent_2025&amp;utm_content&#61;event&amp;utm_asset&#61;&amp;utm_sector&#61;all&amp;utm_segment&#61;cyber&amp;utm_region&#61;global\" target=\"_blank\"><u>here</u></a></p><p style=\"text-align:left\"><b>Multimodal AI:</b><span><b> </b>our platform detects events from many different types of data (images, video, sensor data, audio, and text in over 150 languages). Learn more </span><a href=\"https://www.acme.com/resources/blog/multi-modal-fusion-ai-for-real-time-event-detection/\" target=\"_blank\"><u>here</u></a><span>. </span></p><p style=\"text-align:inherit\"></p><p><b>The opportunity<br /></b></p><ul><li>Be an expert on Acme’s platform with a deep understanding of open source and social media analytics</li><li>Provide user-level support to augment business development efforts across the Corporate Risk vertical</li><li>Learn client mission and operational processes in order to integrate Acme into their workflows and recommend best practices</li><li>Collect customer feedback and clearly articulate product recommendations for Acme product development with our engineering and product teams</li><li>Develop deep insights regarding customer use cases, internal decision making nuances, budget cycles and other key information necessary to close the renewal</li><li>Strategically navigate and influence stakeholders in the buying process including users, influencers and budget decision makers</li><li>Own the renewal process for your book of business, from early planning through close, with accountability for gross revenue retention<br /></li></ul><p><b>What you bring </b></p><p><br />At Acme, we value you for who you are. We encourage you to apply for this role, even if you don’t meet every qualification. Our candidates are reviewed on the basis of their skill and potential to succeed. </p><ul><li>Bachelor&#39;s degree or equivalent relevant experience in a related field AND 6-8&#43; years of enterprise software or SaaS customer success/account management with a demonstrated track record of success</li><li>Experience providing product support at the user level</li><li>Self-motivation and an ability to handle multiple competing priorities in a fast-paced environment</li><li>Detail-oriented with excellent organizational skills and a strong focus on delivering the best possible client experience</li><li>Knowledge and/or experience of publicly available information and social media analysis efforts of or enterprise organizations, including but not limited to corporate security, risk, or crisis management a plus</li></ul><br /><br /><p>#LI-EC1</p><p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><b>About Acme</b></p><p style=\"text-align:left\"><span>At Acme, we are a mission driven team of talented builders, creators and visionaries who have real-world impact on how organizations are able to respond to events. Acme’s groundbreaking, AI-powered, intelligence platform provides organizations with the earliest signals of emerging risks, events, and threats before they unfold. Trusted by two-thirds of the Fortune 50 and half of the Fortune 100, Acme’s platform analyzes billions of public data inputs spanning text, image, video, audio and sensor data across 150&#43; languages, empowering our clients to stay one step ahead in an increasingly complex world where every second counts. </span></p><p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><span>Founded in 2009, we have pioneered the world’s first real-time event detection platform, long before the recent Gen AI ‘boom.’ Acme operates all around the world united by our passion to use AI for the greater good, be agents of positive change and put our technology into the hands of clients charged with the responsibility to keep organizations running and keep people safe.</span></p><p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><span>As our employees focus on developing our revolutionary technology, we focus on our employees. Acme is proud to offer a variety of flexible work arrangements, offices all over the world to foster collaboration, generous PTO and sick leave, and more, as part of our competitive benefits package aimed at keeping all our employees happy and healthy. Explore all our benefits </span><b><a href=\"https://www.acme.com/resources/blog/acme-provides-competitive-benefits-to-support-employee-wellness-and-well-being/\" target=\"_blank\"><u>here</u></a></b><span>. </span></p><p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><span>We believe our differences give us strength. Our employees are empowered to be their best, authentic selves through various opportunities, such as our robust employee resource group (ERG) network, manager development programming, professional development funds, and more.</span></p><p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><span>We serve a global community made up of many cultures and strive to reflect the world and clients we serve, with a workforce built on merit and equity. We actively condemn racism and discrimination in any form. We stand for social good, fostering a culture of allyship, and standing up for those who face systemic barriers to equality. We lead with empathy and strive to be agents of positive change in our company and in our communities.</span></p><p style=\"text-align:inherit\"></p>The annual on-target earnings (OTE) for this position are $100,486 - $147,454,  which consists of the annual base salary and annual commission target for the role. You will also be eligible to receive Company equity. Actual OTE will be based on a number of factors including, but not limited to, geographic location, applicant skills, and prior relevant experience.<p style=\"text-align:inherit !important\"></p><p style=\"text-align:left !important\"><i><b>Acme is an equal opportunity and affirmative action employer. Individuals seeking employment at Acme are considered without regards to race, sex, color, creed, religion, national origin, age, disability, genetics, marital status, pregnancy, unemployment status, sexual orientation, citizenship status or veteran status.</b></i></p><p style=\"text-align:inherit !important\"></p><p style=\"text-align:left !important\"><i><b>Acme will collect and process your personal data in accordance with Acme’s candidate privacy notice available </b></i><a target=\"_blank\" href=\"https://urldefense.proofpoint.com/v2/url?u&#61;https-3A__www.acme.com_careers_candidate-2Dprivacy-2Dpolicy_&amp;d&#61;DwMFaQ&amp;c&#61;euGZstcaTDllvimEN8b7jXrwqOf-v5A_CdpgnVfiiMM&amp;r&#61;7JBoUYWRhbOlyz_l5FB61SPTeTRvne2D6JyWQzUHjyI&amp;m&#61;ucYRR8uTHF6f1iJQeFNVOn33CU5bvao8-eGWNiKToRCJyMtdCd7WihjBiyCxYkt3&amp;s&#61;npsMIg8Niv_hL3BAnS_iYgGrG-GNH2hy_Q7yNDQdbW8&amp;e&#61;\"><span style=\"color:#0000ff\"><i><b><u>here</u></b></i></span></a><i><b>. By providing your details and applying via our careers website, you acknowledge that you have read our candidate privacy notice. If you have any queries, please contact </b></i><a target=\"_blank\" href=\"mailto:recruiting&#64;acme.com\"><span style=\"color:#0000ff\"><i><b><u>recruiting&#64;acme.com</u></b></i></span></a><i><b> or </b></i><a target=\"_blank\" href=\"mailto:privacy&#64;acme.com\"><span style=\"color:#0000ff\"><i><b><u>privacy&#64;acme.com</u></b></i></span></a><i><b>.</b></i></p><p></p><p><a target=\"_blank\" href=\"https://www.acme.com/automated-employment-decision-tools-in-new-york-city/\"><span style=\"color:#0000ff\"><i><b><u>Notice Regarding Automated Employment Decision Tools in New York City</u></b></i></span></a></p><p style=\"text-align:inherit !important\"></p>",
+     "location": "New York, NY",
+     "additionalLocations": [
+      "Arlington, VA"
+     ],
+     "postedOn": "Posted Yesterday",
+     "startDate": "2026-11-12",
+     "timeType": "Full time",
+     "jobReqId": "JR2141",
+     "jobPostingId": "Customer-Success-Manager_JR2141",
+     "jobPostingSiteId": "Careers",
+     "country": {
+      "descriptor": "United States of America",
+      "id": "bc33aa3152ec42d4995f4791a106ed09"
+     },
+     "logoImage": {
+      "src": "/wday/cxs/acme/Careers/sidebarimage/38372323dc3f1000dd46ea494fe90000",
+      "alt": "Acme Logo"
+     },
+     "canApply": true,
+     "posted": true,
+     "includeResumeParsing": true,
+     "jobRequisitionLocation": {
+      "descriptor": "NY",
+      "country": {
+       "descriptor": "United States of America",
+       "id": "bc33aa3152ec42d4995f4791a106ed09",
+       "alpha2Code": "US"
+      }
+     },
+     "externalUrl": "https://acme.wd5.myworkdayjobs.com/Careers/job/New-York-NY/Customer-Success-Manager_JR2141",
+     "questionnaireId": "098a161cd3781006562b2fe716150000"
+    },
+    "hiringOrganization": {
+     "name": "Acme, Inc.",
+     "url": ""
+    },
+    "similarJobs": [],
+    "userAuthenticated": false
+   }
+  },
+  {
+   "method": "GET",
+   "url": "https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/Careers/job/New-York-NY/Account-Executive---SLED---NY-NJ_JR2140-1",
+   "json": null,
+   "status": 200,
+   "body": {
+    "jobPostingInfo": {
+     "id": "7516e3b545031003d7c858eb7e820000",
+     "title": "Account Executive, (SLED)  NY/NJ",
+     "jobDescription": "<p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><b>See yourself at Acme</b></p>Acme is seeking an Account Executive to sell our  Physical Security solutions to high-profile US SLED accounts and ensure that Acme’s critical alerts are getting into the right hands at the right time. You'll deliver unique and impactful solutions to your SLED clients while exceeding quotas and establishing strong customer relationships, while working closely with a variety of channel partners.<br><br>This is a NY/NJ US-based remote role and  as such we are looking for candidates in the territory<p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><b><b>AI Innovation at Acme </b></b></p><p style=\"text-align:left\"><span>Working at Acme you’ll have the opportunity to tackle the most exciting trends in AI on a daily basis to power a revolutionary product that uncovers critical events around the world as they unfold.</span></p><p style=\"text-align:left\"><b><a href=\"https://www.acme.com/press/acme-unveils-acme-the-first-generative-ai-that-automatically-regenerates-in-real-time/\" target=\"_blank\"><u>Regenerative AI</u></a>:</b><span> our AI technology, Acme, is a new form of generative AI that automatically regenerates real-time Live Event Briefs as events unfold. Learn more </span><a href=\"https://www.acme.com/press/acme-ceo-discusses-future-of-real-time-information-at-imagination-in-action\" target=\"_blank\"><u>here</u></a><span>.</span></p><p style=\"text-align:left\"><b><a href=\"https://www.acme.com/press/announcement/acme-unveils-agentic-ai-roadmap/\" target=\"_blank\"><u>Agentic AI</u></a>: </b><span>we recently launched our Agentic AI capability, what we’re calling our Intel Agents, that autonomously generates critical context for our clients on real-time events, threats, and risks allowing them to see the clearest, most accurate view of what’s happening on the ground. Learn more </span><a href=\"https://www.linkedin.com/video/live/urn:li:ugcPost:7322753117979115520/?utm_source&#61;linkedin&amp;utm_medium&#61;organic_social&amp;utm_campaign&#61;social-team-led_parent_2025&amp;utm_content&#61;event&amp;utm_asset&#61;&amp;utm_sector&#61;all&amp;utm_segment&#61;cyber&amp;utm_region&#61;global\" target=\"_blank\"><u>here</u></a></p><p style=\"text-align:left\"><b>Multimodal AI:</b><span><b> </b>our platform detects events from many different types of data (images, video, sensor data, audio, and text in over 150 languages). Learn more </span><a href=\"https://www.acme.com/resources/blog/multi-modal-fusion-ai-for-real-time-event-detection/\" target=\"_blank\"><u>here</u></a><span>. </span></p><p style=\"text-align:inherit\"></p><p><b>The opportunity</b></p><ul><li>Meet sales quota and drive success: Conduct and execute detailed sales campaigns, achieving quarterly and annual sales targets with a robust, measurable sales process</li><li>Build a pipeline, leverage partners and network: Build a strong pipeline through proactive prospecting, strategic networking, and leveraging our growing list of partners</li><li>Cultivate strong client relationships: Cultivate and sustain valuable client relationships whilst skilfully navigating and closing complex enterprise deals</li><li>Develop deep customer insights: Develop comprehensive insights into customer use cases, internal decision-making processes, budget cycles, and other critical information</li><li>Master competitive analysis: Analyze the competitive landscape and understand customer needs in order to position Acme’s portfolio of solutions effectively to meet customer needs and stand out from the competition</li><li>Provide product feedback: Provide valuable feedback to cross-functional teams (Product, Engineering) to drive the continuous enhancement, updates and improvements of our products</li></ul><br /><p><b>What you bring</b></p><p>At Acme, we value you for who you are. We encourage you to apply for this role, even if you don&#39;t meet every qualification. Our candidates are reviewed on the basis of their skill and potential to succeed.</p><ul><li>Minimum 7 years full sales cycle experience selling enterprise technology solutions to a SLED Client based across the NY Tristate area.</li><li>A hunter by nature, with expertise in  prospecting via a multi-channel approach including cold calling, channel partner relationships, LinkedIn outreach and networking </li><li>You have built relationships with senior SLED buyers and are able to leverage your existing network to gain introductions into new logos</li><li>A strategic seller, with expertise in account planning, you use a clear sales process (MEDDPICC preferred) to qualify and move deals through the pipeline to close</li><li>A history of consistent quota achievement and ability to deliver consistently against targets</li><li>Great understanding of a complex sales process and business drivers for enterprise clients</li><li>Experience working with a partner ecosystem to leverage your business opportunities</li></ul><br /><p><b>#LI-EC1</b></p><p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><b>About Acme</b></p><p style=\"text-align:left\"><span>At Acme, we are a mission driven team of talented builders, creators and visionaries who have real-world impact on how organizations are able to respond to events. Acme’s groundbreaking, AI-powered, intelligence platform provides organizations with the earliest signals of emerging risks, events, and threats before they unfold. Trusted by two-thirds of the Fortune 50 and half of the Fortune 100, Acme’s platform analyzes billions of public data inputs spanning text, image, video, audio and sensor data across 150&#43; languages, empowering our clients to stay one step ahead in an increasingly complex world where every second counts. </span></p><p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><span>Founded in 2009, we have pioneered the world’s first real-time event detection platform, long before the recent Gen AI ‘boom.’ Acme operates all around the world united by our passion to use AI for the greater good, be agents of positive change and put our technology into the hands of clients charged with the responsibility to keep organizations running and keep people safe.</span></p><p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><span>As our employees focus on developing our revolutionary technology, we focus on our employees. Acme is proud to offer a variety of flexible work arrangements, offices all over the world to foster collaboration, generous PTO and sick leave, and more, as part of our competitive benefits package aimed at keeping all our employees happy and healthy. Explore all our benefits </span><b><a href=\"https://www.acme.com/resources/blog/acme-provides-competitive-benefits-to-support-employee-wellness-and-well-being/\" target=\"_blank\"><u>here</u></a></b><span>. </span></p><p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><span>We believe our differences give us strength. Our employees are empowered to be their best, authentic selves through various opportunities, such as our robust employee resource group (ERG) network, manager development programming, professional development funds, and more.</span></p><p style=\"text-align:inherit\"></p><p style=\"text-align:left\"><span>We serve a global community made up of many cultures and strive to reflect the world and clients we serve, with a workforce built on merit and equity. We actively condemn racism and discrimination in any form. We stand for social good, fostering a culture of allyship, and standing up for those who face systemic barriers to equality. We lead with empathy and strive to be agents of positive change in our company and in our communities.</span></p><p style=\"text-align:inherit\"></p>The annual on-target earnings (OTE) for this position are $231,200 - $340,000,  which consists of the annual base salary and annual commission target for the role. You will also be eligible to receive Company equity. Actual OTE will be based on a number of factors including, but not limited to, geographic location, applicant skills, and prior relevant experience.<p style=\"text-align:inherit !important\"></p><p style=\"text-align:left !important\"><i><b>Acme is an equal opportunity and affirmative action employer. Individuals seeking employment at Acme are considered without regards to race, sex, color, creed, religion, national origin, age, disability, genetics, marital status, pregnancy, unemployment status, sexual orientation, citizenship status or veteran status.</b></i></p><p style=\"text-align:inherit !important\"></p><p style=\"text-align:left !important\"><i><b>Acme will collect and process your personal data in accordance with Acme’s candidate privacy notice available </b></i><a target=\"_blank\" href=\"https://urldefense.proofpoint.com/v2/url?u&#61;https-3A__www.acme.com_careers_candidate-2Dprivacy-2Dpolicy_&amp;d&#61;DwMFaQ&amp;c&#61;euGZstcaTDllvimEN8b7jXrwqOf-v5A_CdpgnVfiiMM&amp;r&#61;7JBoUYWRhbOlyz_l5FB61SPTeTRvne2D6JyWQzUHjyI&amp;m&#61;ucYRR8uTHF6f1iJQeFNVOn33CU5bvao8-eGWNiKToRCJyMtdCd7WihjBiyCxYkt3&amp;s&#61;npsMIg8Niv_hL3BAnS_iYgGrG-GNH2hy_Q7yNDQdbW8&amp;e&#61;\"><span style=\"color:#0000ff\"><i><b><u>here</u></b></i></span></a><i><b>. By providing your details and applying via our careers website, you acknowledge that you have read our candidate privacy notice. If you have any queries, please contact </b></i><a target=\"_blank\" href=\"mailto:recruiting&#64;acme.com\"><span style=\"color:#0000ff\"><i><b><u>recruiting&#64;acme.com</u></b></i></span></a><i><b> or </b></i><a target=\"_blank\" href=\"mailto:privacy&#64;acme.com\"><span style=\"color:#0000ff\"><i><b><u>privacy&#64;acme.com</u></b></i></span></a><i><b>.</b></i></p><p></p><p><a target=\"_blank\" href=\"https://www.acme.com/automated-employment-decision-tools-in-new-york-city/\"><span style=\"color:#0000ff\"><i><b><u>Notice Regarding Automated Employment Decision Tools in New York City</u></b></i></span></a></p><p style=\"text-align:inherit !important\"></p>",
+     "location": "New York, NY",
+     "additionalLocations": [
+      "US Remote",
+      "NY - Hybrid"
+     ],
+     "postedOn": "Posted Yesterday",
+     "startDate": "2026-11-12",
+     "timeType": "Full time",
+     "jobReqId": "JR2140",
+     "jobPostingId": "Account-Executive---SLED---NY-NJ_JR2140-1",
+     "jobPostingSiteId": "Careers",
+     "country": {
+      "descriptor": "United States of America",
+      "id": "bc33aa3152ec42d4995f4791a106ed09"
+     },
+     "logoImage": {
+      "src": "/wday/cxs/acme/Careers/sidebarimage/38372323dc3f1000dd46ea494fe90000",
+      "alt": "Acme Logo"
+     },
+     "canApply": true,
+     "posted": true,
+     "includeResumeParsing": true,
+     "jobRequisitionLocation": {
+      "descriptor": "NY",
+      "country": {
+       "descriptor": "United States of America",
+       "id": "bc33aa3152ec42d4995f4791a106ed09",
+       "alpha2Code": "US"
+      }
+     },
+     "externalUrl": "https://acme.wd5.myworkdayjobs.com/Careers/job/New-York-NY/Account-Executive---SLED---NY-NJ_JR2140-1",
+     "questionnaireId": "098a161cd3781006562b2fe716150000"
+    },
+    "hiringOrganization": {
+     "name": "Acme, Inc.",
+     "url": ""
+    },
+    "similarJobs": [
+     {
+      "title": "Account Executive, Enterprise (TOLA)",
+      "externalPath": "/job/US-Remote/Account-Executive--Enterprise--TOLA-_JR2123",
+      "timeType": "Full time",
+      "locationsText": "US Remote",
+      "postedOn": "Posted 23 Days Ago",
+      "startDate": "2026-10-21"
+     }
+    ],
+    "userAuthenticated": false
+   }
+  },
+  {
+   "method": "POST",
+   "url": "https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/Careers/jobs",
+   "json": {
+    "appliedFacets": {
+     "locations": [
+      "d0a457db0c471001be448f1aeb660000"
+     ]
+    },
+    "limit": 20,
+    "offset": 0,
+    "searchText": ""
+   },
+   "status": 200,
+   "body": {
+    "total": 6,
+    "jobPostings": [
+     {
+      "title": "Customer Success Manager",
+      "externalPath": "/job/New-York-NY/Customer-Success-Manager_JR2141",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted Yesterday",
+      "bulletFields": [
+       "JR2141"
+      ]
+     },
+     {
+      "title": "Vice President, Product Marketing (Defense)",
+      "externalPath": "/job/Arlington-VA/Vice-President--Product-Marketing--Defense-_JR2136",
+      "locationsText": "Arlington, VA",
+      "postedOn": "Posted 7 Days Ago",
+      "bulletFields": [
+       "JR2136"
+      ]
+     },
+     {
+      "title": "Customer Success Manager, US DOD (Army)",
+      "externalPath": "/job/VA---Hybrid/Customer-Success-Manager--US-DOD_JR2117",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted 11 Days Ago",
+      "bulletFields": [
+       "JR2117"
+      ]
+     },
+     {
+      "title": "Senior Software Engineer, AI Research",
+      "externalPath": "/job/NY---Hybrid/Senior-Software-Engineer--AI-Research_JR2087-1",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted 16 Days Ago",
+      "bulletFields": [
+       "JR2087"
+      ]
+     },
+     {
+      "title": "Senior Research Scientist",
+      "externalPath": "/job/New-York-NY/Senior-Research-Scientist_JR2128-1",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted 21 Days Ago",
+      "bulletFields": [
+       "JR2128"
+      ]
+     },
+     {
+      "title": "Senior Director, AI Engineering",
+      "externalPath": "/job/New-York-NY/Senior-Director--AI-Engineering_JR2086-1",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted 30+ Days Ago",
+      "bulletFields": [
+       "JR2086"
+      ]
+     }
+    ],
+    "facets": [
+     {
+      "facetParameter": "jobFamilyGroup",
+      "descriptor": "Job Category",
+      "values": [
+       {
+        "descriptor": "AI & Engineering",
+        "id": "2b4a1545fce5100313d918bb15fe0000",
+        "count": 3
+       },
+       {
+        "descriptor": "Sales",
+        "id": "2b4a1545fce5100313d925570d3d0000",
+        "count": 2
+       },
+       {
+        "descriptor": "Marketing",
+        "id": "2b4a1545fce5100313d9375a86fd0000",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "facetParameter": "timeType",
+      "descriptor": "Time Type",
+      "values": [
+       {
+        "descriptor": "Full time",
+        "id": "b67def4bbbb11000b66ff5c34b2b0000",
+        "count": 6
+       }
+      ]
+     },
+     {
+      "facetParameter": "locationMainGroup",
+      "values": [
+       {
+        "facetParameter": "locations",
+        "descriptor": "Locations",
+        "values": [
+         {
+          "descriptor": "US Remote",
+          "id": "2b4a1545fce5100313ff0545e6dc0000",
+          "count": 6
+         },
+         {
+          "descriptor": "Arlington, VA",
+          "id": "d0a457db0c471001be448f1aeb660000",
+          "count": 6
+         },
+         {
+          "descriptor": "New York, NY",
+          "id": "d0a457db0c471001be3206b051aa0000",
+          "count": 5
+         },
+         {
+          "descriptor": "London, UK",
+          "id": "d0a457db0c471001bdd1a91a775f0000",
+          "count": 4
+         },
+         {
+          "descriptor": "UK - Remote",
+          "id": "d0a457db0c471002166456d6d0700000",
+          "count": 3
+         },
+         {
+          "descriptor": "Denmark - Remote",
+          "id": "d0a457db0c471002167872dc7c870000",
+          "count": 3
+         },
+         {
+          "descriptor": "VA - Hybrid",
+          "id": "e7c51e2f8c3b1010795cb96acdd60000",
+          "count": 2
+         },
+         {
+          "descriptor": "NY - Hybrid",
+          "id": "61a744d22f05100e5331e80a9f910000",
+          "count": 2
+         },
+         {
+          "descriptor": "London - Hybrid",
+          "id": "e7c51e2f8c3b10107939cb70deb50000",
+          "count": 2
+         },
+         {
+          "descriptor": "VA - Remote",
+          "id": "2b4a1545fce5100313fd9422797a0000",
+          "count": 1
+         },
+         {
+          "descriptor": "UK",
+          "id": "2b4a1545fce5100313fe08f6b9d80000",
+          "count": 1
+         },
+         {
+          "descriptor": "NY - Remote",
+          "id": "2b4a1545fce5100313ff3bedd3ea0000",
+          "count": 1
+         },
+         {
+          "descriptor": "Ireland - Remote",
+          "id": "d0a457db0c47100216aa840ae2010000",
+          "count": 1
+         },
+         {
+          "descriptor": "DEN - Remote",
+          "id": "2b4a1545fce5100313fe02f535510000",
+          "count": 1
+         },
+         {
+          "descriptor": "Australia - Remote",
+          "id": "d0a457db0c4710021689da92ab2c0000",
+          "count": 1
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "userAuthenticated": false
+   }
+  },
+  {
+   "method": "POST",
+   "url": "https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/Careers/jobs",
+   "json": {
+    "appliedFacets": {
+     "locations": [
+      "d0a457db0c4710021689da92ab2c0000"
+     ]
+    },
+    "limit": 20,
+    "offset": 0,
+    "searchText": ""
+   },
+   "status": 200,
+   "body": {
+    "total": 1,
+    "jobPostings": [
+     {
+      "title": "Subject Matter Expert Manager, Domain Expert - MENA",
+      "externalPath": "/job/Australia---Remote/Subject-Matter-Expert-Manager--Domain-Expert---MENA_JR2109",
+      "locationsText": "Australia - Remote",
+      "postedOn": "Posted 30+ Days Ago",
+      "bulletFields": [
+       "JR2109"
+      ]
+     }
+    ],
+    "facets": [
+     {
+      "facetParameter": "jobFamilyGroup",
+      "descriptor": "Job Category",
+      "values": [
+       {
+        "descriptor": "Domain Expert",
+        "id": "2b4a1545fce5100313d91e205fee0000",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "facetParameter": "timeType",
+      "descriptor": "Time Type",
+      "values": [
+       {
+        "descriptor": "Full time",
+        "id": "b67def4bbbb11000b66ff5c34b2b0000",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "facetParameter": "locationMainGroup",
+      "values": [
+       {
+        "facetParameter": "locations",
+        "descriptor": "Locations",
+        "values": [
+         {
+          "descriptor": "US Remote",
+          "id": "2b4a1545fce5100313ff0545e6dc0000",
+          "count": 6
+         },
+         {
+          "descriptor": "Arlington, VA",
+          "id": "d0a457db0c471001be448f1aeb660000",
+          "count": 6
+         },
+         {
+          "descriptor": "New York, NY",
+          "id": "d0a457db0c471001be3206b051aa0000",
+          "count": 5
+         },
+         {
+          "descriptor": "London, UK",
+          "id": "d0a457db0c471001bdd1a91a775f0000",
+          "count": 4
+         },
+         {
+          "descriptor": "UK - Remote",
+          "id": "d0a457db0c471002166456d6d0700000",
+          "count": 3
+         },
+         {
+          "descriptor": "Denmark - Remote",
+          "id": "d0a457db0c471002167872dc7c870000",
+          "count": 3
+         },
+         {
+          "descriptor": "VA - Hybrid",
+          "id": "e7c51e2f8c3b1010795cb96acdd60000",
+          "count": 2
+         },
+         {
+          "descriptor": "NY - Hybrid",
+          "id": "61a744d22f05100e5331e80a9f910000",
+          "count": 2
+         },
+         {
+          "descriptor": "London - Hybrid",
+          "id": "e7c51e2f8c3b10107939cb70deb50000",
+          "count": 2
+         },
+         {
+          "descriptor": "VA - Remote",
+          "id": "2b4a1545fce5100313fd9422797a0000",
+          "count": 1
+         },
+         {
+          "descriptor": "UK",
+          "id": "2b4a1545fce5100313fe08f6b9d80000",
+          "count": 1
+         },
+         {
+          "descriptor": "NY - Remote",
+          "id": "2b4a1545fce5100313ff3bedd3ea0000",
+          "count": 1
+         },
+         {
+          "descriptor": "Ireland - Remote",
+          "id": "d0a457db0c47100216aa840ae2010000",
+          "count": 1
+         },
+         {
+          "descriptor": "DEN - Remote",
+          "id": "2b4a1545fce5100313fe02f535510000",
+          "count": 1
+         },
+         {
+          "descriptor": "Australia - Remote",
+          "id": "d0a457db0c4710021689da92ab2c0000",
+          "count": 1
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "userAuthenticated": false
+   }
+  },
+  {
+   "method": "POST",
+   "url": "https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/Careers/jobs",
+   "json": {
+    "appliedFacets": {
+     "locations": [
+      "d0a457db0c471002167872dc7c870000"
+     ]
+    },
+    "limit": 20,
+    "offset": 0,
+    "searchText": ""
+   },
+   "status": 200,
+   "body": {
+    "total": 3,
+    "jobPostings": [
+     {
+      "title": "Customer Success Manager, International Public Sector",
+      "externalPath": "/job/London-UK/Customer-Success-Manager--International-Public-Sector_JR2144",
+      "locationsText": "3 Locations",
+      "postedOn": "Posted Yesterday",
+      "bulletFields": [
+       "JR2144"
+      ]
+     },
+     {
+      "title": "Account Executive, International Defence",
+      "externalPath": "/job/London---Hybrid/Account-Executive--International-Defence_JR2064",
+      "locationsText": "3 Locations",
+      "postedOn": "Posted 28 Days Ago",
+      "bulletFields": [
+       "JR2064"
+      ]
+     },
+     {
+      "title": "Account Executive, International Defence (Iberia)",
+      "externalPath": "/job/UK---Remote/Account-Executive--International-Defence--Iberia-_JR2079",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted 30+ Days Ago",
+      "bulletFields": [
+       "JR2079"
+      ]
+     }
+    ],
+    "facets": [
+     {
+      "facetParameter": "jobFamilyGroup",
+      "descriptor": "Job Category",
+      "values": [
+       {
+        "descriptor": "Sales",
+        "id": "2b4a1545fce5100313d925570d3d0000",
+        "count": 3
+       }
+      ]
+     },
+     {
+      "facetParameter": "timeType",
+      "descriptor": "Time Type",
+      "values": [
+       {
+        "descriptor": "Full time",
+        "id": "b67def4bbbb11000b66ff5c34b2b0000",
+        "count": 3
+       }
+      ]
+     },
+     {
+      "facetParameter": "locationMainGroup",
+      "values": [
+       {
+        "facetParameter": "locations",
+        "descriptor": "Locations",
+        "values": [
+         {
+          "descriptor": "Arlington, VA",
+          "id": "d0a457db0c471001be448f1aeb660000",
+          "count": 6
+         },
+         {
+          "descriptor": "US Remote",
+          "id": "2b4a1545fce5100313ff0545e6dc0000",
+          "count": 6
+         },
+         {
+          "descriptor": "New York, NY",
+          "id": "d0a457db0c471001be3206b051aa0000",
+          "count": 5
+         },
+         {
+          "descriptor": "London, UK",
+          "id": "d0a457db0c471001bdd1a91a775f0000",
+          "count": 4
+         },
+         {
+          "descriptor": "UK - Remote",
+          "id": "d0a457db0c471002166456d6d0700000",
+          "count": 3
+         },
+         {
+          "descriptor": "Denmark - Remote",
+          "id": "d0a457db0c471002167872dc7c870000",
+          "count": 3
+         },
+         {
+          "descriptor": "VA - Hybrid",
+          "id": "e7c51e2f8c3b1010795cb96acdd60000",
+          "count": 2
+         },
+         {
+          "descriptor": "NY - Hybrid",
+          "id": "61a744d22f05100e5331e80a9f910000",
+          "count": 2
+         },
+         {
+          "descriptor": "London - Hybrid",
+          "id": "e7c51e2f8c3b10107939cb70deb50000",
+          "count": 2
+         },
+         {
+          "descriptor": "VA - Remote",
+          "id": "2b4a1545fce5100313fd9422797a0000",
+          "count": 1
+         },
+         {
+          "descriptor": "UK",
+          "id": "2b4a1545fce5100313fe08f6b9d80000",
+          "count": 1
+         },
+         {
+          "descriptor": "NY - Remote",
+          "id": "2b4a1545fce5100313ff3bedd3ea0000",
+          "count": 1
+         },
+         {
+          "descriptor": "Ireland - Remote",
+          "id": "d0a457db0c47100216aa840ae2010000",
+          "count": 1
+         },
+         {
+          "descriptor": "DEN - Remote",
+          "id": "2b4a1545fce5100313fe02f535510000",
+          "count": 1
+         },
+         {
+          "descriptor": "Australia - Remote",
+          "id": "d0a457db0c4710021689da92ab2c0000",
+          "count": 1
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "userAuthenticated": false
+   }
+  },
+  {
+   "method": "POST",
+   "url": "https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/Careers/jobs",
+   "json": {
+    "appliedFacets": {
+     "locations": [
+      "2b4a1545fce5100313fe02f535510000"
+     ]
+    },
+    "limit": 20,
+    "offset": 0,
+    "searchText": ""
+   },
+   "status": 200,
+   "body": {
+    "total": 1,
+    "jobPostings": [
+     {
+      "title": "Customer Success Manager, International Public Sector",
+      "externalPath": "/job/London-UK/Customer-Success-Manager--International-Public-Sector_JR2144",
+      "locationsText": "3 Locations",
+      "postedOn": "Posted Yesterday",
+      "bulletFields": [
+       "JR2144"
+      ]
+     }
+    ],
+    "facets": [
+     {
+      "facetParameter": "jobFamilyGroup",
+      "descriptor": "Job Category",
+      "values": [
+       {
+        "descriptor": "Sales",
+        "id": "2b4a1545fce5100313d925570d3d0000",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "facetParameter": "timeType",
+      "descriptor": "Time Type",
+      "values": [
+       {
+        "descriptor": "Full time",
+        "id": "b67def4bbbb11000b66ff5c34b2b0000",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "facetParameter": "locationMainGroup",
+      "values": [
+       {
+        "facetParameter": "locations",
+        "descriptor": "Locations",
+        "values": [
+         {
+          "descriptor": "US Remote",
+          "id": "2b4a1545fce5100313ff0545e6dc0000",
+          "count": 6
+         },
+         {
+          "descriptor": "Arlington, VA",
+          "id": "d0a457db0c471001be448f1aeb660000",
+          "count": 6
+         },
+         {
+          "descriptor": "New York, NY",
+          "id": "d0a457db0c471001be3206b051aa0000",
+          "count": 5
+         },
+         {
+          "descriptor": "London, UK",
+          "id": "d0a457db0c471001bdd1a91a775f0000",
+          "count": 4
+         },
+         {
+          "descriptor": "UK - Remote",
+          "id": "d0a457db0c471002166456d6d0700000",
+          "count": 3
+         },
+         {
+          "descriptor": "Denmark - Remote",
+          "id": "d0a457db0c471002167872dc7c870000",
+          "count": 3
+         },
+         {
+          "descriptor": "VA - Hybrid",
+          "id": "e7c51e2f8c3b1010795cb96acdd60000",
+          "count": 2
+         },
+         {
+          "descriptor": "NY - Hybrid",
+          "id": "61a744d22f05100e5331e80a9f910000",
+          "count": 2
+         },
+         {
+          "descriptor": "London - Hybrid",
+          "id": "e7c51e2f8c3b10107939cb70deb50000",
+          "count": 2
+         },
+         {
+          "descriptor": "DEN - Remote",
+          "id": "2b4a1545fce5100313fe02f535510000",
+          "count": 1
+         },
+         {
+          "descriptor": "Australia - Remote",
+          "id": "d0a457db0c4710021689da92ab2c0000",
+          "count": 1
+         },
+         {
+          "descriptor": "VA - Remote",
+          "id": "2b4a1545fce5100313fd9422797a0000",
+          "count": 1
+         },
+         {
+          "descriptor": "UK",
+          "id": "2b4a1545fce5100313fe08f6b9d80000",
+          "count": 1
+         },
+         {
+          "descriptor": "NY - Remote",
+          "id": "2b4a1545fce5100313ff3bedd3ea0000",
+          "count": 1
+         },
+         {
+          "descriptor": "Ireland - Remote",
+          "id": "d0a457db0c47100216aa840ae2010000",
+          "count": 1
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "userAuthenticated": false
+   }
+  },
+  {
+   "method": "POST",
+   "url": "https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/Careers/jobs",
+   "json": {
+    "appliedFacets": {
+     "locations": [
+      "d0a457db0c47100216aa840ae2010000"
+     ]
+    },
+    "limit": 20,
+    "offset": 0,
+    "searchText": ""
+   },
+   "status": 200,
+   "body": {
+    "total": 1,
+    "jobPostings": [
+     {
+      "title": "Account Executive, International Defence",
+      "externalPath": "/job/London---Hybrid/Account-Executive--International-Defence_JR2064",
+      "locationsText": "3 Locations",
+      "postedOn": "Posted 28 Days Ago",
+      "bulletFields": [
+       "JR2064"
+      ]
+     }
+    ],
+    "facets": [
+     {
+      "facetParameter": "jobFamilyGroup",
+      "descriptor": "Job Category",
+      "values": [
+       {
+        "descriptor": "Sales",
+        "id": "2b4a1545fce5100313d925570d3d0000",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "facetParameter": "timeType",
+      "descriptor": "Time Type",
+      "values": [
+       {
+        "descriptor": "Full time",
+        "id": "b67def4bbbb11000b66ff5c34b2b0000",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "facetParameter": "locationMainGroup",
+      "values": [
+       {
+        "facetParameter": "locations",
+        "descriptor": "Locations",
+        "values": [
+         {
+          "descriptor": "US Remote",
+          "id": "2b4a1545fce5100313ff0545e6dc0000",
+          "count": 6
+         },
+         {
+          "descriptor": "Arlington, VA",
+          "id": "d0a457db0c471001be448f1aeb660000",
+          "count": 6
+         },
+         {
+          "descriptor": "New York, NY",
+          "id": "d0a457db0c471001be3206b051aa0000",
+          "count": 5
+         },
+         {
+          "descriptor": "London, UK",
+          "id": "d0a457db0c471001bdd1a91a775f0000",
+          "count": 4
+         },
+         {
+          "descriptor": "UK - Remote",
+          "id": "d0a457db0c471002166456d6d0700000",
+          "count": 3
+         },
+         {
+          "descriptor": "Denmark - Remote",
+          "id": "d0a457db0c471002167872dc7c870000",
+          "count": 3
+         },
+         {
+          "descriptor": "NY - Hybrid",
+          "id": "61a744d22f05100e5331e80a9f910000",
+          "count": 2
+         },
+         {
+          "descriptor": "London - Hybrid",
+          "id": "e7c51e2f8c3b10107939cb70deb50000",
+          "count": 2
+         },
+         {
+          "descriptor": "VA - Hybrid",
+          "id": "e7c51e2f8c3b1010795cb96acdd60000",
+          "count": 2
+         },
+         {
+          "descriptor": "VA - Remote",
+          "id": "2b4a1545fce5100313fd9422797a0000",
+          "count": 1
+         },
+         {
+          "descriptor": "UK",
+          "id": "2b4a1545fce5100313fe08f6b9d80000",
+          "count": 1
+         },
+         {
+          "descriptor": "NY - Remote",
+          "id": "2b4a1545fce5100313ff3bedd3ea0000",
+          "count": 1
+         },
+         {
+          "descriptor": "Ireland - Remote",
+          "id": "d0a457db0c47100216aa840ae2010000",
+          "count": 1
+         },
+         {
+          "descriptor": "DEN - Remote",
+          "id": "2b4a1545fce5100313fe02f535510000",
+          "count": 1
+         },
+         {
+          "descriptor": "Australia - Remote",
+          "id": "d0a457db0c4710021689da92ab2c0000",
+          "count": 1
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "userAuthenticated": false
+   }
+  },
+  {
+   "method": "POST",
+   "url": "https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/Careers/jobs",
+   "json": {
+    "appliedFacets": {
+     "locations": [
+      "d0a457db0c471001bdd1a91a775f0000"
+     ]
+    },
+    "limit": 20,
+    "offset": 0,
+    "searchText": ""
+   },
+   "status": 200,
+   "body": {
+    "total": 4,
+    "jobPostings": [
+     {
+      "title": "Customer Success Manager, International Public Sector",
+      "externalPath": "/job/London-UK/Customer-Success-Manager--International-Public-Sector_JR2144",
+      "locationsText": "3 Locations",
+      "postedOn": "Posted Yesterday",
+      "bulletFields": [
+       "JR2144"
+      ]
+     },
+     {
+      "title": "Senior Manager, Account Development",
+      "externalPath": "/job/London-UK/Senior-Manager--Account-Development_JR2124",
+      "locationsText": "London, UK",
+      "postedOn": "Posted 15 Days Ago",
+      "bulletFields": [
+       "JR2124"
+      ]
+     },
+     {
+      "title": "Senior Account Executive, Corporate Security",
+      "externalPath": "/job/London-UK/Senior-Account-Executive--Corporate-Security_JR2102",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted 28 Days Ago",
+      "bulletFields": [
+       "JR2102"
+      ]
+     },
+     {
+      "title": "Key Account Director, Public Sector (EMEA)",
+      "externalPath": "/job/London-UK/Key-Account-Director--Public-Sector--EMEA-_JR2095",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted 30+ Days Ago",
+      "bulletFields": [
+       "JR2095"
+      ]
+     }
+    ],
+    "facets": [
+     {
+      "facetParameter": "jobFamilyGroup",
+      "descriptor": "Job Category",
+      "values": [
+       {
+        "descriptor": "Sales",
+        "id": "2b4a1545fce5100313d925570d3d0000",
+        "count": 3
+       },
+       {
+        "descriptor": "Marketing",
+        "id": "2b4a1545fce5100313d9375a86fd0000",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "facetParameter": "timeType",
+      "descriptor": "Time Type",
+      "values": [
+       {
+        "descriptor": "Full time",
+        "id": "b67def4bbbb11000b66ff5c34b2b0000",
+        "count": 4
+       }
+      ]
+     },
+     {
+      "facetParameter": "locationMainGroup",
+      "values": [
+       {
+        "facetParameter": "locations",
+        "descriptor": "Locations",
+        "values": [
+         {
+          "descriptor": "US Remote",
+          "id": "2b4a1545fce5100313ff0545e6dc0000",
+          "count": 6
+         },
+         {
+          "descriptor": "Arlington, VA",
+          "id": "d0a457db0c471001be448f1aeb660000",
+          "count": 6
+         },
+         {
+          "descriptor": "New York, NY",
+          "id": "d0a457db0c471001be3206b051aa0000",
+          "count": 5
+         },
+         {
+          "descriptor": "London, UK",
+          "id": "d0a457db0c471001bdd1a91a775f0000",
+          "count": 4
+         },
+         {
+          "descriptor": "UK - Remote",
+          "id": "d0a457db0c471002166456d6d0700000",
+          "count": 3
+         },
+         {
+          "descriptor": "Denmark - Remote",
+          "id": "d0a457db0c471002167872dc7c870000",
+          "count": 3
+         },
+         {
+          "descriptor": "VA - Hybrid",
+          "id": "e7c51e2f8c3b1010795cb96acdd60000",
+          "count": 2
+         },
+         {
+          "descriptor": "NY - Hybrid",
+          "id": "61a744d22f05100e5331e80a9f910000",
+          "count": 2
+         },
+         {
+          "descriptor": "London - Hybrid",
+          "id": "e7c51e2f8c3b10107939cb70deb50000",
+          "count": 2
+         },
+         {
+          "descriptor": "VA - Remote",
+          "id": "2b4a1545fce5100313fd9422797a0000",
+          "count": 1
+         },
+         {
+          "descriptor": "UK",
+          "id": "2b4a1545fce5100313fe08f6b9d80000",
+          "count": 1
+         },
+         {
+          "descriptor": "NY - Remote",
+          "id": "2b4a1545fce5100313ff3bedd3ea0000",
+          "count": 1
+         },
+         {
+          "descriptor": "Ireland - Remote",
+          "id": "d0a457db0c47100216aa840ae2010000",
+          "count": 1
+         },
+         {
+          "descriptor": "DEN - Remote",
+          "id": "2b4a1545fce5100313fe02f535510000",
+          "count": 1
+         },
+         {
+          "descriptor": "Australia - Remote",
+          "id": "d0a457db0c4710021689da92ab2c0000",
+          "count": 1
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "userAuthenticated": false
+   }
+  },
+  {
+   "method": "POST",
+   "url": "https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/Careers/jobs",
+   "json": {
+    "appliedFacets": {
+     "locations": [
+      "e7c51e2f8c3b10107939cb70deb50000"
+     ]
+    },
+    "limit": 20,
+    "offset": 0,
+    "searchText": ""
+   },
+   "status": 200,
+   "body": {
+    "total": 2,
+    "jobPostings": [
+     {
+      "title": "Technical Support Engineer",
+      "externalPath": "/job/London---Hybrid/Technical-Support-Engineer_JR2112",
+      "locationsText": "London - Hybrid",
+      "postedOn": "Posted 28 Days Ago",
+      "bulletFields": [
+       "JR2112"
+      ]
+     },
+     {
+      "title": "Account Executive, International Defence",
+      "externalPath": "/job/London---Hybrid/Account-Executive--International-Defence_JR2064",
+      "locationsText": "3 Locations",
+      "postedOn": "Posted 28 Days Ago",
+      "bulletFields": [
+       "JR2064"
+      ]
+     }
+    ],
+    "facets": [
+     {
+      "facetParameter": "jobFamilyGroup",
+      "descriptor": "Job Category",
+      "values": [
+       {
+        "descriptor": "AI & Engineering",
+        "id": "2b4a1545fce5100313d918bb15fe0000",
+        "count": 1
+       },
+       {
+        "descriptor": "Sales",
+        "id": "2b4a1545fce5100313d925570d3d0000",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "facetParameter": "timeType",
+      "descriptor": "Time Type",
+      "values": [
+       {
+        "descriptor": "Full time",
+        "id": "b67def4bbbb11000b66ff5c34b2b0000",
+        "count": 2
+       }
+      ]
+     },
+     {
+      "facetParameter": "locationMainGroup",
+      "values": [
+       {
+        "facetParameter": "locations",
+        "descriptor": "Locations",
+        "values": [
+         {
+          "descriptor": "US Remote",
+          "id": "2b4a1545fce5100313ff0545e6dc0000",
+          "count": 6
+         },
+         {
+          "descriptor": "Arlington, VA",
+          "id": "d0a457db0c471001be448f1aeb660000",
+          "count": 6
+         },
+         {
+          "descriptor": "New York, NY",
+          "id": "d0a457db0c471001be3206b051aa0000",
+          "count": 5
+         },
+         {
+          "descriptor": "London, UK",
+          "id": "d0a457db0c471001bdd1a91a775f0000",
+          "count": 4
+         },
+         {
+          "descriptor": "UK - Remote",
+          "id": "d0a457db0c471002166456d6d0700000",
+          "count": 3
+         },
+         {
+          "descriptor": "Denmark - Remote",
+          "id": "d0a457db0c471002167872dc7c870000",
+          "count": 3
+         },
+         {
+          "descriptor": "VA - Hybrid",
+          "id": "e7c51e2f8c3b1010795cb96acdd60000",
+          "count": 2
+         },
+         {
+          "descriptor": "NY - Hybrid",
+          "id": "61a744d22f05100e5331e80a9f910000",
+          "count": 2
+         },
+         {
+          "descriptor": "London - Hybrid",
+          "id": "e7c51e2f8c3b10107939cb70deb50000",
+          "count": 2
+         },
+         {
+          "descriptor": "VA - Remote",
+          "id": "2b4a1545fce5100313fd9422797a0000",
+          "count": 1
+         },
+         {
+          "descriptor": "UK",
+          "id": "2b4a1545fce5100313fe08f6b9d80000",
+          "count": 1
+         },
+         {
+          "descriptor": "NY - Remote",
+          "id": "2b4a1545fce5100313ff3bedd3ea0000",
+          "count": 1
+         },
+         {
+          "descriptor": "Ireland - Remote",
+          "id": "d0a457db0c47100216aa840ae2010000",
+          "count": 1
+         },
+         {
+          "descriptor": "DEN - Remote",
+          "id": "2b4a1545fce5100313fe02f535510000",
+          "count": 1
+         },
+         {
+          "descriptor": "Australia - Remote",
+          "id": "d0a457db0c4710021689da92ab2c0000",
+          "count": 1
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "userAuthenticated": false
+   }
+  },
+  {
+   "method": "POST",
+   "url": "https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/Careers/jobs",
+   "json": {
+    "appliedFacets": {
+     "locations": [
+      "d0a457db0c471001be3206b051aa0000"
+     ]
+    },
+    "limit": 20,
+    "offset": 0,
+    "searchText": ""
+   },
+   "status": 200,
+   "body": {
+    "total": 5,
+    "jobPostings": [
+     {
+      "title": "Product Manager III, Cybersecurity Integrations",
+      "externalPath": "/job/US-Remote/Product-Manager-III--Cybersecurity-Integrations_JR2130",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted Yesterday",
+      "bulletFields": [
+       "JR2130"
+      ]
+     },
+     {
+      "title": "Customer Success Manager",
+      "externalPath": "/job/New-York-NY/Customer-Success-Manager_JR2141",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted Yesterday",
+      "bulletFields": [
+       "JR2141"
+      ]
+     },
+     {
+      "title": "Account Executive, (SLED)  NY/NJ",
+      "externalPath": "/job/New-York-NY/Account-Executive---SLED---NY-NJ_JR2140-1",
+      "locationsText": "3 Locations",
+      "postedOn": "Posted Yesterday",
+      "bulletFields": [
+       "JR2140"
+      ]
+     },
+     {
+      "title": "Senior Research Scientist",
+      "externalPath": "/job/New-York-NY/Senior-Research-Scientist_JR2128-1",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted 21 Days Ago",
+      "bulletFields": [
+       "JR2128"
+      ]
+     },
+     {
+      "title": "Senior Director, AI Engineering",
+      "externalPath": "/job/New-York-NY/Senior-Director--AI-Engineering_JR2086-1",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted 30+ Days Ago",
+      "bulletFields": [
+       "JR2086"
+      ]
+     }
+    ],
+    "facets": [
+     {
+      "facetParameter": "jobFamilyGroup",
+      "descriptor": "Job Category",
+      "values": [
+       {
+        "descriptor": "Sales",
+        "id": "2b4a1545fce5100313d925570d3d0000",
+        "count": 2
+       },
+       {
+        "descriptor": "AI & Engineering",
+        "id": "2b4a1545fce5100313d918bb15fe0000",
+        "count": 2
+       },
+       {
+        "descriptor": "Product",
+        "id": "2b4a1545fce5100313d91bbc119b0000",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "facetParameter": "timeType",
+      "descriptor": "Time Type",
+      "values": [
+       {
+        "descriptor": "Full time",
+        "id": "b67def4bbbb11000b66ff5c34b2b0000",
+        "count": 5
+       }
+      ]
+     },
+     {
+      "facetParameter": "locationMainGroup",
+      "values": [
+       {
+        "facetParameter": "locations",
+        "descriptor": "Locations",
+        "values": [
+         {
+          "descriptor": "US Remote",
+          "id": "2b4a1545fce5100313ff0545e6dc0000",
+          "count": 6
+         },
+         {
+          "descriptor": "Arlington, VA",
+          "id": "d0a457db0c471001be448f1aeb660000",
+          "count": 6
+         },
+         {
+          "descriptor": "New York, NY",
+          "id": "d0a457db0c471001be3206b051aa0000",
+          "count": 5
+         },
+         {
+          "descriptor": "London, UK",
+          "id": "d0a457db0c471001bdd1a91a775f0000",
+          "count": 4
+         },
+         {
+          "descriptor": "UK - Remote",
+          "id": "d0a457db0c471002166456d6d0700000",
+          "count": 3
+         },
+         {
+          "descriptor": "Denmark - Remote",
+          "id": "d0a457db0c471002167872dc7c870000",
+          "count": 3
+         },
+         {
+          "descriptor": "VA - Hybrid",
+          "id": "e7c51e2f8c3b1010795cb96acdd60000",
+          "count": 2
+         },
+         {
+          "descriptor": "NY - Hybrid",
+          "id": "61a744d22f05100e5331e80a9f910000",
+          "count": 2
+         },
+         {
+          "descriptor": "London - Hybrid",
+          "id": "e7c51e2f8c3b10107939cb70deb50000",
+          "count": 2
+         },
+         {
+          "descriptor": "VA - Remote",
+          "id": "2b4a1545fce5100313fd9422797a0000",
+          "count": 1
+         },
+         {
+          "descriptor": "UK",
+          "id": "2b4a1545fce5100313fe08f6b9d80000",
+          "count": 1
+         },
+         {
+          "descriptor": "NY - Remote",
+          "id": "2b4a1545fce5100313ff3bedd3ea0000",
+          "count": 1
+         },
+         {
+          "descriptor": "Ireland - Remote",
+          "id": "d0a457db0c47100216aa840ae2010000",
+          "count": 1
+         },
+         {
+          "descriptor": "DEN - Remote",
+          "id": "2b4a1545fce5100313fe02f535510000",
+          "count": 1
+         },
+         {
+          "descriptor": "Australia - Remote",
+          "id": "d0a457db0c4710021689da92ab2c0000",
+          "count": 1
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "userAuthenticated": false
+   }
+  },
+  {
+   "method": "POST",
+   "url": "https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/Careers/jobs",
+   "json": {
+    "appliedFacets": {
+     "locations": [
+      "61a744d22f05100e5331e80a9f910000"
+     ]
+    },
+    "limit": 20,
+    "offset": 0,
+    "searchText": ""
+   },
+   "status": 200,
+   "body": {
+    "total": 2,
+    "jobPostings": [
+     {
+      "title": "Account Executive, (SLED)  NY/NJ",
+      "externalPath": "/job/New-York-NY/Account-Executive---SLED---NY-NJ_JR2140-1",
+      "locationsText": "3 Locations",
+      "postedOn": "Posted Yesterday",
+      "bulletFields": [
+       "JR2140"
+      ]
+     },
+     {
+      "title": "Senior Software Engineer, AI Research",
+      "externalPath": "/job/NY---Hybrid/Senior-Software-Engineer--AI-Research_JR2087-1",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted 16 Days Ago",
+      "bulletFields": [
+       "JR2087"
+      ]
+     }
+    ],
+    "facets": [
+     {
+      "facetParameter": "jobFamilyGroup",
+      "descriptor": "Job Category",
+      "values": [
+       {
+        "descriptor": "Sales",
+        "id": "2b4a1545fce5100313d925570d3d0000",
+        "count": 1
+       },
+       {
+        "descriptor": "AI & Engineering",
+        "id": "2b4a1545fce5100313d918bb15fe0000",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "facetParameter": "timeType",
+      "descriptor": "Time Type",
+      "values": [
+       {
+        "descriptor": "Full time",
+        "id": "b67def4bbbb11000b66ff5c34b2b0000",
+        "count": 2
+       }
+      ]
+     },
+     {
+      "facetParameter": "locationMainGroup",
+      "values": [
+       {
+        "facetParameter": "locations",
+        "descriptor": "Locations",
+        "values": [
+         {
+          "descriptor": "US Remote",
+          "id": "2b4a1545fce5100313ff0545e6dc0000",
+          "count": 6
+         },
+         {
+          "descriptor": "Arlington, VA",
+          "id": "d0a457db0c471001be448f1aeb660000",
+          "count": 6
+         },
+         {
+          "descriptor": "New York, NY",
+          "id": "d0a457db0c471001be3206b051aa0000",
+          "count": 5
+         },
+         {
+          "descriptor": "London, UK",
+          "id": "d0a457db0c471001bdd1a91a775f0000",
+          "count": 4
+         },
+         {
+          "descriptor": "UK - Remote",
+          "id": "d0a457db0c471002166456d6d0700000",
+          "count": 3
+         },
+         {
+          "descriptor": "Denmark - Remote",
+          "id": "d0a457db0c471002167872dc7c870000",
+          "count": 3
+         },
+         {
+          "descriptor": "VA - Hybrid",
+          "id": "e7c51e2f8c3b1010795cb96acdd60000",
+          "count": 2
+         },
+         {
+          "descriptor": "NY - Hybrid",
+          "id": "61a744d22f05100e5331e80a9f910000",
+          "count": 2
+         },
+         {
+          "descriptor": "London - Hybrid",
+          "id": "e7c51e2f8c3b10107939cb70deb50000",
+          "count": 2
+         },
+         {
+          "descriptor": "VA - Remote",
+          "id": "2b4a1545fce5100313fd9422797a0000",
+          "count": 1
+         },
+         {
+          "descriptor": "UK",
+          "id": "2b4a1545fce5100313fe08f6b9d80000",
+          "count": 1
+         },
+         {
+          "descriptor": "NY - Remote",
+          "id": "2b4a1545fce5100313ff3bedd3ea0000",
+          "count": 1
+         },
+         {
+          "descriptor": "Ireland - Remote",
+          "id": "d0a457db0c47100216aa840ae2010000",
+          "count": 1
+         },
+         {
+          "descriptor": "DEN - Remote",
+          "id": "2b4a1545fce5100313fe02f535510000",
+          "count": 1
+         },
+         {
+          "descriptor": "Australia - Remote",
+          "id": "d0a457db0c4710021689da92ab2c0000",
+          "count": 1
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "userAuthenticated": false
+   }
+  },
+  {
+   "method": "POST",
+   "url": "https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/Careers/jobs",
+   "json": {
+    "appliedFacets": {
+     "locations": [
+      "2b4a1545fce5100313ff3bedd3ea0000"
+     ]
+    },
+    "limit": 20,
+    "offset": 0,
+    "searchText": ""
+   },
+   "status": 200,
+   "body": {
+    "total": 1,
+    "jobPostings": [
+     {
+      "title": "Customer Success Manager, Cyber",
+      "externalPath": "/job/VA---Remote/Customer-Success-Manager--Cyber_JR2113",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted 28 Days Ago",
+      "bulletFields": [
+       "JR2113"
+      ]
+     }
+    ],
+    "facets": [
+     {
+      "facetParameter": "jobFamilyGroup",
+      "descriptor": "Job Category",
+      "values": [
+       {
+        "descriptor": "Sales",
+        "id": "2b4a1545fce5100313d925570d3d0000",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "facetParameter": "timeType",
+      "descriptor": "Time Type",
+      "values": [
+       {
+        "descriptor": "Full time",
+        "id": "b67def4bbbb11000b66ff5c34b2b0000",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "facetParameter": "locationMainGroup",
+      "values": [
+       {
+        "facetParameter": "locations",
+        "descriptor": "Locations",
+        "values": [
+         {
+          "descriptor": "US Remote",
+          "id": "2b4a1545fce5100313ff0545e6dc0000",
+          "count": 6
+         },
+         {
+          "descriptor": "Arlington, VA",
+          "id": "d0a457db0c471001be448f1aeb660000",
+          "count": 6
+         },
+         {
+          "descriptor": "New York, NY",
+          "id": "d0a457db0c471001be3206b051aa0000",
+          "count": 5
+         },
+         {
+          "descriptor": "London, UK",
+          "id": "d0a457db0c471001bdd1a91a775f0000",
+          "count": 4
+         },
+         {
+          "descriptor": "UK - Remote",
+          "id": "d0a457db0c471002166456d6d0700000",
+          "count": 3
+         },
+         {
+          "descriptor": "Denmark - Remote",
+          "id": "d0a457db0c471002167872dc7c870000",
+          "count": 3
+         },
+         {
+          "descriptor": "VA - Hybrid",
+          "id": "e7c51e2f8c3b1010795cb96acdd60000",
+          "count": 2
+         },
+         {
+          "descriptor": "NY - Hybrid",
+          "id": "61a744d22f05100e5331e80a9f910000",
+          "count": 2
+         },
+         {
+          "descriptor": "London - Hybrid",
+          "id": "e7c51e2f8c3b10107939cb70deb50000",
+          "count": 2
+         },
+         {
+          "descriptor": "VA - Remote",
+          "id": "2b4a1545fce5100313fd9422797a0000",
+          "count": 1
+         },
+         {
+          "descriptor": "UK",
+          "id": "2b4a1545fce5100313fe08f6b9d80000",
+          "count": 1
+         },
+         {
+          "descriptor": "NY - Remote",
+          "id": "2b4a1545fce5100313ff3bedd3ea0000",
+          "count": 1
+         },
+         {
+          "descriptor": "Ireland - Remote",
+          "id": "d0a457db0c47100216aa840ae2010000",
+          "count": 1
+         },
+         {
+          "descriptor": "DEN - Remote",
+          "id": "2b4a1545fce5100313fe02f535510000",
+          "count": 1
+         },
+         {
+          "descriptor": "Australia - Remote",
+          "id": "d0a457db0c4710021689da92ab2c0000",
+          "count": 1
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "userAuthenticated": false
+   }
+  },
+  {
+   "method": "POST",
+   "url": "https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/Careers/jobs",
+   "json": {
+    "appliedFacets": {
+     "locations": [
+      "2b4a1545fce5100313fe08f6b9d80000"
+     ]
+    },
+    "limit": 20,
+    "offset": 0,
+    "searchText": ""
+   },
+   "status": 200,
+   "body": {
+    "total": 1,
+    "jobPostings": [
+     {
+      "title": "Forward Deployed Engineer",
+      "externalPath": "/job/UK/Forward-Deployed-Engineer_JR2082-1",
+      "locationsText": "UK",
+      "postedOn": "Posted 30 Days Ago",
+      "bulletFields": [
+       "JR2082"
+      ]
+     }
+    ],
+    "facets": [
+     {
+      "facetParameter": "jobFamilyGroup",
+      "descriptor": "Job Category",
+      "values": [
+       {
+        "descriptor": "AI & Engineering",
+        "id": "2b4a1545fce5100313d918bb15fe0000",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "facetParameter": "timeType",
+      "descriptor": "Time Type",
+      "values": [
+       {
+        "descriptor": "Full time",
+        "id": "b67def4bbbb11000b66ff5c34b2b0000",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "facetParameter": "locationMainGroup",
+      "values": [
+       {
+        "facetParameter": "locations",
+        "descriptor": "Locations",
+        "values": [
+         {
+          "descriptor": "US Remote",
+          "id": "2b4a1545fce5100313ff0545e6dc0000",
+          "count": 6
+         },
+         {
+          "descriptor": "Arlington, VA",
+          "id": "d0a457db0c471001be448f1aeb660000",
+          "count": 6
+         },
+         {
+          "descriptor": "New York, NY",
+          "id": "d0a457db0c471001be3206b051aa0000",
+          "count": 5
+         },
+         {
+          "descriptor": "London, UK",
+          "id": "d0a457db0c471001bdd1a91a775f0000",
+          "count": 4
+         },
+         {
+          "descriptor": "UK - Remote",
+          "id": "d0a457db0c471002166456d6d0700000",
+          "count": 3
+         },
+         {
+          "descriptor": "Denmark - Remote",
+          "id": "d0a457db0c471002167872dc7c870000",
+          "count": 3
+         },
+         {
+          "descriptor": "VA - Hybrid",
+          "id": "e7c51e2f8c3b1010795cb96acdd60000",
+          "count": 2
+         },
+         {
+          "descriptor": "NY - Hybrid",
+          "id": "61a744d22f05100e5331e80a9f910000",
+          "count": 2
+         },
+         {
+          "descriptor": "London - Hybrid",
+          "id": "e7c51e2f8c3b10107939cb70deb50000",
+          "count": 2
+         },
+         {
+          "descriptor": "VA - Remote",
+          "id": "2b4a1545fce5100313fd9422797a0000",
+          "count": 1
+         },
+         {
+          "descriptor": "UK",
+          "id": "2b4a1545fce5100313fe08f6b9d80000",
+          "count": 1
+         },
+         {
+          "descriptor": "NY - Remote",
+          "id": "2b4a1545fce5100313ff3bedd3ea0000",
+          "count": 1
+         },
+         {
+          "descriptor": "Ireland - Remote",
+          "id": "d0a457db0c47100216aa840ae2010000",
+          "count": 1
+         },
+         {
+          "descriptor": "DEN - Remote",
+          "id": "2b4a1545fce5100313fe02f535510000",
+          "count": 1
+         },
+         {
+          "descriptor": "Australia - Remote",
+          "id": "d0a457db0c4710021689da92ab2c0000",
+          "count": 1
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "userAuthenticated": false
+   }
+  },
+  {
+   "method": "POST",
+   "url": "https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/Careers/jobs",
+   "json": {
+    "appliedFacets": {
+     "locations": [
+      "d0a457db0c471002166456d6d0700000"
+     ]
+    },
+    "limit": 20,
+    "offset": 0,
+    "searchText": ""
+   },
+   "status": 200,
+   "body": {
+    "total": 3,
+    "jobPostings": [
+     {
+      "title": "Senior Account Executive, Corporate Security",
+      "externalPath": "/job/London-UK/Senior-Account-Executive--Corporate-Security_JR2102",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted 28 Days Ago",
+      "bulletFields": [
+       "JR2102"
+      ]
+     },
+     {
+      "title": "Key Account Director, Public Sector (EMEA)",
+      "externalPath": "/job/London-UK/Key-Account-Director--Public-Sector--EMEA-_JR2095",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted 30+ Days Ago",
+      "bulletFields": [
+       "JR2095"
+      ]
+     },
+     {
+      "title": "Account Executive, International Defence (Iberia)",
+      "externalPath": "/job/UK---Remote/Account-Executive--International-Defence--Iberia-_JR2079",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted 30+ Days Ago",
+      "bulletFields": [
+       "JR2079"
+      ]
+     }
+    ],
+    "facets": [
+     {
+      "facetParameter": "jobFamilyGroup",
+      "descriptor": "Job Category",
+      "values": [
+       {
+        "descriptor": "Sales",
+        "id": "2b4a1545fce5100313d925570d3d0000",
+        "count": 3
+       }
+      ]
+     },
+     {
+      "facetParameter": "timeType",
+      "descriptor": "Time Type",
+      "values": [
+       {
+        "descriptor": "Full time",
+        "id": "b67def4bbbb11000b66ff5c34b2b0000",
+        "count": 3
+       }
+      ]
+     },
+     {
+      "facetParameter": "locationMainGroup",
+      "values": [
+       {
+        "facetParameter": "locations",
+        "descriptor": "Locations",
+        "values": [
+         {
+          "descriptor": "US Remote",
+          "id": "2b4a1545fce5100313ff0545e6dc0000",
+          "count": 6
+         },
+         {
+          "descriptor": "Arlington, VA",
+          "id": "d0a457db0c471001be448f1aeb660000",
+          "count": 6
+         },
+         {
+          "descriptor": "New York, NY",
+          "id": "d0a457db0c471001be3206b051aa0000",
+          "count": 5
+         },
+         {
+          "descriptor": "London, UK",
+          "id": "d0a457db0c471001bdd1a91a775f0000",
+          "count": 4
+         },
+         {
+          "descriptor": "UK - Remote",
+          "id": "d0a457db0c471002166456d6d0700000",
+          "count": 3
+         },
+         {
+          "descriptor": "Denmark - Remote",
+          "id": "d0a457db0c471002167872dc7c870000",
+          "count": 3
+         },
+         {
+          "descriptor": "VA - Hybrid",
+          "id": "e7c51e2f8c3b1010795cb96acdd60000",
+          "count": 2
+         },
+         {
+          "descriptor": "NY - Hybrid",
+          "id": "61a744d22f05100e5331e80a9f910000",
+          "count": 2
+         },
+         {
+          "descriptor": "London - Hybrid",
+          "id": "e7c51e2f8c3b10107939cb70deb50000",
+          "count": 2
+         },
+         {
+          "descriptor": "VA - Remote",
+          "id": "2b4a1545fce5100313fd9422797a0000",
+          "count": 1
+         },
+         {
+          "descriptor": "UK",
+          "id": "2b4a1545fce5100313fe08f6b9d80000",
+          "count": 1
+         },
+         {
+          "descriptor": "NY - Remote",
+          "id": "2b4a1545fce5100313ff3bedd3ea0000",
+          "count": 1
+         },
+         {
+          "descriptor": "Ireland - Remote",
+          "id": "d0a457db0c47100216aa840ae2010000",
+          "count": 1
+         },
+         {
+          "descriptor": "DEN - Remote",
+          "id": "2b4a1545fce5100313fe02f535510000",
+          "count": 1
+         },
+         {
+          "descriptor": "Australia - Remote",
+          "id": "d0a457db0c4710021689da92ab2c0000",
+          "count": 1
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "userAuthenticated": false
+   }
+  },
+  {
+   "method": "POST",
+   "url": "https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/Careers/jobs",
+   "json": {
+    "appliedFacets": {
+     "locations": [
+      "2b4a1545fce5100313ff0545e6dc0000"
+     ]
+    },
+    "limit": 20,
+    "offset": 0,
+    "searchText": ""
+   },
+   "status": 200,
+   "body": {
+    "total": 6,
+    "jobPostings": [
+     {
+      "title": "Product Manager III, Cybersecurity Integrations",
+      "externalPath": "/job/US-Remote/Product-Manager-III--Cybersecurity-Integrations_JR2130",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted Yesterday",
+      "bulletFields": [
+       "JR2130"
+      ]
+     },
+     {
+      "title": "Account Executive, (SLED)  NY/NJ",
+      "externalPath": "/job/New-York-NY/Account-Executive---SLED---NY-NJ_JR2140-1",
+      "locationsText": "3 Locations",
+      "postedOn": "Posted Yesterday",
+      "bulletFields": [
+       "JR2140"
+      ]
+     },
+     {
+      "title": "Account Executive, Enterprise (TOLA)",
+      "externalPath": "/job/US-Remote/Account-Executive--Enterprise--TOLA-_JR2123",
+      "locationsText": "US Remote",
+      "postedOn": "Posted 23 Days Ago",
+      "bulletFields": [
+       "JR2123"
+      ]
+     },
+     {
+      "title": "Subject Matter Expert Domain Expert - MENA",
+      "externalPath": "/job/US-Remote/Subject-Matter-Expert-Domain-Expert---MENA_JR2108",
+      "locationsText": "US Remote",
+      "postedOn": "Posted 24 Days Ago",
+      "bulletFields": [
+       "JR2108"
+      ]
+     },
+     {
+      "title": "Forward Deployed Engineer",
+      "externalPath": "/job/US-Remote/Forward-Deployed-Engineer_JR2111-1",
+      "locationsText": "US Remote",
+      "postedOn": "Posted 30+ Days Ago",
+      "bulletFields": [
+       "JR2111"
+      ]
+     },
+     {
+      "title": "Product Manager Cyber Intel",
+      "externalPath": "/job/US-Remote/Product-Manager-Cyber-Intel_JR2106-1",
+      "locationsText": "US Remote",
+      "postedOn": "Posted 30+ Days Ago",
+      "bulletFields": [
+       "JR2106"
+      ]
+     }
+    ],
+    "facets": [
+     {
+      "facetParameter": "jobFamilyGroup",
+      "descriptor": "Job Category",
+      "values": [
+       {
+        "descriptor": "Sales",
+        "id": "2b4a1545fce5100313d925570d3d0000",
+        "count": 2
+       },
+       {
+        "descriptor": "Product",
+        "id": "2b4a1545fce5100313d91bbc119b0000",
+        "count": 2
+       },
+       {
+        "descriptor": "Domain Expert",
+        "id": "2b4a1545fce5100313d91e205fee0000",
+        "count": 1
+       },
+       {
+        "descriptor": "AI & Engineering",
+        "id": "2b4a1545fce5100313d918bb15fe0000",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "facetParameter": "timeType",
+      "descriptor": "Time Type",
+      "values": [
+       {
+        "descriptor": "Full time",
+        "id": "b67def4bbbb11000b66ff5c34b2b0000",
+        "count": 6
+       }
+      ]
+     },
+     {
+      "facetParameter": "locationMainGroup",
+      "values": [
+       {
+        "facetParameter": "locations",
+        "descriptor": "Locations",
+        "values": [
+         {
+          "descriptor": "US Remote",
+          "id": "2b4a1545fce5100313ff0545e6dc0000",
+          "count": 6
+         },
+         {
+          "descriptor": "Arlington, VA",
+          "id": "d0a457db0c471001be448f1aeb660000",
+          "count": 6
+         },
+         {
+          "descriptor": "New York, NY",
+          "id": "d0a457db0c471001be3206b051aa0000",
+          "count": 5
+         },
+         {
+          "descriptor": "London, UK",
+          "id": "d0a457db0c471001bdd1a91a775f0000",
+          "count": 4
+         },
+         {
+          "descriptor": "UK - Remote",
+          "id": "d0a457db0c471002166456d6d0700000",
+          "count": 3
+         },
+         {
+          "descriptor": "Denmark - Remote",
+          "id": "d0a457db0c471002167872dc7c870000",
+          "count": 3
+         },
+         {
+          "descriptor": "VA - Hybrid",
+          "id": "e7c51e2f8c3b1010795cb96acdd60000",
+          "count": 2
+         },
+         {
+          "descriptor": "NY - Hybrid",
+          "id": "61a744d22f05100e5331e80a9f910000",
+          "count": 2
+         },
+         {
+          "descriptor": "London - Hybrid",
+          "id": "e7c51e2f8c3b10107939cb70deb50000",
+          "count": 2
+         },
+         {
+          "descriptor": "NY - Remote",
+          "id": "2b4a1545fce5100313ff3bedd3ea0000",
+          "count": 1
+         },
+         {
+          "descriptor": "Ireland - Remote",
+          "id": "d0a457db0c47100216aa840ae2010000",
+          "count": 1
+         },
+         {
+          "descriptor": "DEN - Remote",
+          "id": "2b4a1545fce5100313fe02f535510000",
+          "count": 1
+         },
+         {
+          "descriptor": "Australia - Remote",
+          "id": "d0a457db0c4710021689da92ab2c0000",
+          "count": 1
+         },
+         {
+          "descriptor": "VA - Remote",
+          "id": "2b4a1545fce5100313fd9422797a0000",
+          "count": 1
+         },
+         {
+          "descriptor": "UK",
+          "id": "2b4a1545fce5100313fe08f6b9d80000",
+          "count": 1
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "userAuthenticated": false
+   }
+  },
+  {
+   "method": "POST",
+   "url": "https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/Careers/jobs",
+   "json": {
+    "appliedFacets": {
+     "locations": [
+      "e7c51e2f8c3b1010795cb96acdd60000"
+     ]
+    },
+    "limit": 20,
+    "offset": 0,
+    "searchText": ""
+   },
+   "status": 200,
+   "body": {
+    "total": 2,
+    "jobPostings": [
+     {
+      "title": "Customer Success Manager, US DOD (Army)",
+      "externalPath": "/job/VA---Hybrid/Customer-Success-Manager--US-DOD_JR2117",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted 11 Days Ago",
+      "bulletFields": [
+       "JR2117"
+      ]
+     },
+     {
+      "title": "Account Executive, Federal Civilian (VA, HHS)",
+      "externalPath": "/job/VA---Hybrid/Account-Executive--Federal-Civilian--VA--DHHS-_JR2104",
+      "locationsText": "VA - Hybrid",
+      "postedOn": "Posted 28 Days Ago",
+      "bulletFields": [
+       "JR2104"
+      ]
+     }
+    ],
+    "facets": [
+     {
+      "facetParameter": "jobFamilyGroup",
+      "descriptor": "Job Category",
+      "values": [
+       {
+        "descriptor": "Sales",
+        "id": "2b4a1545fce5100313d925570d3d0000",
+        "count": 2
+       }
+      ]
+     },
+     {
+      "facetParameter": "timeType",
+      "descriptor": "Time Type",
+      "values": [
+       {
+        "descriptor": "Full time",
+        "id": "b67def4bbbb11000b66ff5c34b2b0000",
+        "count": 2
+       }
+      ]
+     },
+     {
+      "facetParameter": "locationMainGroup",
+      "values": [
+       {
+        "facetParameter": "locations",
+        "descriptor": "Locations",
+        "values": [
+         {
+          "descriptor": "US Remote",
+          "id": "2b4a1545fce5100313ff0545e6dc0000",
+          "count": 6
+         },
+         {
+          "descriptor": "Arlington, VA",
+          "id": "d0a457db0c471001be448f1aeb660000",
+          "count": 6
+         },
+         {
+          "descriptor": "New York, NY",
+          "id": "d0a457db0c471001be3206b051aa0000",
+          "count": 5
+         },
+         {
+          "descriptor": "London, UK",
+          "id": "d0a457db0c471001bdd1a91a775f0000",
+          "count": 4
+         },
+         {
+          "descriptor": "UK - Remote",
+          "id": "d0a457db0c471002166456d6d0700000",
+          "count": 3
+         },
+         {
+          "descriptor": "Denmark - Remote",
+          "id": "d0a457db0c471002167872dc7c870000",
+          "count": 3
+         },
+         {
+          "descriptor": "VA - Hybrid",
+          "id": "e7c51e2f8c3b1010795cb96acdd60000",
+          "count": 2
+         },
+         {
+          "descriptor": "NY - Hybrid",
+          "id": "61a744d22f05100e5331e80a9f910000",
+          "count": 2
+         },
+         {
+          "descriptor": "London - Hybrid",
+          "id": "e7c51e2f8c3b10107939cb70deb50000",
+          "count": 2
+         },
+         {
+          "descriptor": "VA - Remote",
+          "id": "2b4a1545fce5100313fd9422797a0000",
+          "count": 1
+         },
+         {
+          "descriptor": "UK",
+          "id": "2b4a1545fce5100313fe08f6b9d80000",
+          "count": 1
+         },
+         {
+          "descriptor": "NY - Remote",
+          "id": "2b4a1545fce5100313ff3bedd3ea0000",
+          "count": 1
+         },
+         {
+          "descriptor": "Ireland - Remote",
+          "id": "d0a457db0c47100216aa840ae2010000",
+          "count": 1
+         },
+         {
+          "descriptor": "DEN - Remote",
+          "id": "2b4a1545fce5100313fe02f535510000",
+          "count": 1
+         },
+         {
+          "descriptor": "Australia - Remote",
+          "id": "d0a457db0c4710021689da92ab2c0000",
+          "count": 1
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "userAuthenticated": false
+   }
+  },
+  {
+   "method": "POST",
+   "url": "https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/Careers/jobs",
+   "json": {
+    "appliedFacets": {
+     "locations": [
+      "2b4a1545fce5100313fd9422797a0000"
+     ]
+    },
+    "limit": 20,
+    "offset": 0,
+    "searchText": ""
+   },
+   "status": 200,
+   "body": {
+    "total": 1,
+    "jobPostings": [
+     {
+      "title": "Customer Success Manager, Cyber",
+      "externalPath": "/job/VA---Remote/Customer-Success-Manager--Cyber_JR2113",
+      "locationsText": "2 Locations",
+      "postedOn": "Posted 28 Days Ago",
+      "bulletFields": [
+       "JR2113"
+      ]
+     }
+    ],
+    "facets": [
+     {
+      "facetParameter": "jobFamilyGroup",
+      "descriptor": "Job Category",
+      "values": [
+       {
+        "descriptor": "Sales",
+        "id": "2b4a1545fce5100313d925570d3d0000",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "facetParameter": "timeType",
+      "descriptor": "Time Type",
+      "values": [
+       {
+        "descriptor": "Full time",
+        "id": "b67def4bbbb11000b66ff5c34b2b0000",
+        "count": 1
+       }
+      ]
+     },
+     {
+      "facetParameter": "locationMainGroup",
+      "values": [
+       {
+        "facetParameter": "locations",
+        "descriptor": "Locations",
+        "values": [
+         {
+          "descriptor": "US Remote",
+          "id": "2b4a1545fce5100313ff0545e6dc0000",
+          "count": 6
+         },
+         {
+          "descriptor": "Arlington, VA",
+          "id": "d0a457db0c471001be448f1aeb660000",
+          "count": 6
+         },
+         {
+          "descriptor": "New York, NY",
+          "id": "d0a457db0c471001be3206b051aa0000",
+          "count": 5
+         },
+         {
+          "descriptor": "London, UK",
+          "id": "d0a457db0c471001bdd1a91a775f0000",
+          "count": 4
+         },
+         {
+          "descriptor": "UK - Remote",
+          "id": "d0a457db0c471002166456d6d0700000",
+          "count": 3
+         },
+         {
+          "descriptor": "Denmark - Remote",
+          "id": "d0a457db0c471002167872dc7c870000",
+          "count": 3
+         },
+         {
+          "descriptor": "VA - Hybrid",
+          "id": "e7c51e2f8c3b1010795cb96acdd60000",
+          "count": 2
+         },
+         {
+          "descriptor": "NY - Hybrid",
+          "id": "61a744d22f05100e5331e80a9f910000",
+          "count": 2
+         },
+         {
+          "descriptor": "London - Hybrid",
+          "id": "e7c51e2f8c3b10107939cb70deb50000",
+          "count": 2
+         },
+         {
+          "descriptor": "VA - Remote",
+          "id": "2b4a1545fce5100313fd9422797a0000",
+          "count": 1
+         },
+         {
+          "descriptor": "UK",
+          "id": "2b4a1545fce5100313fe08f6b9d80000",
+          "count": 1
+         },
+         {
+          "descriptor": "NY - Remote",
+          "id": "2b4a1545fce5100313ff3bedd3ea0000",
+          "count": 1
+         },
+         {
+          "descriptor": "Ireland - Remote",
+          "id": "d0a457db0c47100216aa840ae2010000",
+          "count": 1
+         },
+         {
+          "descriptor": "DEN - Remote",
+          "id": "2b4a1545fce5100313fe02f535510000",
+          "count": 1
+         },
+         {
+          "descriptor": "Australia - Remote",
+          "id": "d0a457db0c4710021689da92ab2c0000",
+          "count": 1
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "userAuthenticated": false
+   }
+  }
+ ]
+}

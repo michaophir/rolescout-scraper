@@ -108,6 +108,11 @@ def add_board(conn, name: str, source: str, ref: str, *, origin: str = "manual",
         raise CompanyError(f"unknown source {source!r}; expected one of {', '.join(sorted(ADAPTERS))}")
     if not ref:
         raise CompanyError("board reference is empty")
+    try:
+        # One stored spelling per board; for Workday this also accepts a URL.
+        ref = ADAPTERS[source].canonical_ref(ref)
+    except ValueError as exc:
+        raise CompanyError(str(exc)) from None
     owner = conn.execute(
         "SELECT c.name FROM boards b JOIN companies c ON c.id = b.company_id "
         "WHERE b.source = ? AND b.ref = ?", (source, ref)).fetchone()
@@ -120,16 +125,25 @@ def add_board(conn, name: str, source: str, ref: str, *, origin: str = "manual",
             (company["id"], source, ref, origin, evidence, utc_now())).lastrowid
 
 
+def board_ref(source: str, ref: str) -> str:
+    """The stored spelling of a reference; text that is not one comes back stripped."""
+    try:
+        return ADAPTERS[source].canonical_ref(ref)
+    except (KeyError, ValueError):
+        return ref.strip()
+
+
 def remove_board(conn, name: str, source: str, ref: str) -> int:
     """Unmap a board. Its open roles are closed now, since nothing will fetch
     them again; their one-line rows stay. Returns how many roles were closed.
     """
     company = get_company(conn, name)
+    ref = board_ref(source, ref)
     board = conn.execute(
         "SELECT id FROM boards WHERE company_id = ? AND source = ? AND ref = ?",
-        (company["id"], source, ref.strip())).fetchone()
+        (company["id"], source, ref)).fetchone()
     if board is None:
-        raise CompanyError(f"{company['name']} has no board {source}/{ref.strip()}")
+        raise CompanyError(f"{company['name']} has no board {source}/{ref}")
     now = utc_now()
     with transaction(conn):
         conn.execute(

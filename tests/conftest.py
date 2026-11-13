@@ -60,11 +60,16 @@ class FakeWeb:
             url, body = body
         return FakeWebResponse(url, body, 200)
 
+    def request(self, method, url, **kwargs):
+        """Any method is served like a GET (the Workday list endpoint takes a POST)."""
+        return self.get(url, **kwargs)
+
 
 class FakeWebResponse:
     def __init__(self, url, body, status_code):
         self.url = url
         self.status_code = status_code
+        self.headers = {}
         self._body = body
         self.text = body if isinstance(body, str) else json.dumps(body)
 

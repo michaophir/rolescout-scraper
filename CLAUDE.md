@@ -82,6 +82,22 @@ Google and Meta are unsupported (JS-rendered job boards).
 
 ---
 
+## Conventions
+
+- Adapters are built per job system by default. A single-company adapter is
+  allowed only when that company runs its own career site with no shared job
+  system behind it, and it is named as an exception in CLAUDE.md with the
+  reason. Company-specific branches inside a shared adapter are not allowed.
+- No real company names in code, comments, docstrings, error messages, tool
+  descriptions, CLI help, docs or tests. Use a neutral example such as
+  `acme/wd5/Careers`.
+- Target companies are personal data. They live in the database, not in the
+  repo.
+- Fixtures are recorded from real boards and then anonymized, and are named
+  after the behavior they test.
+
+---
+
 ## Notes
 
 - Do not modify input files without asking the user

@@ -9,7 +9,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from itertools import groupby
 
-from rolescout.adapters import get_adapter
+from rolescout.adapters import FetchContext, KnownRole, get_adapter
 from rolescout.db import transaction, utc_now
 from rolescout.http import make_session
 from rolescout.models import Role
@@ -38,6 +38,9 @@ class BoardResult:
     roles_fetched: int | None = None
     baseline: bool = False       # this board's first successful fetch
     duration_ms: int = 0
+    requests: int | None = None  # HTTP requests the fetch made, when the adapter counts them
+    complete: bool = True        # False: the fetch stopped early, so nothing was closed
+    note: str = ""
 
 
 @dataclass
@@ -122,7 +125,7 @@ def scout_is_running(conn: sqlite3.Connection) -> bool:
 
 
 def apply_fetch(conn: sqlite3.Connection, company_id: int, board_id: int,
-                roles: Iterable[Role], now: str) -> tuple[int, int, int]:
+                roles: Iterable[Role], now: str, *, complete: bool = True) -> tuple[int, int, int]:
     """Record one successful fetch of a board. Returns (new, reopened, closed).
 
     Must run inside a transaction. Every fetched role is inserted or updated
@@ -130,6 +133,11 @@ def apply_fetch(conn: sqlite3.Connection, company_id: int, board_id: int,
     the board that were not fetched get one more miss, and close on the
     second: the description is deleted (unless the role is marked saved or
     applied), the one-line row is kept.
+
+    A role fetched without a description keeps the one already stored: some
+    sources charge a request per description and are asked only once.
+    With ``complete`` False the fetch did not see the whole board, so no role
+    is counted as missing.
     """
     new = reopened = 0
     seen: set[int] = set()
@@ -157,13 +165,16 @@ def apply_fetch(conn: sqlite3.Connection, company_id: int, board_id: int,
             if row["closed_at"] is not None:
                 reopened += 1
         seen.add(role_id)
-        # The WHERE skips the write when the text is unchanged.
-        conn.execute(
-            "INSERT INTO role_descriptions (role_id, description) VALUES (?, ?) "
-            "ON CONFLICT (role_id) DO UPDATE SET description = excluded.description "
-            "WHERE description IS NOT excluded.description",
-            (role_id, role.description))
+        if role.description:
+            # The WHERE skips the write when the text is unchanged.
+            conn.execute(
+                "INSERT INTO role_descriptions (role_id, description) VALUES (?, ?) "
+                "ON CONFLICT (role_id) DO UPDATE SET description = excluded.description "
+                "WHERE description IS NOT excluded.description",
+                (role_id, role.description))
 
+    if not complete:
+        return new, reopened, 0
     open_ids = {r["id"] for r in conn.execute(
         "SELECT id FROM roles WHERE board_id = ? AND closed_at IS NULL", (board_id,))}
     missing = [(role_id,) for role_id in open_ids - seen]
@@ -177,6 +188,21 @@ def apply_fetch(conn: sqlite3.Connection, company_id: int, board_id: int,
         "(SELECT role_id FROM role_marks WHERE status IN ('saved', 'applied'))", closing)
     conn.executemany("UPDATE roles SET closed_at = ? WHERE id = ?", [(now, *c) for c in closing])
     return new, reopened, len(closing)
+
+
+def known_roles(conn: sqlite3.Connection, board_id: int) -> dict[str, KnownRole]:
+    """What is stored for the roles of one board, for adapters that fetch
+    descriptions one at a time and must not fetch one twice."""
+    rows = conn.execute(
+        "SELECT r.source_job_id, r.date_posted, r.location, r.workplace_type, "
+        "EXISTS (SELECT 1 FROM role_descriptions d WHERE d.role_id = r.id AND d.description != '') "
+        "  AS has_description, "
+        "EXISTS (SELECT 1 FROM role_marks m WHERE m.role_id = r.id "
+        "        AND m.status IN ('saved', 'applied')) AS keep "
+        "FROM roles r WHERE r.board_id = ?", (board_id,))
+    return {r["source_job_id"]: KnownRole(
+        date_posted=r["date_posted"], location=r["location"], workplace_type=r["workplace_type"],
+        has_description=bool(r["has_description"]), keep=bool(r["keep"])) for r in rows}
 
 
 def _open_by_department(conn, company_id: int) -> dict[str, int]:
@@ -203,8 +229,14 @@ def _run_scout(
     adapter_for: Callable[[str], object] | None = None,
     clock: Callable[[], str] = utc_now,
     on_board: Callable[[BoardResult], None] | None = None,
+    wants_description: Callable[[str], bool] | None = None,
 ) -> RunSummary:
     """Fetch every board of every active company once and record the run.
+
+    ``wants_description`` says, from a role's title, whether its description
+    is worth a request of its own. It matters only for sources that charge
+    one request per description (Workday); without it those sources fetch
+    descriptions for saved and applied roles only.
 
     Each company is committed on its own, so a failure (or an interrupt)
     never undoes the companies already done. ``delay`` is the minimum number
@@ -246,13 +278,26 @@ def _run_scout(
                 result = BoardResult(company=name, source=board["source"], ref=board["ref"])
                 started = time.monotonic()
                 roles: list[Role] = []
+                adapter = None
                 try:
-                    roles = adapter_for(board["source"]).fetch(board["ref"], company=name)
+                    adapter = adapter_for(board["source"])
+                    if getattr(adapter, "uses_context", False):
+                        context = FetchContext(
+                            wants_description=wants_description or (lambda title: False),
+                            known=known_roles(conn, board["board_id"]))
+                        roles = adapter.fetch(board["ref"], company=name, context=context)
+                    else:
+                        roles = adapter.fetch(board["ref"], company=name)
                     result.roles_fetched = len(roles)
                     result.baseline = board["last_success_at"] is None
                 except Exception as exc:  # one board's failure must not stop the run
                     result.status = "error"
                     result.error = str(exc) or type(exc).__name__
+                stats = getattr(adapter, "last_stats", None)
+                if stats is not None:
+                    result.requests = stats.requests
+                    result.complete = stats.complete or result.status != "ok"
+                    result.note = "; ".join(stats.notes) if result.status == "ok" else ""
                 result.duration_ms = int((time.monotonic() - started) * 1000)
                 fetched.append((board, result, roles))
 
@@ -261,23 +306,29 @@ def _run_scout(
                 for board, result, roles in fetched:
                     if result.status == "ok":
                         new, reopened, closed = apply_fetch(
-                            conn, company_id, board["board_id"], roles, now)
+                            conn, company_id, board["board_id"], roles, now,
+                            complete=result.complete)
                         snapshot.opened += reopened + (0 if result.baseline else new)
                         snapshot.closed += closed
                         snapshot.baseline = snapshot.baseline or result.baseline
+                        # A first fetch that was cut short is not the baseline
+                        # yet: the roles it did not reach must not count as
+                        # newly opened when a later fetch finds them.
                         conn.execute(
-                            "UPDATE boards SET last_success_at = ?, last_error = NULL, "
-                            "last_error_at = NULL WHERE id = ?", (now, board["board_id"]))
+                            "UPDATE boards SET last_success_at = CASE WHEN ? THEN ? ELSE last_success_at END, "
+                            "last_error = NULL, last_error_at = NULL WHERE id = ?",
+                            (int(result.complete or not result.baseline), now, board["board_id"]))
                     else:
                         conn.execute(
                             "UPDATE boards SET last_error = ?, last_error_at = ? WHERE id = ?",
                             (result.error, now, board["board_id"]))
                     conn.execute(
                         "INSERT INTO run_boards (run_id, company_id, source, ref, status, error, "
-                        "roles_fetched, baseline, duration_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        "roles_fetched, baseline, duration_ms, requests, note) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         (run_id, company_id, result.source, result.ref, result.status,
                          result.error, result.roles_fetched, int(result.baseline),
-                         result.duration_ms))
+                         result.duration_ms, result.requests, result.note))
                 snapshot.open_by_department = _open_by_department(conn, company_id)
                 snapshot.open_roles = sum(snapshot.open_by_department.values())
                 conn.execute(

@@ -80,7 +80,7 @@ def test_a_company_can_have_several_boards_but_a_board_has_one_owner(conn):
     with pytest.raises(CompanyError, match="already mapped to 'Acme'"):
         companies.add_board(conn, "Acme", "lever", "acme-eu")
     with pytest.raises(CompanyError, match="unknown source"):
-        companies.add_board(conn, "Bolt", "workday", "bolt")
+        companies.add_board(conn, "Bolt", "icims", "bolt")
     assert by_name(conn)["Bolt"]["boards"] == []
 
 

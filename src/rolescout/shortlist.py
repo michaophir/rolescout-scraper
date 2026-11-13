@@ -71,6 +71,13 @@ class RankingConfig:
         self._locations = [(p, pts, re.compile(re.escape(p), re.I))
                            for p, pts in self.preferred_locations.items()]
 
+    def wants_title(self, title: str) -> bool:
+        """Whether a role with this title can reach the shortlist at all: it
+        matches a wanted phrase and no excluded one."""
+        title = title or ""
+        return (any(pattern.search(title) for _, _, pattern in self._wanted)
+                and not any(pattern.search(title) for _, pattern in self._exclude))
+
 
 def _points_table(raw: object, where: str) -> dict[str, float]:
     if raw is None:

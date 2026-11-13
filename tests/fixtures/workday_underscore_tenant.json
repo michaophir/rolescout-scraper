@@ -1,0 +1,322 @@
+{
+ "recorded_on": "2026-11-13",
+ "board": "acme_corp/wd5/Careers",
+ "exchanges": [
+  {
+   "method": "GET",
+   "url": "https://acme-corp.wd5.myworkdayjobs.com/robots.txt",
+   "json": null,
+   "status": 200,
+   "body": "Sitemap: https://acme-corp.wd5.myworkdayjobs.com/Careers/siteMap.xml\n\nUser-agent: *\nAllow: /Careers/\nDisallow: /refreshFacet/"
+  },
+  {
+   "method": "POST",
+   "url": "https://acme-corp.wd5.myworkdayjobs.com/wday/cxs/acme-corp/Careers/jobs",
+   "json": {
+    "appliedFacets": {},
+    "limit": 20,
+    "offset": 0,
+    "searchText": ""
+   },
+   "status": 422,
+   "body": {
+    "errorCode": "HTTP_422",
+    "errorCaseId": "B1A68FMWF8UVZG",
+    "httpStatus": 422,
+    "locale": "en-US",
+    "message": "",
+    "messageParams": {}
+   }
+  },
+  {
+   "method": "POST",
+   "url": "https://acme-corp.wd5.myworkdayjobs.com/wday/cxs/acme_corp/Careers/jobs",
+   "json": {
+    "appliedFacets": {},
+    "limit": 20,
+    "offset": 0,
+    "searchText": ""
+   },
+   "status": 200,
+   "body": {
+    "total": 22,
+    "jobPostings": [
+     {
+      "title": "Engineer I",
+      "externalPath": "/job/New-York---New-York/Engineer-I_R-01440",
+      "locationsText": "New York - New York"
+     },
+     {
+      "title": "Account Manager, DSP Operations",
+      "externalPath": "/job/United-Kingdom---London/Account-Manager--DSP-Operations_R-01439-1",
+      "locationsText": "United Kingdom - London"
+     },
+     {
+      "title": "Account Director, Publisher Platforms - AdTech",
+      "externalPath": "/job/France---Paris/Account-Director--Publisher-Platforms---AdTech_R-01438",
+      "locationsText": "France - Paris"
+     },
+     {
+      "title": "Product Marketing Manager",
+      "externalPath": "/job/New-York---New-York/Product-Marketing-Manager_R-01434",
+      "locationsText": "2 Locations"
+     },
+     {
+      "title": "Senior Manager, Marketing,  Canada & LATAM",
+      "externalPath": "/job/Canada---Toronto/Senior-Manager--Marketing---Canada---LATAM_R-01433",
+      "locationsText": "Canada - Toronto"
+     },
+     {
+      "title": "Account Director, DV+ Platform",
+      "externalPath": "/job/New-York---New-York/Account-Director--DV--Platform_R-01432-1",
+      "locationsText": "2 Locations"
+     },
+     {
+      "title": "Senior Accountant",
+      "externalPath": "/job/California---Los-Angeles/Senior-Accountant_R-01431",
+      "locationsText": "California - Los Angeles"
+     },
+     {
+      "title": "Sales Account Manager - AdTech - Italy (Maternity Cover)",
+      "externalPath": "/job/Italy---Milano/Sales-Account-Manager---AdTech---Italy--Maternity-Cover-_R-01430",
+      "locationsText": "Italy - Milano"
+     },
+     {
+      "title": "Lead, Product Marketing Documentation",
+      "externalPath": "/job/California---Los-Angeles/Lead--Product-Marketing-Documentation_R-01426",
+      "locationsText": "2 Locations"
+     },
+     {
+      "title": "Lead, DV+ Platform, India",
+      "externalPath": "/job/India---Mumbai/Lead--DV--Platform--India_R-01427",
+      "locationsText": "2 Locations"
+     },
+     {
+      "title": "Commercial Counsel",
+      "externalPath": "/job/New-York---New-York/Commercial-Counsel_R-01425-1",
+      "locationsText": "New York - New York"
+     },
+     {
+      "title": "Engineer II",
+      "externalPath": "/job/Colorado---Broomfield/Engineer-II_R-01415",
+      "locationsText": "3 Locations"
+     },
+     {
+      "title": "Account Manager, Media Planning",
+      "externalPath": "/job/Colorado---Broomfield/Account-Manager--Media-Planning_R-01416",
+      "locationsText": "Colorado - Broomfield"
+     },
+     {
+      "title": "Senior Technical Operations Manager, Mobile",
+      "externalPath": "/job/New-York---New-York/Senior-Technical-Operations-Manager--Mobile_R-01414",
+      "locationsText": "5 Locations"
+     },
+     {
+      "title": "Database Platform Staff Engineer",
+      "externalPath": "/job/India---Remote/Database-Platform-Staff-Engineer_R-01411-1",
+      "locationsText": "India - Remote"
+     },
+     {
+      "title": "Senior Product Manager,  Mobile, DV+",
+      "externalPath": "/job/New-York---New-York/Senior-Product-Manager---Mobile--DV-_R-01413",
+      "locationsText": "3 Locations"
+     },
+     {
+      "title": "Engineer II",
+      "externalPath": "/job/Massachusetts---Boston/Engineer-II_R-01410",
+      "locationsText": "2 Locations"
+     },
+     {
+      "title": "Senior Technical Operations Manager",
+      "externalPath": "/job/New-York---New-York/Senior-Technical-Operations-Manager_R-01409",
+      "locationsText": "4 Locations"
+     },
+     {
+      "title": "Product Manager",
+      "externalPath": "/job/Massachusetts---Boston/Product-Manager_R-01407",
+      "locationsText": "Massachusetts - Boston"
+     },
+     {
+      "title": "Security Engineer",
+      "externalPath": "/job/India---Remote/Security-Engineer_R-01408-1",
+      "locationsText": "India - Remote"
+     }
+    ],
+    "facets": [
+     {
+      "facetParameter": "locationMainGroup",
+      "values": [
+       {
+        "facetParameter": "locationCountry",
+        "descriptor": "Location Country",
+        "values": [
+         {
+          "descriptor": "Canada",
+          "id": "a30a87ed25634629aa6c3958aa2b91ea",
+          "count": 1
+         },
+         {
+          "descriptor": "France",
+          "id": "54c5b6971ffb4bf0b116fe7651ec789a",
+          "count": 1
+         },
+         {
+          "descriptor": "India",
+          "id": "c4f78be1a8f14da0ab49ce1162348a5e",
+          "count": 3
+         },
+         {
+          "descriptor": "Italy",
+          "id": "8cd04a563fd94da7b06857a79faaf815",
+          "count": 1
+         },
+         {
+          "descriptor": "Singapore",
+          "id": "80938777cac5440fab50d729f9634969",
+          "count": 1
+         },
+         {
+          "descriptor": "United Kingdom",
+          "id": "29247e57dbaf46fb855b224e03170bc7",
+          "count": 1
+         },
+         {
+          "descriptor": "United States of America",
+          "id": "bc33aa3152ec42d4995f4791a106ed09",
+          "count": 14
+         }
+        ]
+       },
+       {
+        "facetParameter": "locations",
+        "descriptor": "Locations",
+        "values": [
+         {
+          "descriptor": "California - Los Angeles",
+          "id": "27aa8b019f48100e08032085fbd1adf0",
+          "count": 6
+         },
+         {
+          "descriptor": "California - San Francisco",
+          "id": "52dc65c91663106643d90ee5e59a4079",
+          "count": 3
+         },
+         {
+          "descriptor": "Canada - Toronto",
+          "id": "47a31a8027e101d4a10460b20a016404",
+          "count": 1
+         },
+         {
+          "descriptor": "Colorado - Broomfield",
+          "id": "2f61062041cc01800d116ebb1801e304",
+          "count": 6
+         },
+         {
+          "descriptor": "France - Paris",
+          "id": "27aa8b019f48100e080305c22402adc6",
+          "count": 1
+         },
+         {
+          "descriptor": "India - Mumbai",
+          "id": "6971125f1a3e012cc1eb0281ae5d8a06",
+          "count": 1
+         },
+         {
+          "descriptor": "India - Remote",
+          "id": "1b8092009c1c100153043b2e4de40000",
+          "count": 3
+         },
+         {
+          "descriptor": "Italy - Milano",
+          "id": "27aa8b019f48100e0802fb9122b1adb5",
+          "count": 1
+         },
+         {
+          "descriptor": "Massachusetts - Boston",
+          "id": "2dfd16f0e90701d830cc0315564b081b",
+          "count": 4
+         },
+         {
+          "descriptor": "New York - New York",
+          "id": "27aa8b019f48100e0802e6b8c8eead95",
+          "count": 10
+         },
+         {
+          "descriptor": "Singapore",
+          "id": "2f61062041cc014efc83580b29010407",
+          "count": 1
+         },
+         {
+          "descriptor": "United Kingdom - London",
+          "id": "27aa8b019f48100e0802dc86d201ad86",
+          "count": 1
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "facetParameter": "distance",
+      "descriptor": "Distance",
+      "values": [
+       {
+        "descriptor": "10 miles",
+        "id": "a538cdb60a631000078a2c60ed1700f3",
+        "count": 1
+       },
+       {
+        "descriptor": "25 miles",
+        "id": "a538cdb60a631000078a2c6a410300f4",
+        "count": 1
+       },
+       {
+        "descriptor": "50 miles",
+        "id": "a538cdb60a631000078a2c6eadd300f5",
+        "count": 1
+       },
+       {
+        "descriptor": "100 miles",
+        "id": "a538cdb60a631000078a2c71efcc00f6",
+        "count": 1
+       },
+       {
+        "descriptor": "Any Distance",
+        "id": "a538cdb60a631000078a2c74f73b00f7",
+        "count": 1
+       }
+      ]
+     }
+    ],
+    "userAuthenticated": false
+   }
+  },
+  {
+   "method": "POST",
+   "url": "https://acme-corp.wd5.myworkdayjobs.com/wday/cxs/acme_corp/Careers/jobs",
+   "json": {
+    "appliedFacets": {},
+    "limit": 20,
+    "offset": 20,
+    "searchText": ""
+   },
+   "status": 200,
+   "body": {
+    "total": 0,
+    "jobPostings": [
+     {
+      "title": "Analyst, Business Intelligence",
+      "externalPath": "/job/New-York---New-York/Analyst--Business-Intelligence_R-01406",
+      "locationsText": "New York - New York"
+     },
+     {
+      "title": "Account Manager, Platforms, Asia",
+      "externalPath": "/job/Singapore/Account-Manager--Platforms--Asia_R-01397-1",
+      "locationsText": "Singapore"
+     }
+    ],
+    "facets": [],
+    "userAuthenticated": false
+   }
+  }
+ ]
+}

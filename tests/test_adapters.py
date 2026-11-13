@@ -16,6 +16,9 @@ from rolescout.adapters import (
 from rolescout.models import Role
 
 ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+# The sources that return a whole board in one call. Workday pages, and has
+# its own tests in test_workday.py.
+ONE_CALL = [GreenhouseAdapter, LeverAdapter, AshbyAdapter]
 
 
 def check_common(roles, source):
@@ -108,7 +111,7 @@ def test_ashby(load_fixture, fake_session):
     assert roles[2].department == "Sales"
 
 
-@pytest.mark.parametrize("adapter_cls", ADAPTERS.values())
+@pytest.mark.parametrize("adapter_cls", ONE_CALL)
 def test_company_override(adapter_cls, load_fixture, fake_session):
     name = {"greenhouse": "greenhouse_anthropic.json", "lever": "lever_spotify.json",
             "ashby": "ashby_ramp.json"}[adapter_cls.name]
@@ -159,7 +162,7 @@ def test_ashby_edge_cases(fake_session):
     assert (roles[0].compensation_text, roles[0].date_posted) == ("", "")
 
 
-@pytest.mark.parametrize("adapter_cls", ADAPTERS.values())
+@pytest.mark.parametrize("adapter_cls", ONE_CALL)
 def test_errors_are_raised_not_swallowed(adapter_cls, fake_session):
     with pytest.raises(BoardNotFound):
         adapter_cls(fake_session(status_code=404)).fetch("nope")
@@ -176,7 +179,7 @@ def test_empty_board_is_not_an_error(fake_session):
 
 
 def test_get_adapter():
-    assert set(ADAPTERS) == {"greenhouse", "lever", "ashby"}
+    assert set(ADAPTERS) == {"greenhouse", "lever", "ashby", "workday"}
     assert isinstance(get_adapter("lever"), LeverAdapter)
     with pytest.raises(ValueError):
-        get_adapter("workday")
+        get_adapter("icims")

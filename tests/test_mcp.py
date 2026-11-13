@@ -57,8 +57,8 @@ def world(conn, isolated_db_path, monkeypatch, tmp_path):
         companies.add_board(conn, name, "greenhouse", ref)
     companies.add_company(conn, "Wday", website="https://wday.com", tier=1)
     resolve.save_resolution(conn, resolve.Resolution(
-        company="Wday", outcome="unsupported", job_system="workday",
-        job_system_url="https://wday.wd1.myworkdayjobs.com/x", careers_url="https://wday.com/careers"))
+        company="Wday", outcome="unsupported", job_system="icims",
+        job_system_url="https://wday.icims.com/x", careers_url="https://wday.com/careers"))
     companies.add_company(conn, "Mystery", tier=2)
 
     def eng(job):
@@ -207,7 +207,7 @@ def test_list_companies_with_mapping_state(world):
     assert listed["total"] == 5
     assert (by_name["Alpha"]["coverage"], by_name["Alpha"]["boards"], by_name["Alpha"]["open_roles"]) == (
         "covered", ["greenhouse/alpha"], 4)
-    assert (by_name["Wday"]["coverage"], by_name["Wday"]["job_system"]) == ("unsupported", "workday")
+    assert (by_name["Wday"]["coverage"], by_name["Wday"]["job_system"]) == ("unsupported", "icims")
     assert by_name["Mystery"]["coverage"] == "unidentified"
     assert {c["name"] for c in session.call("list_target_companies", coverage="not_covered")["companies"]} == {
         "Wday", "Mystery"}
@@ -223,7 +223,7 @@ def test_add_deactivate_reactivate_and_map(world):
     mapped = session.call("map_board", company="delta", source="lever", board_ref="delta-co")
     assert mapped == {"company": "Delta", "boards": ["lever/delta-co"], "next": "fetched at the next scout"}
     assert "already mapped to 'Delta'" in session.error("map_board", company="Beta", source="lever", board_ref="delta-co")
-    assert session.error("map_board", company="Delta", source="workday", board_ref="x")   # not a supported source
+    assert session.error("map_board", company="Delta", source="icims", board_ref="x")   # not a supported source
 
     assert session.call("deactivate_company", name="Alpha") == {"name": "Alpha", "active": False}
     inactive = session.call("list_target_companies", coverage="inactive")
@@ -240,7 +240,7 @@ def test_record_job_system_gaps_and_brief(world):
     before = session.call("coverage_gaps")
     assert before["summary"] == "1 build candidate, 1 unidentified"
     assert [(g["system"], g["build_candidate"], g["why"]) for g in before["job_systems"]] == [
-        ("workday", True, "tier 1: Wday")]
+        ("icims", True, "tier 1: Wday")]
     assert [u["company"] for u in before["unidentified"]] == ["Mystery"]
 
     recorded = session.call("record_job_system", company="mystery", system="Rippling",
@@ -254,8 +254,8 @@ def test_record_job_system_gaps_and_brief(world):
     assert "map the board instead" in session.error(
         "record_job_system", company="Mystery", system="greenhouse", url="https://x.com")
 
-    brief = session.call("connector_brief", system="workday")
-    assert brief["brief_markdown"].startswith("# Connector brief: workday")
+    brief = session.call("connector_brief", system="icims")
+    assert brief["brief_markdown"].startswith("# Connector brief: icims")
     assert "### Wday (tier 1)" in brief["brief_markdown"]
     assert "Systems with gaps" in session.error("connector_brief", system="taleo")
 

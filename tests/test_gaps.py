@@ -155,7 +155,7 @@ def test_manual_entry_survives_re_resolve(conn, capsys):
 
 def test_manual_entry_does_not_block_a_real_board_being_found(conn):
     companies.add_company(conn, "Acme", website="https://acme.com")
-    set_job_system(conn, "Acme", "workday", "https://acme.wd1.myworkdayjobs.com/x")
+    set_job_system(conn, "Acme", "icims", "https://acme.icims.com/x")
     (res,), _ = run_resolve(conn, {
         "https://acme.com": '<a href="https://jobs.lever.co/acme">Jobs</a>',
         LEVER.format("acme"): lever_jobs(2),
@@ -168,8 +168,8 @@ def test_set_system_validation(conn, capsys):
     companies.add_company(conn, "Acme")
     assert cli.main(["companies", "set-system", "Acme", "greenhouse", "https://x.com"]) == 1
     assert 'map the board instead with rolescout companies map "Acme" greenhouse BOARD' in capsys.readouterr().err
-    assert cli.main(["companies", "set-system", "Acme", "workday", "not-a-url"]) == 1
-    assert cli.main(["companies", "set-system", "Nope", "workday", "https://x.com"]) == 1
+    assert cli.main(["companies", "set-system", "Acme", "icims", "not-a-url"]) == 1
+    assert cli.main(["companies", "set-system", "Nope", "icims", "https://x.com"]) == 1
     capsys.readouterr()
     assert cli.main(["companies", "clear-system", "Acme"]) == 0
     assert capsys.readouterr().out == "Acme has no hand-recorded job system.\n"
@@ -190,8 +190,8 @@ def add(conn, name, tier, system=None, url=None, manual=False):
 
 @pytest.fixture
 def gappy(conn):
-    # workday: three tier-2/3 companies -> candidate by count
-    add(conn, "Wa", 2, "workday"); add(conn, "Wb", 3, "workday"); add(conn, "Wc", None, "workday")
+    # icims: three tier-2/3 companies -> candidate by count
+    add(conn, "Wa", 2, "icims"); add(conn, "Wb", 3, "icims"); add(conn, "Wc", None, "icims")
     # rippling: one tier-1 company -> candidate by tier
     add(conn, "Rip", 1, "rippling", manual=True)
     # workable: two tier-2 companies -> below both thresholds
@@ -216,12 +216,12 @@ def gappy(conn):
 def test_build_candidate_thresholds(gappy):
     report = gaps.gaps_report(gappy)
     groups = {g["system"]: g for g in report["systems"]}
-    assert [g["system"] for g in report["systems"]] == ["workday", "rippling", "custom", "workable"]
-    assert (groups["workday"]["build_candidate"], groups["workday"]["why"]) == (True, "3 companies")
+    assert [g["system"] for g in report["systems"]] == ["icims", "rippling", "custom", "workable"]
+    assert (groups["icims"]["build_candidate"], groups["icims"]["why"]) == (True, "3 companies")
     assert (groups["rippling"]["build_candidate"], groups["rippling"]["why"]) == (True, "tier 1: Rip")
     assert groups["workable"]["build_candidate"] is False        # two companies, none tier 1
     assert groups["custom"]["build_candidate"] is False          # three, but they share no connector
-    assert [(m["company"], m["tier"]) for m in groups["workday"]["companies"]] == [
+    assert [(m["company"], m["tier"]) for m in groups["icims"]["companies"]] == [
         ("Wa", 2), ("Wb", 3), ("Wc", None)]
     assert report["build_candidates"] == 2
     assert [e["company"] for e in report["needs_mapping"]] == ["Never"]
@@ -245,7 +245,7 @@ def test_gaps_command_and_status_line(gappy, capsys, monkeypatch, tmp_path):
     assert out.startswith("Coverage gaps: 2 build candidates, 2 unidentified, 1 awaiting mapping "
                           "(12 of 13 active companies not covered)\n")
     candidates, rest = out.split("Other unsupported job systems:")
-    assert "workday" in candidates and "rippling" in candidates and "(by hand)" in candidates
+    assert "icims" in candidates and "rippling" in candidates and "(by hand)" in candidates
     assert "workable" not in candidates and "workable" in rest
     assert "Needs identification - rolescout companies set-system NAME SYSTEM URL" in out
     assert "On a supported system, not mapped yet" in out
@@ -263,13 +263,13 @@ def test_gaps_command_and_status_line(gappy, capsys, monkeypatch, tmp_path):
 
 
 def test_connector_brief(gappy, capsys):
-    assert cli.main(["brief", "Workday"]) == 0
+    assert cli.main(["brief", "Icims"]) == 0
     out = capsys.readouterr().out
-    assert out.startswith("# Connector brief: workday\n")
+    assert out.startswith("# Connector brief: icims\n")
     assert "cannot fetch 3 target companies" in out and "Build candidate: yes (3 companies)." in out
     assert "### Wa (tier 2)" in out and "### Wc (no tier)" in out
     assert "- Careers page: https://wa.com/careers" in out
-    assert "- Job system URL: https://workday.example/wa" in out
+    assert "- Job system URL: https://icims.example/wa" in out
     assert "- Identified: automatically" in out
     assert "## What the adapter must do" in out and "`board_url(ref)`" in out
 
@@ -278,7 +278,7 @@ def test_connector_brief(gappy, capsys):
     assert "Build candidate: yes (tier 1: Rip)." in out and "- Identified: by hand" in out
 
     assert cli.main(["brief", "taleo"]) == 1
-    assert "Systems with gaps: workday, rippling, custom, workable" in capsys.readouterr().err
+    assert "Systems with gaps: icims, rippling, custom, workable" in capsys.readouterr().err
 
 
 # --- the weekly re-check -----------------------------------------------------
@@ -369,8 +369,8 @@ def test_failing_board_is_re_resolved_and_the_move_is_recorded(conn, monkeypatch
     gaps.mark_rechecked(conn, "2020-01-01T00:00:00Z")  # a week is up
 
     pages = {
-        # Mover now sends applicants to Workday; Hopper moved to an Ashby board.
-        "https://mover.com": '<a href="https://mover.wd5.myworkdayjobs.com/Careers">Careers</a>',
+        # Mover now sends applicants to iCIMS; Hopper moved to an Ashby board.
+        "https://mover.com": '<a href="https://careers-mover.icims.com/jobs">Careers</a>',
         "https://hopper.com": '<a href="https://jobs.ashbyhq.com/hopper">Jobs</a>',
         ASHBY.format("hopper"): ashby_jobs(3),
         "https://flaky.com": '<a href="https://jobs.lever.co/flaky">Jobs</a>',
@@ -381,10 +381,10 @@ def test_failing_board_is_re_resolved_and_the_move_is_recorded(conn, monkeypatch
     assert "https://flaky.com" not in web.urls              # two failures: not yet
 
     # Mover: the dead board stays mapped, but the gap is now on record.
-    assert resolution(conn, "Mover")["job_system"] == "workday"
+    assert resolution(conn, "Mover")["job_system"] == "icims"
     report = gaps.gaps_report(conn)
     (group,) = report["systems"]
-    assert (group["system"], group["build_candidate"], group["why"]) == ("workday", True, "tier 1: Mover")
+    assert (group["system"], group["build_candidate"], group["why"]) == ("icims", True, "tier 1: Mover")
     assert group["companies"][0]["failing_boards"] == ["greenhouse/mover"]
 
     # Hopper: the new board is saved; the old one is left for a person to remove.
@@ -418,16 +418,16 @@ def test_version_1_database_is_upgraded_in_place(tmp_path, monkeypatch):
     assert db.schema_version(old) == 1
     old.execute("INSERT INTO companies (name, created_at) VALUES ('Acme', 'x')")
     old.execute("INSERT INTO company_resolutions (company_id, resolved_at, outcome, job_system, evidence) "
-                "VALUES (1, 'x', 'unsupported', 'workday', '{}')")
+                "VALUES (1, 'x', 'unsupported', 'icims', '{}')")
     old.close()
     monkeypatch.undo()
 
     conn = db.connect(path)
     assert db.schema_version(conn) == db.SCHEMA_VERSION >= 2
     row = conn.execute("SELECT job_system, manual FROM company_resolutions").fetchone()
-    assert tuple(row) == ("workday", 0)                       # existing findings kept, not manual
+    assert tuple(row) == ("icims", 0)                       # existing findings kept, not manual
     assert db.get_meta(conn, "anything") is None
-    assert gaps.gaps_report(conn)["systems"][0]["system"] == "workday"
+    assert gaps.gaps_report(conn)["systems"][0]["system"] == "icims"
 
 
 def test_manual_entries_travel_with_the_export(conn, tmp_path):

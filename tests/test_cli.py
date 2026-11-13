@@ -37,7 +37,7 @@ def test_fetch_reports_missing_board(monkeypatch, capsys):
 
 def test_unknown_source_is_rejected():
     with pytest.raises(SystemExit):
-        cli.main(["fetch", "workday", "acme"])
+        cli.main(["fetch", "icims", "acme"])
 
 
 # --- database-backed commands ------------------------------------------------

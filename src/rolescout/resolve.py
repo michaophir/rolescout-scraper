@@ -4,6 +4,9 @@ Two kinds of evidence, in order:
 
 1. **Link** (strong). The company's own website or careers page links to a
    board on a supported source, and that board exists. Saved automatically.
+   A Workday board is only ever found this way, from a URL whose hostname is
+   Workday's: its tenant, data center and site cannot be guessed from a name,
+   and a page that merely mentions "myworkdayjobs.com" is not evidence.
 2. **Guess** (weak). A board exists at a slug derived from the company name
    or domain. Saved only when something ties the board to the company's own
    domain; a matching name alone is never enough, because namesakes exist.
@@ -34,6 +37,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from rolescout.adapters import ADAPTERS, BoardNotFound, SourceError, get_adapter
+from rolescout.adapters.workday import WORKDAY_URL, find_refs
 from rolescout.companies import CompanyError, add_board
 from rolescout.db import transaction, utc_now
 from rolescout.http import USER_AGENT, make_session
@@ -58,7 +62,8 @@ MAX_LINKED_BOARDS = 2          # more distinct boards than this on one site is s
 # A guessed board is confirmed when at least this share of its postings
 # reference the company's own domain (job URL, link or email address).
 MIN_DOMAIN_SHARE = 0.25
-GUESS_SOURCES = ("greenhouse", "lever", "ashby")
+# Sources where a board may sit at a slug made from the company name.
+GUESS_SOURCES = tuple(name for name, cls in ADAPTERS.items() if cls.guessable)
 
 # --- what a job-board link looks like ----------------------------------------
 
@@ -85,7 +90,6 @@ BOARD_TOKEN_VAR = re.compile(
 # Job systems we can recognize but have no adapter for. Each pattern matches
 # host (and sometimes the first path segment); the rest of the URL is kept.
 UNSUPPORTED_SYSTEMS: list[tuple[str, str]] = [
-    ("workday", r"[\w.-]+\.myworkday(?:jobs|site)\.com"),
     ("smartrecruiters", r"(?:jobs|careers|api)\.smartrecruiters\.com/[\w-]+"),
     ("workable", r"apply\.workable\.com/[\w-]+|(?!www\.)[\w-]+\.workable\.com"),
     ("rippling", r"ats\.rippling\.com/[\w-]+"),
@@ -126,7 +130,6 @@ FINGERPRINTS: list[tuple[str, re.Pattern]] = [(system, re.compile(pattern, re.I)
     ("workable", r"workable\.com/assets/embed\.js|\bwhr_embed\s*\("),
     ("paycom", r"paycomonline\.net/v4/ats"),
     ("rippling", r"ats\.rippling\.com"),
-    ("workday", r"myworkday(?:jobs|site)\.com"),
     ("smartrecruiters", r"(?:static|api|jobs|careers)\.smartrecruiters\.com"),
     ("eightfold", r"\.eightfold\.ai|eightfold-careers"),
     ("icims", r"\.icims\.com"),
@@ -316,6 +319,9 @@ def scan_for_boards(text: str, *, normalized: bool = False
     if GREENHOUSE_DYNAMIC.search(text):
         for match in BOARD_TOKEN_VAR.finditer(text):
             supported.setdefault(("greenhouse", match.group(1).lower()))
+    # Any Workday URL that names a career site: front page, job, login, apply.
+    for ref in find_refs(text)[0]:
+        supported.setdefault(("workday", str(ref)))
     unsupported: dict[str, str] = {}
     for system, pattern in UNSUPPORTED_LINKS:
         match = pattern.search(text)
@@ -333,6 +339,10 @@ def scan_for_fingerprints(text: str, *, normalized: bool = False) -> dict[str, s
         match = pattern.search(text)
         if match:
             found[system] = match.group(0).strip("?&=( ")
+    # Workday is only recognized by a URL on one of its own hostnames.
+    match = WORKDAY_URL.search(text)
+    if match:
+        found["workday"] = match.group(0).rstrip(".,;")
     return found
 
 
@@ -574,6 +584,20 @@ class Resolver:
             res.notes.append(f"{source}/{ref}: {exc}")
             return None
 
+    def _confirm_link(self, source: str, ref: str, res: Resolution) -> tuple[str, int] | None:
+        """(reference to store, open roles) for a linked board, None if it does not exist."""
+        self._tick()
+        adapter = self.adapter(source)
+        try:
+            return adapter.confirm(ref)
+        except BoardNotFound:
+            return None
+        except SourceError as exc:
+            res.notes.append(f"{source}/{ref}: {exc}")
+            return None
+        finally:
+            res.requests += getattr(adapter.last_stats, "requests", 1) or 1
+
     def _check_guess(self, company: str, source: str, ref: str, items: list[dict],
                      own_domains: set[str], res: Resolution) -> Candidate:
         """Decide whether a board found by guessing belongs to this company."""
@@ -657,12 +681,15 @@ class Resolver:
 
         # 1. Links from the company's own site.
         for (source, ref), found_on in supported.items():
-            items = self._fetch_board(source, ref, res)
-            if items is None:
+            confirmed = self._confirm_link(source, ref, res)
+            if confirmed is None:
                 res.notes.append(f"{found_on} links to {source}/{ref}, but that board does not exist")
                 continue
+            ref, roles = confirmed
+            if any((c.source, c.ref) == (source, ref) for c in res.candidates):
+                continue  # two spellings of one board
             res.candidates.append(Candidate(
-                source, ref, "link", "confirmed", f"linked from {found_on}", roles=len(items)))
+                source, ref, "link", "confirmed", f"linked from {found_on}", roles=roles))
         linked = [c for c in res.candidates if c.kind == "link"]
         if linked:
             if len(linked) > MAX_LINKED_BOARDS:
@@ -696,7 +723,7 @@ class Resolver:
         # 3. Slug guesses, accepted only with confirmation. If the site shows a
         #    supported system's fingerprint, only that system is tried.
         known = [k for k in fingerprints if k in ADAPTERS]
-        sources = tuple(known) or GUESS_SOURCES
+        sources = tuple(s for s in (known or GUESS_SOURCES) if ADAPTERS[s].guessable)
         tried = set(supported)
         for ref in slug_guesses(company, website):
             for source in sources:
@@ -718,10 +745,14 @@ class Resolver:
             # The system is one we support; only the board name is missing.
             system = known[0]
             matched, found_on = fingerprints[system]
-            res.job_system, res.job_system_url = system, found_on
+            # For Workday the URL on record is the Workday URL itself, never
+            # the page that mentioned it.
+            res.job_system = system
+            res.job_system_url = "https://" + matched if system == "workday" else found_on
+            board = "CAREER-SITE-URL" if system == "workday" else "BOARD"
             res.notes.append(
                 f"{found_on} uses {system} ({matched!r}), but the board name was not found; "
-                f"map it by hand: rolescout companies map \"{company}\" {system} BOARD")
+                f"map it by hand: rolescout companies map \"{company}\" {system} {board}")
             res.outcome = "needs_review"
         elif any(c.status == "unconfirmed" for c in res.candidates):
             res.outcome = "needs_review"

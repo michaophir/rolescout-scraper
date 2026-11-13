@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 class Role:
     """One open role, normalized across sources. Missing values are ""."""
 
-    source: str             # adapter name: "greenhouse" | "lever" | "ashby"
+    source: str             # adapter name: "greenhouse" | "lever" | "ashby" | "workday"
     source_job_id: str      # the source's own id for the posting
     company: str
     title: str
@@ -17,7 +17,7 @@ class Role:
     url: str
     date_posted: str        # ISO date (YYYY-MM-DD) or ""
     compensation_text: str  # free text as published by the source
-    description: str        # plain text, full length
+    description: str        # plain text, full length; "" when the source was not asked for it
 
     def to_dict(self) -> dict[str, str]:
         return asdict(self)

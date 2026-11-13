@@ -50,7 +50,7 @@ Key ideas:
 - Marks record the owner's decision on a role: dismissed (never show again), saved (keep,
   flagged), applied (never show again; description kept after the role closes).
 - A company is identified by its name. Tier 1 is highest priority. A company is fetched only
-  if it is mapped to a job board on a supported source (greenhouse, lever, ashby).
+  if it is mapped to a job board on a supported source (greenhouse, lever, ashby, workday).
 - Coverage gaps are companies that cannot be fetched yet: on an unsupported job system, on a
   supported one with no board mapped, or unidentified.
 
@@ -401,7 +401,7 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
     def coverage_gaps() -> dict[str, Any]:
         """Which target companies rolescout cannot fetch, and which connector is worth building next.
 
-        Unsupported companies are grouped by the job system they use (workday, workable, ...).
+        Unsupported companies are grouped by the job system they use (icims, workable, ...).
         A system is a build candidate when three or more companies use it or a tier-1 company
         does. Also lists companies on a supported system that still need a board mapped
         (fix with map_board) and companies whose job system is unknown (fix with
@@ -573,11 +573,12 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
     @server.tool(title="Map a company to a job board", annotations=writes)
     def map_board(
         company: CompanyName,
-        source: Annotated[Literal["greenhouse", "lever", "ashby"], Field(description="The job system hosting the board.")],
+        source: Annotated[Literal["greenhouse", "lever", "ashby", "workday"], Field(description="The job system hosting the board.")],
         board_ref: Annotated[str, Field(description=(
             "The board's identifier on that system: the slug in its URL, e.g. 'anthropic' in "
             "job-boards.greenhouse.io/anthropic, 'spotify' in jobs.lever.co/spotify, 'notion' in "
-            "jobs.ashbyhq.com/notion."))],
+            "jobs.ashbyhq.com/notion. For workday: TENANT/wdN/SITE (e.g. acme/wd5/Careers) "
+            "or any URL on the company's Workday career site."))],
     ) -> dict[str, Any]:
         """Tell rolescout which job board belongs to a company, so the next scout fetches it.
 
@@ -599,9 +600,9 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
     def record_job_system(
         company: CompanyName,
         system: Annotated[str, Field(description=(
-            "The job system's name in lowercase, e.g. workday, rippling, paycom, smartrecruiters; "
-            "or custom for a careers site the company built itself. Not greenhouse, lever or "
-            "ashby: for those use map_board."))],
+            "The job system's name in lowercase, e.g. icims, rippling, paycom, smartrecruiters; "
+            "or custom for a careers site the company built itself. Not greenhouse, lever, "
+            "ashby or workday: for those use map_board."))],
         url: Annotated[str, Field(description="The URL where the company's jobs are listed on that system.")],
         note: Annotated[str, Field(description="Optional: how it was identified.")] = "",
     ) -> dict[str, Any]:

@@ -26,6 +26,19 @@ def _repair_websites(conn: sqlite3.Connection) -> None:
             conn.execute("UPDATE companies SET website = ? WHERE id = ?", (fixed, row["id"]))
 
 
+def _drop_false_workday_findings(conn: sqlite3.Connection) -> None:
+    """Forget automatic "this company is on Workday" findings whose URL is not
+    on a Workday host (a page that merely mentioned the domain). The company
+    goes back to not resolved and is looked at again by the next resolve."""
+    from rolescout.adapters.workday import is_workday_url
+
+    for row in conn.execute(
+            "SELECT company_id, job_system_url FROM company_resolutions "
+            "WHERE job_system = 'workday' AND manual = 0").fetchall():
+        if not is_workday_url(row["job_system_url"] or ""):
+            conn.execute("DELETE FROM company_resolutions WHERE company_id = ?", (row["company_id"],))
+
+
 # Each step is an SQL statement or a function taking the connection.
 MIGRATIONS: list[list] = [
     [
@@ -200,6 +213,13 @@ MIGRATIONS: list[list] = [
     ],
     [
         _repair_websites,
+    ],
+    [
+        # What a board's fetch cost, and anything worth saying about it
+        # (stopped early, descriptions left for the next run).
+        "ALTER TABLE run_boards ADD COLUMN requests INTEGER",
+        "ALTER TABLE run_boards ADD COLUMN note TEXT NOT NULL DEFAULT ''",
+        _drop_false_workday_findings,
     ],
 ]
 

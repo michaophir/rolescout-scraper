@@ -11,7 +11,8 @@ from pathlib import Path
 from rolescout import __version__
 from rolescout.adapters import ADAPTERS, SourceError, get_adapter
 from rolescout.companies import (
-    CompanyError, add_board, add_company, get_company, import_csv, list_companies, remove_board,
+    CompanyError, add_board, add_company, board_ref, get_company, import_csv, list_companies,
+    remove_board,
     set_active,
 )
 from rolescout.db import DB_ENV_VAR, DEFAULT_DB_PATH, SchemaError, connect, resolve_db_path
@@ -52,13 +53,18 @@ def format_table(headers: list[str], rows: list[list], max_widths: dict[str, int
 # --- fetch ------------------------------------------------------------------
 
 def _cmd_fetch(args: argparse.Namespace) -> int:
+    adapter = get_adapter(args.source)
+    started = time.monotonic()
     try:
-        roles = get_adapter(args.source).fetch(args.slug)
+        roles = adapter.fetch(args.slug)
     except SourceError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
-    print(f"{args.source}/{args.slug}: {len(roles)} open roles")
+    print(f"{args.source}/{board_ref(args.source, args.slug)}: {len(roles)} open roles"
+          + _cost(adapter.last_stats.requests, time.monotonic() - started))
+    for note in adapter.last_stats.notes:
+        print(f"  note: {note}")
     if not roles:
         return 0
     if not 1 <= args.sample <= len(roles):
@@ -166,14 +172,15 @@ def _cmd_companies_set_active(args) -> int:
 def _cmd_companies_map(args) -> int:
     conn = connect(args.db)
     add_board(conn, args.name, args.source, args.ref)
-    print(f"{get_company(conn, args.name)['name']} -> {args.source}/{args.ref.strip()}")
+    print(f"{get_company(conn, args.name)['name']} -> {args.source}/{board_ref(args.source, args.ref)}")
     return 0
 
 
 def _cmd_companies_unmap(args) -> int:
     conn = connect(args.db)
     closed = remove_board(conn, args.name, args.source, args.ref)
-    print(f"Removed {args.source}/{args.ref.strip()} from {get_company(conn, args.name)['name']}; "
+    print(f"Removed {args.source}/{board_ref(args.source, args.ref)} from "
+          f"{get_company(conn, args.name)['name']}; "
           f"{closed} open role{'' if closed == 1 else 's'} closed.")
     return 0
 
@@ -380,17 +387,46 @@ def _cmd_companies_report(args) -> int:
 
 # --- scout ------------------------------------------------------------------
 
+def _cost(requests: int | None, seconds: float) -> str:
+    """", 44 requests, 51s": what a board's fetch cost."""
+    if requests is None:
+        return f", {seconds:.0f}s"
+    return f", {requests} request{'' if requests == 1 else 's'}, {seconds:.0f}s"
+
+
 def _print_progress(result: BoardResult) -> None:
     if result.status == "ok":
         detail = f"{result.roles_fetched} roles" + (" (baseline)" if result.baseline else "")
+        if not result.complete:
+            detail += ", partial"
     else:
         detail = f"FAILED: {result.error}"
-    print(f"  {result.company} ({result.source}/{result.ref}) ... {detail}", flush=True)
+    print(f"  {result.company} ({result.source}/{result.ref}) ... {detail}"
+          f"{_cost(result.requests, result.duration_ms / 1000)}", flush=True)
+    if result.note:
+        print(f"      {result.note}", flush=True)
+
+
+def _description_rule(args, quiet: bool = False):
+    """Which titles are worth a description request of their own, from the
+    ranking config. None when there is no usable config."""
+    path = _ranking_path(args)
+    try:
+        return ranking.load_config(path).wants_title
+    except ranking.ConfigError as exc:
+        if not quiet:
+            print(f"Note: {exc}. Workday descriptions are fetched for saved and applied roles only.")
+        return None
 
 
 def _scout_once(conn, args, *, as_json: bool = False):
     """Run one scout and print its summary. Returns the summary."""
-    summary = run_scout(conn, delay=args.delay, on_board=None if as_json else _print_progress)
+    uses_rule = conn.execute(
+        "SELECT 1 FROM boards b JOIN companies c ON c.id = b.company_id "
+        "WHERE c.active = 1 AND b.source = 'workday' LIMIT 1").fetchone() is not None
+    summary = run_scout(
+        conn, delay=args.delay, on_board=None if as_json else _print_progress,
+        wants_description=_description_rule(args, quiet=as_json) if uses_rule else None)
 
     if as_json:
         print(json.dumps({
@@ -414,14 +450,19 @@ def _scout_once(conn, args, *, as_json: bool = False):
                 snap.company, ", ".join(f"{b.source}/{b.ref}" for b in boards), status,
                 sum(b.roles_fetched or 0 for b in boards), snap.open_roles,
                 "baseline" if snap.baseline and not snap.opened else snap.opened, snap.closed,
+                sum(b.requests or 0 for b in boards),
+                f"{sum(b.duration_ms for b in boards) / 1000:.0f}s",
                 "; ".join(b.error or "" for b in failed)])
         rows.append(["TOTAL", f"{len(summary.boards)} boards",
                      f"{summary.ok} ok, {summary.failed} failed",
                      sum(b.roles_fetched or 0 for b in summary.boards),
                      summary.total("open_roles"), summary.total("opened"),
-                     summary.total("closed"), ""])
+                     summary.total("closed"),
+                     sum(b.requests or 0 for b in summary.boards),
+                     f"{sum(b.duration_ms for b in summary.boards) / 1000:.0f}s", ""])
         print(format_table(
-            ["Company", "Boards", "Status", "Fetched", "Open", "Opened", "Closed", "Error"],
+            ["Company", "Boards", "Status", "Fetched", "Open", "Opened", "Closed", "Requests",
+             "Time", "Error"],
             rows, {"Error": 60}))
     else:
         print("No active company is mapped to a board. Use: rolescout companies resolve "
@@ -951,7 +992,8 @@ def build_parser() -> argparse.ArgumentParser:
     fetch = commands.add_parser(
         "fetch", help="fetch one board live and print the role count and a sample role")
     fetch.add_argument("source", choices=sorted(ADAPTERS))
-    fetch.add_argument("slug", help="board slug, e.g. the last part of jobs.lever.co/<slug>")
+    fetch.add_argument("slug", help="board slug, e.g. the last part of jobs.lever.co/<slug>; "
+                                    "for workday, TENANT/wdN/SITE or the career site's URL")
     fetch.add_argument("--sample", type=int, default=1, metavar="N",
                        help="which role to print, 1-based (default: 1)")
     fetch.add_argument("--full", action="store_true", help="print the whole description")
@@ -996,7 +1038,8 @@ def build_parser() -> argparse.ArgumentParser:
                        help="add a board to a company, e.g. map Anthropic greenhouse anthropic")
     p.add_argument("name")
     p.add_argument("source", choices=sorted(ADAPTERS))
-    p.add_argument("ref", help="board reference (slug)")
+    p.add_argument("ref", help="board reference: the slug; for workday, TENANT/wdN/SITE "
+                               "or any URL on the career site")
     p.set_defaults(func=_cmd_companies_map)
 
     p = sub.add_parser("unmap", parents=[db],
@@ -1034,7 +1077,7 @@ def build_parser() -> argparse.ArgumentParser:
         "set-system", parents=[db],
         help="record by hand which job system a company uses; detection never overwrites it")
     p.add_argument("name")
-    p.add_argument("system", help="e.g. workday, rippling, paycom, or custom for a home-built site")
+    p.add_argument("system", help="e.g. icims, rippling, paycom, or custom for a home-built site")
     p.add_argument("url", help="where its jobs are listed")
     p.add_argument("--note", help="anything worth keeping, e.g. how you found it")
     p.set_defaults(func=_cmd_companies_set_system)

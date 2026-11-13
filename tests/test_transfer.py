@@ -17,8 +17,8 @@ def source(conn):
     companies.add_board(conn, "Cobalt", "ashby", "Cobalt")
     companies.set_active(conn, "Cobalt", False)
     save_resolution(conn, Resolution(
-        company="Bolt", outcome="unsupported", job_system="workday",
-        job_system_url="https://bolt.wd1.myworkdayjobs.com/x", notes=["a note"]))
+        company="Bolt", outcome="unsupported", job_system="icims",
+        job_system_url="https://bolt.icims.com/x", notes=["a note"]))
     return conn
 
 

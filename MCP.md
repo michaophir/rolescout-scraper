@@ -108,7 +108,7 @@ Write (absent in read-only mode):
 | `add_target_company` | Add a company to the target list |
 | `deactivate_company` | Stop tracking a company, keeping its history |
 | `reactivate_company` | Resume tracking it |
-| `map_board` | Map a company to a Greenhouse, Lever or Ashby board |
+| `map_board` | Map a company to a Greenhouse, Lever, Ashby or Workday board |
 | `record_job_system` | Record by hand which unsupported job system a company uses |
 
 Roles are identified by `role_id`, the integer every role-returning tool

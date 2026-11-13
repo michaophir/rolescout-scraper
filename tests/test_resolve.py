@@ -109,16 +109,16 @@ def test_unsupported_job_system_is_recorded_with_its_url(conn):
     companies.add_company(conn, "Dynamo", website="https://dynamo.com")
     (res,), web = run_resolve(conn, {
         "https://dynamo.com": '<a href="https://dynamo.com/careers">Careers</a>',
-        # /careers redirects to Workday.
+        # /careers redirects to iCIMS.
         "https://dynamo.com/careers": (
-            "https://dynamo.wd5.myworkdayjobs.com/en-US/External", "<html>jobs</html>"),
+            "https://careers-dynamo.icims.com/jobs/search", "<html>jobs</html>"),
         GH.format("dynamo"): gh_jobs(9, content="<p>Careers at dynamo.com</p>"),  # must not be tried
     })
-    assert (res.outcome, res.job_system) == ("unsupported", "workday")
-    assert res.job_system_url == "https://dynamo.wd5.myworkdayjobs.com/en-US/External"
+    assert (res.outcome, res.job_system) == ("unsupported", "icims")
+    assert res.job_system_url == "https://careers-dynamo.icims.com/jobs/search"
     assert boards_of(conn, "Dynamo") == []
     saved = resolution(conn, "Dynamo")
-    assert (saved["job_system"], saved["job_system_url"]) == ("workday", res.job_system_url)
+    assert (saved["job_system"], saved["job_system_url"]) == ("icims", res.job_system_url)
     # A careers page that names its job system outranks guessing: no board API was called.
     assert web.urls == ["https://dynamo.com/robots.txt", "https://dynamo.com",
                         "https://dynamo.com/careers"]
@@ -334,9 +334,9 @@ def test_scan_finds_boards_in_links_embeds_and_escaped_json():
     supported, unsupported = scan_for_boards(page)
     assert set(supported) == {
         ("greenhouse", "acme"), ("greenhouse", "acmeembed"), ("greenhouse", "acmeframe"),
-        ("ashby", "Acme.Labs"), ("lever", "acme-co"), ("lever", "acmeapi")}
+        ("ashby", "Acme.Labs"), ("lever", "acme-co"), ("lever", "acmeapi"),
+        ("workday", "acme/wd1/Careers")}
     assert unsupported == {
-        "workday": "https://acme.wd1.myworkdayjobs.com/Careers",
         "workable": "https://apply.workable.com/acme/",
         "lever-eu": "https://jobs.eu.lever.co/acme-eu"}
 

@@ -189,6 +189,33 @@ ls -lh ~/.rolescout/backups
 Each run in the log starts with `=== rolescout daily, <time> ===` and ends
 with `=== finished <time>, ok ===`.
 
+## Workday boards
+
+A Workday board is named by three things that do not follow from the company
+name: tenant, data center and career site, written `TENANT/wdN/SITE`
+(for example `acme/wd5/Careers`). `rolescout companies resolve` maps
+one whenever a company's site links to a Workday URL. To map one by hand,
+paste any URL from the career site, a job page included:
+
+```sh
+rolescout companies map "Acme" workday "https://acme.wd5.myworkdayjobs.com/en-US/Careers/login"
+```
+
+Workday costs more requests than the other sources, so the scout prints the
+requests and time each board took:
+
+- The list of roles takes one request per 20 roles, one second apart.
+- A description takes one request per role. It is fetched once, and only for
+  roles whose title matches a wanted phrase in `ranking.toml` (and no excluded
+  one) and for roles you marked saved or applied. Every other role is stored
+  without a description. After you add a wanted phrase, the next scout fetches
+  the descriptions it now needs.
+- One board gets at most 150 descriptions, 900 requests and 15 minutes per
+  run. What does not fit waits for the next run; a board cut short is marked
+  `partial` and none of its roles are closed that day.
+- A posted date comes from "Posted 5 Days Ago" in the list (exact once the
+  description is fetched). "Posted 30+ Days Ago" gives no date.
+
 ## Agents (MCP)
 
 To let an AI agent read the shortlist and work with rolescout without the
