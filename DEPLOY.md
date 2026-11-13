@@ -216,6 +216,33 @@ requests and time each board took:
 - A posted date comes from "Posted 5 Days Ago" in the list (exact once the
   description is fetched). "Posted 30+ Days Ago" gives no date.
 
+## New companies from portfolio boards
+
+Investor portfolio job boards can be read for companies you do not track
+yet. They are never used for roles. The board list and the filter are
+personal data: the boards live in the database and the filter in
+`~/.rolescout/candidates.toml`, next to it.
+
+```sh
+rolescout portfolio add https://jobs.example.vc      # once per board
+cd ~/rolescout-scraper && rolescout candidates init   # starter filter; edit it
+rolescout portfolio harvest                           # read the boards, apply the filter
+rolescout candidates --status eligible
+rolescout candidates why NAME
+rolescout candidates activate NAME                    # or --all, or --first N
+```
+
+Only boards on the Getro platform can be read, from their public pages; the
+platform's API is off limits and is never called. A harvest makes at most one
+request per second, obeys each board's robots.txt, and stops at its time
+limit; the next one continues where it stopped. The daily job runs a harvest
+once a week after the scout and the backup, for at most 15 minutes a day
+(`--harvest-days`, `--harvest-minutes`), and nothing it does can fail the
+scout. Activating a candidate adds it as a tier 3 company; its own job board
+is found by the weekly re-check, or at once with `rolescout companies resolve`.
+After editing the filter, `rolescout candidates apply` re-sorts every
+candidate with no network call.
+
 ## Agents (MCP)
 
 To let an AI agent read the shortlist and work with rolescout without the

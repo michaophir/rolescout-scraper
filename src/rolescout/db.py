@@ -221,6 +221,72 @@ MIGRATIONS: list[list] = [
         "ALTER TABLE run_boards ADD COLUMN note TEXT NOT NULL DEFAULT ''",
         _drop_false_workday_findings,
     ],
+    [
+        """
+        -- Portfolio job boards registered as a source of new companies.
+        -- Personal data: the list lives here, never in the repository.
+        CREATE TABLE portfolio_boards (
+            id               INTEGER PRIMARY KEY,
+            url              TEXT NOT NULL UNIQUE,     -- scheme and host, e.g. https://jobs.example.vc
+            name             TEXT NOT NULL DEFAULT '', -- from the board itself, or given by hand
+            platform         TEXT NOT NULL DEFAULT '', -- filled at the first harvest
+            added_at         TEXT NOT NULL,
+            last_harvest_at  TEXT,
+            last_error       TEXT,
+            companies_listed INTEGER
+        )
+        """,
+        """
+        -- Companies found on portfolio boards. One row per website domain,
+        -- however many boards list the company. No role is ever stored here:
+        -- only how many of its open roles matched the location rule.
+        CREATE TABLE candidates (
+            id               INTEGER PRIMARY KEY,
+            domain           TEXT NOT NULL UNIQUE,     -- registrable domain: the identity
+            name             TEXT NOT NULL DEFAULT '',
+            website          TEXT NOT NULL DEFAULT '',
+            stage            TEXT,
+            employees        INTEGER,
+            sectors          TEXT NOT NULL DEFAULT '[]',   -- JSON array
+            locations        TEXT NOT NULL DEFAULT '[]',   -- JSON array
+            company_id       INTEGER REFERENCES companies(id) ON DELETE SET NULL,  -- the tracked company it is
+            status           TEXT NOT NULL DEFAULT 'review',  -- eligible | review | rejected
+            reason           TEXT NOT NULL DEFAULT '',
+            checks           TEXT NOT NULL DEFAULT '{}',   -- JSON: each rule's result
+            matching_roles   INTEGER,                      -- open roles matching the location rule
+            roles_rule       TEXT,                         -- the locations that count was taken for
+            roles_checked_at TEXT,
+            first_seen_at    TEXT NOT NULL,
+            last_checked_at  TEXT,                         -- when its company page was last read
+            activated_at     TEXT,
+            dismissed_at     TEXT,
+            dismiss_note     TEXT NOT NULL DEFAULT ''
+        )
+        """,
+        """
+        CREATE TABLE candidate_listings (
+            candidate_id  INTEGER NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
+            board_id      INTEGER NOT NULL REFERENCES portfolio_boards(id) ON DELETE CASCADE,
+            slug          TEXT NOT NULL,     -- the company's page on that board
+            platform_id   TEXT NOT NULL DEFAULT '',  -- the board platform's id for the company
+            listed_at     TEXT NOT NULL,
+            last_listed_at TEXT NOT NULL,
+            PRIMARY KEY (candidate_id, board_id)
+        )
+        """,
+        "CREATE INDEX candidate_listings_board ON candidate_listings (board_id, slug)",
+        """
+        -- Board pages that could not be turned into a candidate (no domain,
+        -- unreadable), so a repeat harvest does not re-read them every time.
+        CREATE TABLE portfolio_skips (
+            board_id    INTEGER NOT NULL REFERENCES portfolio_boards(id) ON DELETE CASCADE,
+            slug        TEXT NOT NULL,
+            reason      TEXT NOT NULL,
+            checked_at  TEXT NOT NULL,
+            PRIMARY KEY (board_id, slug)
+        )
+        """,
+    ],
 ]
 
 SCHEMA_VERSION = len(MIGRATIONS)

@@ -98,6 +98,8 @@ Read (always available):
 | `connector_brief` | A Markdown brief for building an adapter for one job system |
 | `hiring_trends` | Open counts and roles opened and closed over a date range, overall and by department |
 | `health` | What `rolescout status` shows |
+| `list_candidates` | Companies found on portfolio boards, with status and reason, and the funnel |
+| `explain_candidate` | Each filter rule's result for one candidate |
 
 Write (absent in read-only mode):
 
@@ -110,6 +112,8 @@ Write (absent in read-only mode):
 | `reactivate_company` | Resume tracking it |
 | `map_board` | Map a company to a Greenhouse, Lever, Ashby or Workday board |
 | `record_job_system` | Record by hand which unsupported job system a company uses |
+| `activate_candidate` | Start tracking a candidate as a tier 3 company |
+| `dismiss_candidate` | Mark a candidate as never wanted |
 
 Roles are identified by `role_id`, the integer every role-returning tool
 includes. Companies are identified by name. Lists take `limit` and `offset`

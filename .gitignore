@@ -18,3 +18,6 @@ rolescout-companies*.json
 
 # Ranking config (personal: the roles you want). It belongs next to the database.
 ranking.toml
+
+# Candidates filter config (personal: the companies you want). It belongs next to the database.
+candidates.toml

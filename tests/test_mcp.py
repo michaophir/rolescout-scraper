@@ -17,9 +17,11 @@ from tests.test_scout import Clock, Scripted  # noqa: E402
 from tests.test_shortlist import SMALL_CONFIG, mk  # noqa: E402
 
 READ_TOOLS = {"get_shortlist", "get_role", "search_roles", "explain_rank", "list_marks",
-              "list_target_companies", "coverage_gaps", "connector_brief", "hiring_trends", "health"}
+              "list_target_companies", "coverage_gaps", "connector_brief", "hiring_trends", "health",
+              "list_candidates", "explain_candidate"}
 WRITE_TOOLS = {"mark_role", "unmark_role", "add_target_company", "deactivate_company",
-               "reactivate_company", "map_board", "record_job_system"}
+               "reactivate_company", "map_board", "record_job_system",
+               "activate_candidate", "dismiss_candidate"}
 
 
 class Session:
@@ -417,3 +419,46 @@ def test_importing_the_module_does_not_need_the_sdk():
             "except RuntimeError as exc:\n    print(exc)\n")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert 'pip install "rolescout[mcp]"' in out.stdout, out.stderr
+
+
+# --- candidates from portfolio boards ----------------------------------------
+
+def test_candidate_tools(world, isolated_db_path):
+    from rolescout import candidates as cands
+    from rolescout import portfolio
+    from tests.test_candidates import A, CONFIG, FakeWeb, Fetcher, board_pages, co
+    session, _, conn = world
+    portfolio.add_board(conn, A, "Alpha Fund")
+    listed = [co("acme", "acme.example", id=1, employees=200), co("tiny", "tiny.example", id=2, employees=3),
+              co("vague", "vague.example", id=3, stage="other"), co("alpha-co", "alpha.com", id=4)]
+    portfolio.harvest(conn, cands.parse_config(CONFIG), fetcher=Fetcher(session=FakeWeb(board_pages(A, "x", "1", listed))))
+
+    everything = session.call("list_candidates")
+    assert everything["total"] == 4 and everything["funnel"]["already_tracked"] == 1   # alpha.com is the tracked Alpha
+    assert set(everything["candidates"][0]) == {"name", "domain", "status", "why", "stage", "employees",
+                                                "sectors", "matching_open_roles", "boards"}
+    eligible = session.call("list_candidates", status="eligible")
+    assert [(c["name"], c["domain"], c["boards"]) for c in eligible["candidates"]] == [
+        ("Acme", "acme.example", ["Alpha Fund"])]
+    assert session.call("list_candidates", limit=1)["next_offset"] == 1
+
+    why = session.call("explain_candidate", candidate="tiny.example")
+    assert (why["status"], why["why"]) == ("rejected", "3 employees, below the minimum of 10")
+    assert [(r["rule"], r["result"]) for r in why["rules"]] == [
+        ("size", "reject"), ("stage", "pass"), ("sector", "pass"), ("roles", "skipped")]
+    assert "no candidate named" in session.error("explain_candidate", candidate="Nope")
+
+    done = session.call("activate_candidate", candidate="Acme")
+    assert (done["name"], done["tier"], done["tags"]) == ("Acme", 3, ["portfolio:alpha-fund"])
+    assert session.call("explain_candidate", candidate="acme.example")["status"] == "tracked"
+    assert "pass --force" in session.error("activate_candidate", candidate="Tiny")
+    assert "already tracked" in session.error("activate_candidate", candidate="Acme")
+
+    gone = session.call("dismiss_candidate", candidate="vague.example", note="too early")
+    assert gone == {"name": "Vague", "domain": "vague.example", "status": "dismissed", "note": "too early"}
+    assert [c["name"] for c in session.call("list_candidates", status="dismissed")["candidates"]] == ["Vague"]
+    assert conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0] == 3     # no scout, no fetch: only the fixture's runs
+
+    read_only = Session(mcp_server.build_server(isolated_db_path, read_only=True))
+    assert read_only.call("list_candidates")["total"] == 4
+    assert "activate_candidate" in read_only.error("activate_candidate", candidate="Tiny")     # no such tool

@@ -7,6 +7,23 @@ import pytest
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
+def pytest_configure(config):
+    """Keep every test away from the real ~/.rolescout, whatever a test does.
+
+    The per-test fixture below points the default database at a temp file,
+    but a test that calls ``monkeypatch.undo()`` drops that again. Setting
+    these for the whole session means the fallback is still a throwaway
+    folder, never the user's home.
+    """
+    import os
+    import tempfile
+
+    fallback = Path(tempfile.mkdtemp(prefix="rolescout-tests-"))
+    os.environ["ROLESCOUT_DB"] = str(fallback / "fallback.db")
+    for name in ("ROLESCOUT_RANKING", "ROLESCOUT_CANDIDATES", "ROLESCOUT_MCP_TOKEN"):
+        os.environ.pop(name, None)
+
+
 @pytest.fixture(autouse=True)
 def no_network(monkeypatch):
     """Fail any test that tries to open a network connection."""

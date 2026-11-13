@@ -29,6 +29,8 @@ from rolescout.scout import BoardResult, ScoutAlreadyRunning, run_scout
 from rolescout import shortlist as ranking
 from rolescout.shortlist import ConfigError, MarkError
 from rolescout.transfer import TransferError, export_companies, import_companies
+from rolescout import candidates as cands
+from rolescout import portfolio
 
 DESCRIPTION_PREVIEW_CHARS = 400
 
@@ -829,6 +831,251 @@ def _weekly_recheck(conn, args) -> None:
         print(f"Coverage re-check failed, will try again tomorrow: {type(exc).__name__}: {exc}")
 
 
+# --- portfolio boards and candidates ----------------------------------------
+
+def _candidates_config(args) -> Path:
+    return cands.config_path(resolve_db_path(args.db), getattr(args, "config", None))
+
+
+def _cmd_portfolio_add(args) -> int:
+    board = portfolio.add_board(connect(args.db), args.url, args.name or "")
+    print(f"Registered {board['url']}. Read its companies with: rolescout portfolio harvest")
+    return 0
+
+
+def _cmd_portfolio_list(args) -> int:
+    boards = portfolio.list_boards(connect(args.db))
+    if args.json:
+        print(json.dumps(boards, indent=2, ensure_ascii=False))
+        return 0
+    rows = [[b["id"], b["name"] or "-", b["url"], b["platform"] or "-",
+             "" if b["companies_listed"] is None else b["companies_listed"], b["candidates"],
+             (b["last_harvest_at"] or "never")[:16].replace("T", " "), b["last_error"] or ""] for b in boards]
+    print(format_table(["ID", "Name", "URL", "Platform", "Listed", "Candidates", "Last harvest (UTC)", "Problem"],
+                       rows, {"Problem": 60}))
+    print(f"\n{len(boards)} board{'' if len(boards) == 1 else 's'}.")
+    return 0
+
+
+def _cmd_portfolio_remove(args) -> int:
+    url, orphans = portfolio.remove_board(connect(args.db), args.board)
+    print(f"Removed {url}. Its candidates are kept"
+          + (f"; {orphans} are now listed on no board." if orphans else "."))
+    return 0
+
+
+def _funnel_lines(f: dict) -> list[str]:
+    return [
+        f"Listed on your boards:      {f['listed']:>6}",
+        f"  already tracked:          {f['already_tracked']:>6}",
+        f"  dismissed:                {f['dismissed']:>6}",
+        f"Considered:                 {f['considered']:>6}",
+        f"  passed size:              {f['passed_size']:>6}",
+        f"  passed stage:             {f['passed_stage']:>6}",
+        f"  passed sector:            {f['passed_sector']:>6}",
+        f"  passed open-role rule:    {f['passed_roles']:>6}",
+        f"Eligible:                   {f['eligible']:>6}",
+        f"Needs review:               {f['needs_review']:>6}",
+        f"Awaiting the role check:    {f['awaiting_role_check']:>6}",
+        f"Rejected:                   {f['rejected']:>6}",
+    ]
+
+
+def _print_harvest(summary) -> None:
+    rows = [[b.name or "-", b.url, b.listed, b.read, b.fresh, b.unreadable, b.no_domain, b.role_checks,
+             b.error or ("" if b.finished else "stopped at the time limit")] for b in summary.boards]
+    print(format_table(["Board", "URL", "Listed", "Read", "Fresh", "Unreadable", "No domain",
+                        "Role checks", "Note"], rows, {"Note": 60}))
+    print(f"\n{summary.requests} requests in {summary.seconds:.0f} seconds"
+          + ("; stopped at the time limit, the next harvest continues from here." if summary.stopped_early else "."))
+
+
+def _run_harvest(conn, args, minutes: float | None, boards: list[str] | None = None):
+    cfg = cands.load_config(_candidates_config(args))
+    summary = portfolio.harvest(
+        conn, cfg, boards=boards, delay=args.delay, time_limit=minutes * 60 if minutes else None,
+        on_board=lambda b: print(f"  {b.name or b.url}: " + (b.error or f"{b.listed} companies listed, "
+                                 f"{b.read} read, {b.fresh} checked recently"), flush=True))
+    _print_harvest(summary)
+    print()
+    print("\n".join(_funnel_lines(cands.funnel(conn))))
+    return summary
+
+
+def _cmd_portfolio_harvest(args) -> int:
+    conn = connect(args.db)
+    if not portfolio.list_boards(conn):
+        print("No boards registered. Add one with: rolescout portfolio add URL")
+        return 0
+    print(f"Database: {resolve_db_path(args.db)}")
+    summary = _run_harvest(conn, args, args.max_minutes, args.boards or None)
+    if summary.complete and not args.boards:
+        portfolio.mark_harvested(conn)
+    print("\nSee them with: rolescout candidates --status eligible")
+    return 1 if summary.boards and all(b.error for b in summary.boards) else 0
+
+
+def _weekly_harvest(conn, args) -> None:
+    """Read the registered portfolio boards. Never fails the daily run."""
+    try:
+        print("\nWeekly portfolio harvest")
+        summary = _run_harvest(conn, args, args.harvest_minutes)
+        # A harvest cut short is not marked done: tomorrow's run carries on
+        # from where it stopped, still inside the same daily limit.
+        if summary.complete:
+            portfolio.mark_harvested(conn)
+    except Exception as exc:
+        print(f"Portfolio harvest failed, will try again tomorrow: {type(exc).__name__}: {exc}")
+
+
+def _cmd_candidates_init(args) -> int:
+    path = _candidates_config(args)
+    if path.exists() and not args.force:
+        print(f"error: {path} already exists. Edit it, or pass --force to replace it "
+              "(your changes would be lost).", file=sys.stderr)
+        return 1
+    filters = Path(args.filters).expanduser() if args.filters else Path("role_filters.csv")
+    keywords, seeded = [], ""
+    if filters.exists():
+        keywords, seeded = cands.read_sector_keywords(filters), filters.name
+    elif args.filters:
+        raise FileNotFoundError(f"no such file: {filters}")
+    text = cands.starter_config(keywords, seeded)
+    cands.parse_config(text)  # a starter that does not load would be a bug
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(text)
+    if keywords:
+        print(f"Wrote {path}: {len(keywords)} sector keywords from {filters}.")
+    else:
+        print(f"Wrote {path} with example sector keywords only (no role_filters.csv with domain rows "
+              "here; pass --filters PATH to seed from one). Edit the keywords before relying on it.")
+    repo = _inside_git_repo(path)
+    if repo:
+        print(f"warning: {path} is inside the git repository at {repo}. It is personal data; "
+              "keep it out of commits.", file=sys.stderr)
+    return 0
+
+
+def _cmd_candidates_apply(args) -> int:
+    conn = connect(args.db)
+    pending = cands.apply_filter(conn, cands.load_config(_candidates_config(args)))
+    print("Filter applied (no network).")
+    print("\n".join(_funnel_lines(cands.funnel(conn))))
+    if pending:
+        print(f"\n{len(pending)} passed the other rules and still need their open roles counted: "
+              "rolescout portfolio harvest")
+    return 0
+
+
+def _cmd_candidates(args) -> int:
+    conn = connect(args.db)
+    rows = cands.list_candidates(conn, args.status)
+    total = len(rows)
+    if args.limit:
+        rows = rows[:args.limit]
+    if args.json:
+        print(json.dumps(rows, indent=2, ensure_ascii=False))
+        return 0
+    if not total and not conn.execute("SELECT 1 FROM candidates LIMIT 1").fetchone():
+        print("No candidates yet. Register a board (rolescout portfolio add URL), create a filter "
+              "(rolescout candidates init), then: rolescout portfolio harvest")
+        return 0
+    table = [[r["state"], r["name"], r["domain"], r["stage"] or "", "" if r["employees"] is None else r["employees"],
+              ", ".join(r["sectors"][:3]), "" if r["matching_roles"] is None else r["matching_roles"],
+              len(r["boards"]),
+              (f"tracked as {r['tracked_as']}" if r["state"] == "tracked"
+               else r["dismiss_note"] or "dismissed" if r["state"] == "dismissed" else r["reason"])] for r in rows]
+    print(format_table(["Status", "Name", "Domain", "Stage", "Employees", "Sectors", "Roles", "Boards", "Why"],
+                       table, {"Name": 28, "Sectors": 40, "Why": 70}))
+    shown = f"{len(rows)} of {total}" if len(rows) != total else str(total)
+    print(f"\n{shown} candidate{'' if total == 1 else 's'}" + (f" with status {args.status}" if args.status else "")
+          + ".  Details: rolescout candidates why NAME")
+    return 0
+
+
+def _cmd_candidates_why(args) -> int:
+    conn = connect(args.db)
+    c = cands.get_candidate(conn, args.name)
+    if args.json:
+        print(json.dumps(c, indent=2, ensure_ascii=False))
+        return 0
+    print(f"{c['name']}  ({c['domain']})")
+    print(f"{c['website'] or 'no website'} | stage {c['stage'] or 'not given'} | "
+          f"{c['employees'] if c['employees'] is not None else 'unknown number of'} employees")
+    if c["locations"]:
+        print("Locations: " + ", ".join(c["locations"][:6]))
+    print("Sectors: " + (", ".join(c["sectors"]) or "none given"))
+    print("Listed on: " + (", ".join(b["name"] or b["url"] for b in c["boards"]) or "no registered board any more"))
+    print()
+    if c["state"] == "tracked":
+        print(f"Status: tracked, as {c['tracked_as']}" + (f" (activated {c['activated_at'][:10]})" if c["activated_at"] else
+                                                          " (its website matches a company you already track)"))
+    elif c["state"] == "dismissed":
+        print(f"Status: dismissed on {c['dismissed_at'][:10]}" + (f": {c['dismiss_note']}" if c["dismiss_note"] else ""))
+    else:
+        print(f"Status: {'needs review' if c['state'] == 'review' else c['state']}: {c['reason']}")
+    if c["checks"]:
+        print("\nRules, in order:")
+        labels = {"size": "Size", "stage": "Stage", "sector": "Sector", "roles": "Open roles"}
+        for rule in cands.RULES:
+            check = c["checks"].get(rule)
+            if check:
+                print(f"  {labels[rule] + ':':<12}{check['result']:<8} {check['detail']}")
+    return 0
+
+
+def _cmd_candidates_activate(args) -> int:
+    conn = connect(args.db)
+    if sum(bool(x) for x in (args.all, args.first, args.names)) != 1:
+        print("error: say which candidates: names, --all, or --first N.", file=sys.stderr)
+        return 1
+    if args.names:
+        chosen = [cands.get_candidate(conn, name) for name in args.names]
+    else:
+        chosen = cands.list_candidates(conn, "eligible")
+        if args.first:
+            chosen = chosen[:args.first]
+    if not chosen:
+        print("No eligible candidates to activate.")
+        return 0
+    done, failed = [], []
+    for candidate in chosen:
+        try:
+            done.append(cands.activate(conn, candidate, force=args.force))
+        except cands.CandidateError as exc:
+            failed.append(str(exc))
+    for d in done:
+        print(f"Activated {d['name']} ({d['domain']}) as a tier {d['tier']} company, tagged {', '.join(d['tags']) or 'with no board'}.")
+    for message in failed:
+        print(f"Not activated: {message}", file=sys.stderr)
+    if done:
+        print(f"\n{len(done)} activated. They have no job board mapped yet; find them with: "
+              "rolescout companies resolve")
+    return 1 if failed and not done else 0
+
+
+def _cmd_candidates_dismiss(args) -> int:
+    conn = connect(args.db)
+    for name in args.names:
+        candidate = cands.get_candidate(conn, name)
+        cands.dismiss(conn, candidate, args.note or "")
+        print(f"Dismissed {candidate['name']} ({candidate['domain']}); it will not be suggested again.")
+    return 0
+
+
+def _cmd_candidates_restore(args) -> int:
+    conn = connect(args.db)
+    for name in args.names:
+        candidate = cands.get_candidate(conn, name)
+        if cands.restore(conn, candidate):
+            print(f"Restored {candidate['name']} ({candidate['domain']}).")
+        else:
+            print(f"{candidate['name']} was not dismissed.")
+    return 0
+
+
 def _cmd_daily(args) -> int:
     """What the scheduled job runs: scout (retrying if the network is not up yet), then backup."""
     if args.log:
@@ -863,6 +1110,9 @@ def _cmd_daily(args) -> int:
             _print_backup(conn, args.backup_dir, args.keep)
         if code == 0 and recheck_due(conn, args.recheck_days):
             _weekly_recheck(conn, args)
+        # Last, and optional: nothing it does can change the scout's result.
+        if code == 0 and portfolio.harvest_due(conn, args.harvest_days):
+            _weekly_harvest(conn, args)
     except Exception as exc:  # the log must say why an unattended run died
         print(f"error: {type(exc).__name__}: {exc}")
         code = 1
@@ -1176,6 +1426,74 @@ def build_parser() -> argparse.ArgumentParser:
                    help="offer only the tools that read; every tool that changes anything is absent")
     p.set_defaults(func=_cmd_serve)
 
+    filt = argparse.ArgumentParser(add_help=False)
+    filt.add_argument(
+        "--config", metavar="PATH",
+        help=f"candidates filter (default: ${cands.CONFIG_ENV_VAR}, else {cands.CONFIG_NAME} next to the database)")
+
+    pf = commands.add_parser(
+        "portfolio", help="portfolio job boards you read for new companies (never for roles)")
+    pfsub = pf.add_subparsers(dest="subcommand", required=True, metavar="SUBCOMMAND")
+    p = pfsub.add_parser("add", parents=[db], help="register a board by its URL")
+    p.add_argument("url", help="the board's address, e.g. https://jobs.example.vc")
+    p.add_argument("--name", help="what to call it (default: the name the board gives itself)")
+    p.set_defaults(func=_cmd_portfolio_add)
+    p = pfsub.add_parser("list", parents=[db], help="list registered boards")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=_cmd_portfolio_list)
+    p = pfsub.add_parser("remove", parents=[db], help="unregister a board; its candidates are kept")
+    p.add_argument("board", help="the board's ID, URL or name")
+    p.set_defaults(func=_cmd_portfolio_remove)
+    p = pfsub.add_parser(
+        "harvest", parents=[db, filt],
+        help="read the boards' companies into the candidates list and apply the filter")
+    p.add_argument("boards", nargs="*", metavar="BOARD", help="only these boards (default: all)")
+    p.add_argument("--max-minutes", type=float, default=30.0, metavar="MINUTES",
+                   help="stop after this long; the next harvest continues (default: 30, 0 for no limit)")
+    p.add_argument("--delay", type=float, default=1.0, metavar="SECONDS",
+                   help="minimum pause between requests (default: 1.0)")
+    p.set_defaults(func=_cmd_portfolio_harvest)
+
+    cd = commands.add_parser(
+        "candidates", parents=[db, filt],
+        help="companies found on portfolio boards: eligible, needing review, or rejected")
+    cd.add_argument("--status", choices=cands.STATUSES, help="only candidates with this status")
+    cd.add_argument("--limit", type=int, metavar="N")
+    cd.add_argument("--json", action="store_true")
+    cd.set_defaults(func=_cmd_candidates)
+    cdsub = cd.add_subparsers(dest="subcommand", metavar="SUBCOMMAND")
+    late_c = argparse.ArgumentParser(add_help=False)
+    late_c.add_argument("--db", metavar="PATH", default=argparse.SUPPRESS, help="database file")
+    late_c.add_argument("--config", metavar="PATH", default=argparse.SUPPRESS, help="candidates filter")
+    p = cdsub.add_parser("init", parents=[late_c], help="create a starter filter config")
+    p.add_argument("--filters", metavar="CSV",
+                   help="seed sector keywords from the domain rows of a role_filters.csv-style file "
+                        "(default: role_filters.csv in the current folder, if present)")
+    p.add_argument("--force", action="store_true", help="replace an existing config")
+    p.set_defaults(func=_cmd_candidates_init)
+    p = cdsub.add_parser("apply", parents=[late_c],
+                         help="re-apply the filter to every candidate (no network)")
+    p.set_defaults(func=_cmd_candidates_apply)
+    p = cdsub.add_parser("why", parents=[late_c], help="show each rule's result for one candidate")
+    p.add_argument("name", help="the candidate's name or website domain")
+    p.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+    p.set_defaults(func=_cmd_candidates_why)
+    p = cdsub.add_parser(
+        "activate", parents=[late_c],
+        help="start tracking candidates: adds them as tier 3 companies tagged with their boards")
+    p.add_argument("names", nargs="*", metavar="NAME", help="candidates by name or domain")
+    p.add_argument("--all", action="store_true", help="every eligible candidate")
+    p.add_argument("--first", type=int, metavar="N", help="the first N eligible candidates, as listed")
+    p.add_argument("--force", action="store_true", help="allow a rejected or dismissed candidate named here")
+    p.set_defaults(func=_cmd_candidates_activate)
+    p = cdsub.add_parser("dismiss", parents=[late_c], help="never suggest these candidates again")
+    p.add_argument("names", nargs="+", metavar="NAME")
+    p.add_argument("--note", help="why, for your own reference")
+    p.set_defaults(func=_cmd_candidates_dismiss)
+    p = cdsub.add_parser("restore", parents=[late_c], help="undo a dismissal")
+    p.add_argument("names", nargs="+", metavar="NAME")
+    p.set_defaults(func=_cmd_candidates_restore)
+
     p = commands.add_parser(
         "gaps", parents=[db],
         help="companies we cannot fetch, grouped by job system, with connectors worth building")
@@ -1231,6 +1549,10 @@ def build_parser() -> argparse.ArgumentParser:
                         "this often; 0 turns it off (default: 7)")
     p.add_argument("--recheck-minutes", type=float, default=15.0, metavar="MINUTES",
                    help="upper limit on one coverage re-check (default: 15)")
+    p.add_argument("--harvest-days", type=float, default=7.0, metavar="DAYS",
+                   help="read the registered portfolio boards this often; 0 turns it off (default: 7)")
+    p.add_argument("--harvest-minutes", type=float, default=15.0, metavar="MINUTES",
+                   help="upper limit on one day's portfolio harvest (default: 15)")
     p.set_defaults(func=_cmd_daily)
 
     query = commands.add_parser(
@@ -1260,7 +1582,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return args.func(args)
     except (CompanyError, SchemaError, FileNotFoundError, TransferError, BackupError,
-            launchd.ScheduleError, GapsError, ConfigError, MarkError) as exc:
+            launchd.ScheduleError, GapsError, ConfigError, MarkError, cands.ConfigError,
+            cands.CandidateError, portfolio.PortfolioError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:

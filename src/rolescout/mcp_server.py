@@ -15,6 +15,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
+from rolescout import candidates as cands
 from rolescout import shortlist as ranking
 from rolescout.adapters import ADAPTERS
 from rolescout.companies import CompanyError, add_board, add_company, get_company, list_companies, set_active
@@ -134,7 +135,8 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
             if read_only:
                 conn.execute("PRAGMA query_only = ON")
             yield conn
-        except (CompanyError, MarkError, ConfigError, GapsError, ValueError) as exc:
+        except (CompanyError, MarkError, ConfigError, GapsError, ValueError, cands.CandidateError,
+                cands.ConfigError) as exc:
             raise ToolError(str(exc)) from None
         finally:
             conn.close()
@@ -495,8 +497,92 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
                 "server_mode": "read-only" if read_only else "read-write",
             }
 
+    CandidateRef = Annotated[str, Field(description=(
+        "The candidate's website domain (e.g. example.com) or its name, as list_candidates shows them."))]
+
+    def candidate_row(c: dict) -> dict:
+        return {"name": c["name"], "domain": c["domain"], "status": c["state"],
+                "why": (f"tracked as {c['tracked_as']}" if c["state"] == "tracked"
+                        else c["dismiss_note"] or "dismissed" if c["state"] == "dismissed" else c["reason"]),
+                "stage": c["stage"], "employees": c["employees"], "sectors": c["sectors"][:5],
+                "matching_open_roles": c["matching_roles"],
+                "boards": [b["name"] or b["url"] for b in c["boards"]]}
+
+    @server.tool(title="List candidate companies", annotations=reads)
+    def list_candidates(
+        status: Annotated[Literal["eligible", "review", "rejected", "tracked", "dismissed"] | None, Field(description=(
+            "eligible: passed every rule, ready to activate. review: a rule could not be decided. "
+            "rejected: failed a rule. tracked: already one of the owner's companies. dismissed: the "
+            "owner never wants it. Omit for all."))] = None,
+        limit: Limit = 25,
+        offset: Offset = 0,
+    ) -> dict[str, Any]:
+        """Companies found on the investor portfolio boards the owner follows, that are not yet
+        (or already) tracked. Each has a name, website domain, funding stage, employee count,
+        sectors, the boards that list it, and a status with the reason.
+
+        Use it for "any new companies worth adding" or "what did the last harvest find". These
+        are companies, not jobs: no role is stored for a candidate until it is activated and its
+        own job board is fetched. Results are ordered by how many boards list the company, then
+        by size. The funnel in the result shows how the whole list narrows rule by rule.
+        """
+        with database() as conn:
+            rows = cands.list_candidates(conn, status)
+            limit, offset = _page(limit, offset)
+            page = rows[offset:offset + limit]
+            return {"total": len(rows), "candidates": [candidate_row(c) for c in page],
+                    "next_offset": _next(offset, len(page), len(rows)), "funnel": cands.funnel(conn)}
+
+    @server.tool(title="Explain a candidate's status", annotations=reads)
+    def explain_candidate(candidate: CandidateRef) -> dict[str, Any]:
+        """Why a candidate company is eligible, needs review, or was rejected: the result of each
+        filter rule in order (size, funding stage, sector, open roles in the wanted locations),
+        plus its details and the boards that list it.
+
+        Use it when the owner asks "why was X rejected" or before recommending that a candidate
+        in review be activated.
+        """
+        with database() as conn:
+            c = cands.get_candidate(conn, candidate)
+            return {**candidate_row(c), "website": c["website"], "locations": c["locations"][:8],
+                    "sectors": c["sectors"],
+                    "rules": [{"rule": rule, **c["checks"][rule]} for rule in cands.RULES if rule in c["checks"]],
+                    "first_seen": c["first_seen_at"][:10], "last_checked": (c["last_checked_at"] or "")[:10] or None}
+
     if read_only:
         return server
+
+    @server.tool(title="Activate a candidate", annotations=writes)
+    def activate_candidate(
+        candidate: CandidateRef,
+        force: Annotated[bool, Field(description=(
+            "Activate even though the candidate is rejected or dismissed. Leave false unless the "
+            "owner said to override."))] = False,
+    ) -> dict[str, Any]:
+        """Start tracking a candidate: it becomes one of the owner's target companies at tier 3,
+        tagged with the portfolio boards that list it. Its own job board is not known yet; the
+        weekly re-check looks for it, and its roles appear after that. Nothing is fetched now.
+
+        Only activate when the owner has asked for that company (or for "the eligible ones").
+        Eligible and in-review candidates can be activated; rejected and dismissed ones need force.
+        """
+        with database() as conn:
+            done = cands.activate(conn, cands.get_candidate(conn, candidate), force=force)
+            return {**done, "next": "its job board is looked for at the next weekly re-check"}
+
+    @server.tool(title="Dismiss a candidate", annotations=writes)
+    def dismiss_candidate(
+        candidate: CandidateRef,
+        note: Annotated[str, Field(description="Optional: why the owner does not want it.")] = "",
+    ) -> dict[str, Any]:
+        """Mark a candidate as one the owner never wants, so it stops appearing as eligible or
+        in review. Later harvests keep it dismissed. Use it only when the owner has said so;
+        the owner can undo it from the command line (rolescout candidates restore NAME).
+        """
+        with database() as conn:
+            c = cands.get_candidate(conn, candidate)
+            cands.dismiss(conn, c, note)
+            return {"name": c["name"], "domain": c["domain"], "status": "dismissed", "note": note.strip() or None}
 
     # ------------------------------------------------------------ write tools
 

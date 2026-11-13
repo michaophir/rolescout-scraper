@@ -1,0 +1,533 @@
+{
+  "_about": "Recorded from a public Getro portfolio board, then anonymized: the board, companies, ids, URLs and descriptions are replaced with neutral examples; field names, value types and tag vocabulary are as recorded. Each section is the part of a page's __NEXT_DATA__ JSON that is read. The platform's API host disallows crawlers in robots.txt and was not called.",
+  "jobs_page": {
+    "_from": "GET /jobs -> __NEXT_DATA__.props.pageProps",
+    "network": {
+      "id": "9001",
+      "name": "Example Ventures",
+      "slug": "example-ventures",
+      "domain": "example.vc",
+      "url": "jobs.example.vc",
+      "kind": "ecosystem",
+      "segment": "vc_pe",
+      "tabsOrder": "jobs, companies, talent_network",
+      "jobBoardFilters": {
+        "stageFilter": true,
+        "locationFilter": true,
+        "seniorityFilter": true,
+        "companySizeFilter": true,
+        "compensationFilter": true,
+        "jobFunctionFilter": true,
+        "industryTagsFilter": true
+      }
+    },
+    "initialState": {
+      "jobs": {
+        "total": 897,
+        "found": [
+          {
+            "id": 5000000,
+            "organization": {
+              "stage": "series_unknown",
+              "logoUrl": "https://cdn.example/logo.png",
+              "topics": [
+                "Enterprise",
+                "FinTech",
+                "SaaS"
+              ],
+              "name": "Acme Robotics",
+              "headCount": 4,
+              "id": 7000,
+              "industryTags": [
+                "Advertising",
+                "Art And Entertainment",
+                "Business/Productivity Software",
+                "Commerce and Shopping",
+                "Community and Lifestyle",
+                "Cybersecurity",
+                "E-Commerce",
+                "Finance",
+                "Financial Services",
+                "Financial Software",
+                "Identity Management",
+                "Internet",
+                "Internet Services",
+                "Lifestyle",
+                "Monitoring",
+                "Other Financial Services",
+                "Platform",
+                "Retail",
+                "Search",
+                "Shopping",
+                "Technology"
+              ],
+              "slug": "acme-robotics"
+            },
+            "compensationPublic": true,
+            "featured": false,
+            "compensationAmountMaxCents": 28000000,
+            "searchableLocations": [
+              "New York, NY, USA",
+              "New York, USA",
+              "United States",
+              "North America"
+            ],
+            "createdAt": 1794574996,
+            "weight": 0,
+            "compensationAmountMinCents": 22200000,
+            "source": "career_page",
+            "title": "Engineering Manager",
+            "workMode": "on_site",
+            "url": "https://boards.greenhouse.io/acmerobotics/jobs/6000000",
+            "skills": [
+              "Information Infrastructure",
+              "DevOps",
+              "SRE",
+              "Terraform",
+              "Python (Programming Language)",
+              "Go (Programming Language)",
+              "Amazon Web Services",
+              "Kubernetes",
+              "Incident Response"
+            ],
+            "locationDetails": [
+              {
+                "name": "New York, NY, USA",
+                "areaType": "locality",
+                "point": "POINT (-74.0059728 40.7127753)"
+              }
+            ],
+            "compensationOffersEquity": true,
+            "compensationCurrency": "USD",
+            "compensationPeriod": "year",
+            "locations": [
+              "New York, NY, USA"
+            ],
+            "hasDescription": true,
+            "slug": "5000000-example-role",
+            "seniority": "senior"
+          },
+          {
+            "id": 5000001,
+            "organization": {
+              "stage": "acquisition",
+              "logoUrl": "https://cdn.example/logo.png",
+              "topics": [
+                "Consumer",
+                "Health"
+              ],
+              "name": "Bolt Health",
+              "headCount": 5,
+              "id": 7001,
+              "industryTags": [
+                "Enterprise Software",
+                "Fitness",
+                "Health Care",
+                "Medical",
+                "Mental Health",
+                "Personal Health",
+                "Therapeutics",
+                "Wellness"
+              ],
+              "slug": "bolt-health"
+            },
+            "compensationPublic": true,
+            "featured": false,
+            "compensationAmountMaxCents": 4423,
+            "searchableLocations": [
+              "Remote"
+            ],
+            "createdAt": 1794573893,
+            "weight": 0,
+            "compensationAmountMinCents": 3846,
+            "source": "career_page",
+            "title": "Customer Support Specialist",
+            "workMode": "remote",
+            "url": "https://boards.greenhouse.io/bolthealth/jobs/6000001",
+            "skills": [
+              "Care Coordination",
+              "Crisis Management",
+              "Troubleshooting (Problem Solving)",
+              "Empathy"
+            ],
+            "locationDetails": [
+              {
+                "name": "Remote",
+                "areaType": "global",
+                "point": null
+              }
+            ],
+            "compensationOffersEquity": false,
+            "compensationCurrency": "USD",
+            "compensationPeriod": "hour",
+            "locations": [
+              "Remote"
+            ],
+            "hasDescription": true,
+            "slug": "5000001-example-role",
+            "seniority": "entry_level"
+          },
+          {
+            "id": 5000002,
+            "organization": {
+              "stage": "acquisition",
+              "logoUrl": "https://cdn.example/logo.png",
+              "topics": [
+                "Consumer",
+                "Health"
+              ],
+              "name": "Cobalt Data",
+              "headCount": 5,
+              "id": 7002,
+              "industryTags": [
+                "Enterprise Software",
+                "Fitness",
+                "Health Care",
+                "Medical",
+                "Mental Health",
+                "Personal Health",
+                "Therapeutics",
+                "Wellness"
+              ],
+              "slug": "cobalt-data"
+            },
+            "compensationPublic": true,
+            "featured": false,
+            "compensationAmountMaxCents": null,
+            "searchableLocations": [
+              "Remote"
+            ],
+            "createdAt": 1794573893,
+            "weight": 0,
+            "compensationAmountMinCents": null,
+            "source": "career_page",
+            "title": "Account Executive",
+            "workMode": "remote",
+            "url": "https://boards.greenhouse.io/cobaltdata/jobs/6000002",
+            "skills": [
+              "Care Coordination",
+              "Crisis Management",
+              "Interpersonal Communications",
+              "Empathy",
+              "Troubleshooting (Problem Solving)"
+            ],
+            "locationDetails": [
+              {
+                "name": "Remote",
+                "areaType": "global",
+                "point": null
+              }
+            ],
+            "compensationOffersEquity": null,
+            "compensationCurrency": null,
+            "compensationPeriod": "period_not_defined",
+            "locations": [
+              "Remote"
+            ],
+            "hasDescription": true,
+            "slug": "5000002-example-role",
+            "seniority": "entry_level"
+          }
+        ]
+      }
+    }
+  },
+  "company_page": {
+    "_from": "GET /companies/acme-robotics -> __NEXT_DATA__.props.pageProps.company",
+    "company": {
+      "id": 7000,
+      "name": "Acme Robotics",
+      "description": "Example company description.",
+      "founded": "2020",
+      "slug": "acme-robotics",
+      "domain": "acme-robotics.example",
+      "qa": true,
+      "approxEmployees": 263,
+      "orgType": "private",
+      "bizModels": [
+        "B2B"
+      ],
+      "stage": "series_d",
+      "websiteUrl": "http://acme-robotics.example",
+      "hasActiveJobs": true,
+      "industryTags": [
+        "Analytics",
+        "Artificial Intelligence (AI)",
+        "Cloud Security",
+        "Compliance",
+        "Consumer Electronics",
+        "Data Governance",
+        "Hardware",
+        "Software"
+      ],
+      "editableIndustryTags": [
+        {
+          "id": 4101,
+          "description": "Analytics"
+        },
+        {
+          "id": 3671,
+          "description": "Artificial Intelligence (AI)"
+        },
+        {
+          "id": 3691,
+          "description": "Cloud Security"
+        },
+        {
+          "id": 3685,
+          "description": "Compliance"
+        },
+        {
+          "id": 4059,
+          "description": "Consumer Electronics"
+        },
+        {
+          "id": 7727,
+          "description": "Data Governance"
+        },
+        {
+          "id": 3730,
+          "description": "Hardware"
+        },
+        {
+          "id": 3652,
+          "description": "Software"
+        }
+      ],
+      "scrapingEnabled": true,
+      "lastSuccessfullyScrapedAt": "2026-11-13T12:14:17.147Z",
+      "ocpSearchStatus": "completed",
+      "jobSourceCustomerFacingStatus": "Live",
+      "activeJobsCount": 116,
+      "organizationSizes": [
+        [
+          "2023-12-31T00:00:00.000Z",
+          120
+        ],
+        [
+          "2024-12-31T00:00:00.000Z",
+          200
+        ]
+      ],
+      "linkedinUrl": "https://www.linkedin.com/company/000000",
+      "crunchbaseUrl": "https://www.crunchbase.com/organization/acme-robotics",
+      "logoUrl": "https://cdn.example/logo.png",
+      "topics": [],
+      "jobFunctions": [
+        {
+          "id": "1064993780",
+          "name": "Administration"
+        },
+        {
+          "id": "1064993781",
+          "name": "Accounting & Finance"
+        },
+        {
+          "id": "1064993782",
+          "name": "Marketing & Communications"
+        },
+        {
+          "id": "1064993784",
+          "name": "Software Engineering"
+        },
+        {
+          "id": "1064993785",
+          "name": "Other Engineering"
+        },
+        {
+          "id": "1064993786",
+          "name": "People & HR"
+        },
+        {
+          "id": "1064993787",
+          "name": "Product"
+        },
+        {
+          "id": "1064993788",
+          "name": "IT"
+        },
+        {
+          "id": "1064993789",
+          "name": "Design"
+        },
+        {
+          "id": "1064993790",
+          "name": "Legal"
+        },
+        {
+          "id": "1064993791",
+          "name": "Sales & Business Development"
+        },
+        {
+          "id": "1064993792",
+          "name": "Operations"
+        },
+        {
+          "id": "1064993794",
+          "name": "Quality Assurance"
+        }
+      ],
+      "locations": [
+        {
+          "id": "426691",
+          "name": "Ward Estates, Kansas City, MO, USA",
+          "placeId": "ChIJp_XlZqnvwIcR2ON7zFhTf3U"
+        },
+        {
+          "id": "16",
+          "name": "San Jose, CA, USA",
+          "placeId": "ChIJ9T_5iuTKj4ARe3GfygqMnbk"
+        },
+        {
+          "id": "49",
+          "name": "San Francisco, CA, USA",
+          "placeId": "ChIJIQBpAG2ahYAR_6128GcTUEo"
+        },
+        {
+          "id": "880",
+          "name": "Cupertino, CA, USA",
+          "placeId": "ChIJq3fTG1e0j4ARtHjho-E_TTk"
+        },
+        {
+          "id": "1811",
+          "name": "Menlo Park, CA, USA",
+          "placeId": "ChIJ_4ByEbGmj4ARq4nyXY6Zv-s"
+        }
+      ]
+    }
+  },
+  "job_page": {
+    "_from": "GET /companies/acme-robotics/jobs/5000000-example-role -> __NEXT_DATA__.props.pageProps.initialState.jobs.currentJob",
+    "currentJob": {
+      "applicationMethod": "method_not_defined",
+      "applicationPath": null,
+      "compensationCurrency": "USD",
+      "compensationPeriod": "year",
+      "compensationAmountMinCents": 17500000,
+      "compensationAmountMaxCents": 27500000,
+      "compensationOffersEquity": false,
+      "compensationPublic": true,
+      "description": "<p>Example role description.</p>",
+      "descriptionLastUpdatedAt": "2026-11-12T11:16:56.642Z",
+      "employmentTypes": [
+        "full_time"
+      ],
+      "expiresAt": null,
+      "id": 5000000,
+      "locations": [
+        {
+          "id": 16,
+          "name": "San Jose, CA, USA",
+          "placeId": "ChIJ9T_5iuTKj4ARe3GfygqMnbk",
+          "description": "San Jose, CA, USA"
+        }
+      ],
+      "organization": {
+        "id": 7000,
+        "domain": "acme-robotics.example",
+        "name": "Acme Robotics",
+        "logoUrl": "https://cdn.example/logo.png",
+        "slug": "acme-robotics",
+        "jobBoardCollectionsCount": 9,
+        "pmktpEnabled": false,
+        "approxEmployees": 263,
+        "description": "Example company description.",
+        "stage": "series_d",
+        "industryTags": [
+          {
+            "description": "Analytics"
+          },
+          {
+            "description": "Application Specific Integrated Circuit (ASIC)"
+          },
+          {
+            "description": "Artificial Intelligence (AI)"
+          },
+          {
+            "description": "Cloud Security"
+          },
+          {
+            "description": "Compliance"
+          },
+          {
+            "description": "Consumer Electronics"
+          },
+          {
+            "description": "Data & Analytics"
+          },
+          {
+            "description": "Data Governance"
+          },
+          {
+            "description": "Hardware"
+          },
+          {
+            "description": "Manufacturing"
+          },
+          {
+            "description": "Semiconductor"
+          },
+          {
+            "description": "Software"
+          }
+        ],
+        "locations": [
+          {
+            "id": 16,
+            "name": "San Jose, CA, USA",
+            "placeId": "ChIJ9T_5iuTKj4ARe3GfygqMnbk",
+            "description": "San Jose, CA, USA"
+          },
+          {
+            "id": 49,
+            "name": "San Francisco, CA, USA",
+            "placeId": "ChIJIQBpAG2ahYAR_6128GcTUEo",
+            "description": "San Francisco, CA, USA"
+          },
+          {
+            "id": 880,
+            "name": "Cupertino, CA, USA",
+            "placeId": "ChIJq3fTG1e0j4ARtHjho-E_TTk",
+            "description": "Cupertino, CA, USA"
+          },
+          {
+            "id": 1811,
+            "name": "Menlo Park, CA, USA",
+            "placeId": "ChIJ_4ByEbGmj4ARq4nyXY6Zv-s",
+            "description": "Menlo Park, CA, USA"
+          },
+          {
+            "id": 426691,
+            "name": "Ward Estates, Kansas City, MO, USA",
+            "placeId": "ChIJp_XlZqnvwIcR2ON7zFhTf3U",
+            "description": "Ward Estates, Kansas City, MO, USA"
+          }
+        ]
+      },
+      "postedAt": "2026-11-07T11:54:49.336Z",
+      "slug": "5000000-example-role",
+      "source": "career_page",
+      "status": "active",
+      "title": "Product Manager",
+      "url": "https://jobs.ashbyhq.com/acmerobotics/00000000-0000-4000-8000-000000000000",
+      "deactivatedAt": null,
+      "closedAt": null,
+      "passesFilter": true,
+      "visibility": "visible",
+      "jobFunctions": []
+    }
+  },
+  "sitemap_sample": {
+    "_from": "GET /sitemap.xml -> <loc> values",
+    "locs": [
+      "https://jobs.example.vc",
+      "https://jobs.example.vc/jobs",
+      "https://jobs.example.vc/companies",
+      "https://jobs.example.vc/companies/acme-robotics",
+      "https://jobs.example.vc/companies/bolt-health",
+      "https://jobs.example.vc/companies/cobalt-data",
+      "https://jobs.example.vc/companies/acme-robotics/jobs/5000000-example-role",
+      "https://jobs.example.vc/companies/acme-robotics/jobs/5000001-example-role"
+    ]
+  }
+}
