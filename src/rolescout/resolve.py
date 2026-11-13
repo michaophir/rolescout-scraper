@@ -37,6 +37,7 @@ from rolescout.adapters import ADAPTERS, BoardNotFound, SourceError, get_adapter
 from rolescout.companies import CompanyError, add_board
 from rolescout.db import transaction, utc_now
 from rolescout.http import USER_AGENT, make_session
+from rolescout.urls import InvalidWebsite, normalize_website
 
 PAGE_TIMEOUT = 20
 
@@ -633,9 +634,22 @@ class Resolver:
         return res
 
     def _resolve(self, res: Resolution, company: str, website: str) -> Resolution:
+        # Stored values are normalized on entry, but never trust that here:
+        # a scheme-less or broken value must not reach the HTTP layer.
+        try:
+            website = normalize_website(website)
+        except InvalidWebsite as exc:
+            res.notes.append(f"invalid website on record ({exc}); its site was not read. "
+                             "Correct it by importing a CSV row for this company with the right website")
+            website = ""
+            invalid = True
+        else:
+            invalid = False
         own_domains = {registrable_domain(website)} - {""}
         supported, unsupported, fingerprints = {}, {}, {}
-        if website:
+        if invalid:
+            pass
+        elif website:
             supported, unsupported, fingerprints = self._site_evidence(
                 company, website, res, own_domains)
         else:

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from rolescout.adapters import ADAPTERS
 from rolescout.db import transaction, utc_now
+from rolescout.urls import InvalidWebsite, normalize_website
 
 
 class CompanyError(Exception):
@@ -27,6 +28,14 @@ def _parse_tier(value) -> int | None:
         raise CompanyError(f"tier must be a whole number, got {text!r}") from None
 
 
+def clean_website(value: object, company: str = "") -> str:
+    """``normalize_website`` with the error turned into a CompanyError that names the company."""
+    try:
+        return normalize_website(value)
+    except InvalidWebsite as exc:
+        raise CompanyError(f"{company}: {exc}" if company else str(exc)) from None
+
+
 def get_company(conn: sqlite3.Connection, name: str) -> sqlite3.Row:
     row = conn.execute("SELECT * FROM companies WHERE name = ?", (name.strip(),)).fetchone()
     if row is None:
@@ -38,11 +47,12 @@ def add_company(conn, name: str, *, website: str = "", tier=None, tags=None) -> 
     name = name.strip()
     if not name:
         raise CompanyError("company name is empty")
+    website = clean_website(website)
     try:
         with transaction(conn):
             cur = conn.execute(
                 "INSERT INTO companies (name, website, tier, tags, created_at) VALUES (?, ?, ?, ?, ?)",
-                (name, website.strip(), _parse_tier(tier), json.dumps(_clean_tags(tags)), utc_now()))
+                (name, website, _parse_tier(tier), json.dumps(_clean_tags(tags)), utc_now()))
     except sqlite3.IntegrityError:
         raise CompanyError(f"company {name!r} already exists") from None
     return cur.lastrowid
@@ -53,19 +63,23 @@ def import_csv(conn, path: str | Path) -> tuple[int, int]:
 
     New names are added. Existing names get their website and tier updated;
     their tags, active flag and mapping are left alone. Returns (added, updated).
+    Websites are normalized ("acme.com" becomes "https://acme.com"). A row
+    with a value that cannot be a website stops the import before anything
+    is written.
     """
     with open(path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         if "company_name" not in (reader.fieldnames or []):
             raise CompanyError(f"{path}: expected a 'company_name' column")
         rows = [r for r in reader if (r.get("company_name") or "").strip()]
+    # Check every row first, so a bad one changes nothing.
+    websites = [clean_website(r.get("website"), f"{path}: {r['company_name'].strip()}") for r in rows]
 
     added = updated = 0
     now = utc_now()
     with transaction(conn):
-        for row in rows:
+        for row, website in zip(rows, websites):
             name = row["company_name"].strip()
-            website = (row.get("website") or "").strip()
             tier = _parse_tier(row.get("tier"))
             cur = conn.execute(
                 "UPDATE companies SET website = ?, tier = ? WHERE name = ?", (website, tier, name))

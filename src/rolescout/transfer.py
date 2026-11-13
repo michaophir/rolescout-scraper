@@ -9,6 +9,7 @@ import sqlite3
 
 from rolescout.adapters import ADAPTERS
 from rolescout.db import transaction, utc_now
+from rolescout.urls import InvalidWebsite, normalize_website
 
 FORMAT = "rolescout-companies"
 FORMAT_VERSION = 1
@@ -68,7 +69,11 @@ def import_companies(conn: sqlite3.Connection, data: object) -> dict:
                 name = (entry.get("name") or "").strip()
                 if not name:
                     raise TransferError("export contains a company with no name")
-                fields = (entry.get("website") or "", entry.get("tier"),
+                try:
+                    website = normalize_website(entry.get("website"))
+                except InvalidWebsite as exc:
+                    raise TransferError(f"{name}: {exc}") from None
+                fields = (website, entry.get("tier"),
                           json.dumps(sorted(entry.get("tags") or [])),
                           int(bool(entry.get("active", True))))
                 row = conn.execute("SELECT id FROM companies WHERE name = ?", (name,)).fetchone()

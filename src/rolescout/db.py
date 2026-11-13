@@ -12,7 +12,22 @@ DEFAULT_DB_PATH = Path("~/.rolescout/rolescout.db")
 # One entry per schema version; entry N upgrades a database from version N to
 # N+1. Never edit a released entry: append a new one. The current version is
 # stored in SQLite's `PRAGMA user_version`.
-MIGRATIONS: list[list[str]] = [
+def _repair_websites(conn: sqlite3.Connection) -> None:
+    """Give websites stored without a scheme ("alation.com") the normal form.
+    A value that cannot be a website is left as it is; resolve reports it."""
+    from rolescout.urls import InvalidWebsite, normalize_website
+
+    for row in conn.execute("SELECT id, website FROM companies WHERE website != ''").fetchall():
+        try:
+            fixed = normalize_website(row["website"])
+        except InvalidWebsite:
+            continue
+        if fixed != row["website"]:
+            conn.execute("UPDATE companies SET website = ? WHERE id = ?", (fixed, row["id"]))
+
+
+# Each step is an SQL statement or a function taking the connection.
+MIGRATIONS: list[list] = [
     [
         """
         CREATE TABLE companies (
@@ -183,6 +198,9 @@ MIGRATIONS: list[list[str]] = [
         )
         """,
     ],
+    [
+        _repair_websites,
+    ],
 ]
 
 SCHEMA_VERSION = len(MIGRATIONS)
@@ -226,8 +244,11 @@ def migrate(conn: sqlite3.Connection) -> None:
             f"up to version {SCHEMA_VERSION}; upgrade rolescout")
     for version in range(current, SCHEMA_VERSION):
         with transaction(conn):
-            for statement in MIGRATIONS[version]:
-                conn.execute(statement)
+            for step in MIGRATIONS[version]:
+                if callable(step):
+                    step(conn)
+                else:
+                    conn.execute(step)
             conn.execute(f"PRAGMA user_version = {version + 1}")
 
 
@@ -247,7 +268,7 @@ def connect(path: str | os.PathLike | None = None) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     # isolation_level=None: no implicit transactions; writes use transaction().
     conn = sqlite3.connect(db_path, isolation_level=None, timeout=30)
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = sqlite3.Row  # before migrate(): migration steps read rows by name
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA synchronous = NORMAL")
     conn.execute("PRAGMA foreign_keys = ON")
