@@ -56,6 +56,9 @@ def format_table(headers: list[str], rows: list[list], max_widths: dict[str, int
 
 def _cmd_fetch(args: argparse.Namespace) -> int:
     adapter = get_adapter(args.source)
+    # Paced like a scout: some sources take more than one request per board.
+    if hasattr(getattr(adapter, "session", None), "min_interval"):
+        adapter.session.min_interval = 1.0
     started = time.monotonic()
     try:
         roles = adapter.fetch(args.slug)
@@ -431,15 +434,18 @@ def _description_rule(args, quiet: bool = False):
         return ranking.load_config(path).wants_title
     except ranking.ConfigError as exc:
         if not quiet:
-            print(f"Note: {exc}. Workday descriptions are fetched for saved and applied roles only.")
+            print(f"Note: {exc}. Where a description costs a request of its own (Workday, Rippling), "
+                  "it is fetched for saved and applied roles only.")
         return None
 
 
 def _scout_once(conn, args, *, as_json: bool = False):
     """Run one scout and print its summary. Returns the summary."""
+    by_request = sorted(name for name, cls in ADAPTERS.items() if cls.uses_context)
     uses_rule = conn.execute(
         "SELECT 1 FROM boards b JOIN companies c ON c.id = b.company_id "
-        "WHERE c.active = 1 AND b.source = 'workday' LIMIT 1").fetchone() is not None
+        f"WHERE c.active = 1 AND b.source IN ({', '.join('?' * len(by_request))}) LIMIT 1",
+        by_request).fetchone() is not None
     summary = run_scout(
         conn, delay=args.delay, on_board=None if as_json else _print_progress,
         wants_description=_description_rule(args, quiet=as_json) if uses_rule else None)
@@ -1311,7 +1317,8 @@ def build_parser() -> argparse.ArgumentParser:
         "fetch", help="fetch one board live and print the role count and a sample role")
     fetch.add_argument("source", choices=sorted(ADAPTERS))
     fetch.add_argument("slug", help="board slug, e.g. the last part of jobs.lever.co/<slug>; "
-                                    "for workday, TENANT/wdN/SITE or the career site's URL")
+                                    "for workday, TENANT/wdN/SITE or the career site's URL; "
+                                    "for rippling, gem and workable, any URL of the board also works")
     fetch.add_argument("--sample", type=int, default=1, metavar="N",
                        help="which role to print, 1-based (default: 1)")
     fetch.add_argument("--full", action="store_true", help="print the whole description")
@@ -1363,7 +1370,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("name")
     p.add_argument("source", choices=sorted(ADAPTERS))
     p.add_argument("ref", help="board reference: the slug; for workday, TENANT/wdN/SITE "
-                               "or any URL on the career site")
+                               "or any URL on the career site; for rippling, gem and workable, "
+                               "any URL of the board or of one of its jobs also works")
     p.set_defaults(func=_cmd_companies_map)
 
     p = sub.add_parser("unmap", parents=[db],
@@ -1663,6 +1671,23 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("\ninterrupted", file=sys.stderr)
         return 130
+    except BrokenPipeError:
+        # The reader went away (| head): stop quietly. Point stdout at nothing
+        # so the interpreter's own flush at exit has no closed pipe to fail on.
+        _silence_stdout()
+        return 0
+    finally:
+        try:
+            sys.stdout.flush()
+        except BrokenPipeError:
+            _silence_stdout()
+
+
+def _silence_stdout() -> None:
+    try:
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+    except (OSError, ValueError, AttributeError):
+        pass   # stdout is not a real file (a test's capture): nothing to protect
 
 
 if __name__ == "__main__":

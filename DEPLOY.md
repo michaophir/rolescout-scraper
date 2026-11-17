@@ -211,6 +211,29 @@ paste any URL from the career site, a job page included:
 rolescout companies map "Acme" workday "https://acme.wd5.myworkdayjobs.com/en-US/Careers/login"
 ```
 
+## Rippling, Gem and Workable boards
+
+These three are named by the board name in their URL: `ats.rippling.com/NAME/jobs`,
+`jobs.gem.com/NAME` and `apply.workable.com/NAME`. `rolescout companies resolve`
+maps one whenever a company's site links to such a URL, a job page, an
+embedded board or an API URL included. Companies an earlier version recorded
+as being on one of these systems are mapped from the URL recorded then, by
+the same command or by the weekly re-check.
+
+A site that shows the system but names no board (it only loads the system's
+script) gets one more try: the board at the company's own name. It is saved
+when the board declares the company's website, and otherwise listed for you
+to confirm. To map one by hand, paste any URL of the board:
+
+```sh
+rolescout companies map "Acme" rippling "https://ats.rippling.com/acme/jobs/JOB-ID"
+```
+
+Gem and Workable return every role with its description in one request.
+Rippling lists roles in one request, but a description, posted date and pay
+cost one request per role, so like Workday they are read only for roles whose
+title your ranking config wants and for roles you saved or applied to.
+
 Workday costs more requests than the other sources, so the scout prints the
 requests and time each board took:
 

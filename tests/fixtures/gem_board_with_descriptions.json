@@ -1,0 +1,138 @@
+[
+  {
+    "absolute_url": "https://jobs.gem.com/acme/am9icG9zdDfe7675f4d33fc99ac30c1a",
+    "content": "<p>Acme builds tools for small teams. We are hiring for this role in the places listed.</p><ul><li>Own the roadmap for one product area</li><li>Work with design &amp; engineering</li></ul><p>Questions? Write to jobs@acme.example or see https://www.acme.example/careers.</p>",
+    "content_plain": "Acme builds tools for small teams. We are hiring for this role in the places listed.\nOwn the roadmap for one product area\nWork with design & engineering\nQuestions? Write to jobs@acme.example or see https://www.acme.example/careers.",
+    "created_at": "2026-05-04T20:58:28.594Z",
+    "departments": [
+      {
+        "child_ids": [],
+        "id": "ZGVwdD1f18fc607a2acf122d2d46",
+        "name": "Customer Experience",
+        "parent_id": null
+      }
+    ],
+    "employment_type": "full_time",
+    "first_published_at": "2026-05-04T21:06:10.407Z",
+    "id": "am9icG9zdDfe7675f4d33fc99ac30c1a",
+    "internal_job_id": "am9iO8104b9ede8e10404431857",
+    "location": {
+      "name": "New York, United States"
+    },
+    "location_type": "hybrid",
+    "offices": [
+      {
+        "child_ids": [],
+        "child_office_external_ids": [],
+        "id": "bG9jO45e9ccd97436b836bf59be",
+        "location": {
+          "name": "New York, United States"
+        },
+        "name": "New York",
+        "parent_id": null,
+        "parent_office_external_id": null
+      },
+      {
+        "child_ids": [],
+        "child_office_external_ids": [],
+        "id": "bG9jO6125196eada40ff74dfac4",
+        "location": {
+          "name": "San Francisco, United States"
+        },
+        "name": "San Francisco",
+        "parent_id": null,
+        "parent_office_external_id": null
+      }
+    ],
+    "requisition_id": "R1",
+    "title": "Technical Program Manager",
+    "updated_at": "2026-10-08T14:44:13.127Z"
+  },
+  {
+    "absolute_url": "https://jobs.gem.com/acme/am9icG9zdDbb0d38c4344c46720c1dc0",
+    "content": "<p>Acme builds tools for small teams. We are hiring for this role in the places listed.</p><ul><li>Own the roadmap for one product area</li><li>Work with design &amp; engineering</li></ul><p>Questions? Write to jobs@acme.example or see https://www.acme.example/careers.</p>",
+    "content_plain": "Acme builds tools for small teams. We are hiring for this role in the places listed.\nOwn the roadmap for one product area\nWork with design & engineering\nQuestions? Write to jobs@acme.example or see https://www.acme.example/careers.",
+    "created_at": "2026-05-18T23:02:39.099Z",
+    "departments": [
+      {
+        "child_ids": [],
+        "id": "ZGVwdD2ffa9349d18c905e01c21c",
+        "name": "Revenue",
+        "parent_id": null
+      }
+    ],
+    "employment_type": "full_time",
+    "first_published_at": "2026-05-19T22:49:04.900Z",
+    "id": "am9icG9zdDbb0d38c4344c46720c1dc0",
+    "internal_job_id": "am9iO60ba711ac15ee1da2542f1",
+    "location": {
+      "name": "Remote"
+    },
+    "location_type": "remote",
+    "offices": [
+      {
+        "child_ids": [],
+        "child_office_external_ids": [],
+        "id": "bG9jO11154da4f51ae98ee49903",
+        "location": {
+          "name": "Remote"
+        },
+        "name": "Remote",
+        "parent_id": null,
+        "parent_office_external_id": null
+      }
+    ],
+    "requisition_id": "R2",
+    "title": "Senior AE (Director of Strategic Relationships)",
+    "updated_at": "2026-10-08T14:50:02.292Z"
+  },
+  {
+    "absolute_url": "https://jobs.gem.com/acme/am9icG9zdDd69794edd8c76d7ff15d8c",
+    "content": "<p>Acme builds tools for small teams. We are hiring for this role in the places listed.</p><ul><li>Own the roadmap for one product area</li><li>Work with design &amp; engineering</li></ul><p>Questions? Write to jobs@acme.example or see https://www.acme.example/careers.</p>",
+    "content_plain": "Acme builds tools for small teams. We are hiring for this role in the places listed.\nOwn the roadmap for one product area\nWork with design & engineering\nQuestions? Write to jobs@acme.example or see https://www.acme.example/careers.",
+    "created_at": "2026-05-04T21:15:39.242Z",
+    "departments": [
+      {
+        "child_ids": [],
+        "id": "ZGVwdDc983f1783c35fb884e7a37",
+        "name": "Product Management",
+        "parent_id": "ZGVwdDrMfHpVQI3he6IHf2teHUjK"
+      }
+    ],
+    "employment_type": "full_time",
+    "first_published_at": "2026-05-05T04:32:25.722Z",
+    "id": "am9icG9zdDd69794edd8c76d7ff15d8c",
+    "internal_job_id": "am9iO7d4c2699475d907e8d9fcd",
+    "location": {
+      "name": "San Francisco, United States"
+    },
+    "location_type": "hybrid",
+    "offices": [
+      {
+        "child_ids": [],
+        "child_office_external_ids": [],
+        "id": "bG9jO6125196eada40ff74dfac4",
+        "location": {
+          "name": "San Francisco, United States"
+        },
+        "name": "San Francisco",
+        "parent_id": null,
+        "parent_office_external_id": null
+      },
+      {
+        "child_ids": [],
+        "child_office_external_ids": [],
+        "id": "bG9jO45e9ccd97436b836bf59be",
+        "location": {
+          "name": "New York, United States"
+        },
+        "name": "New York",
+        "parent_id": null,
+        "parent_office_external_id": null
+      }
+    ],
+    "requisition_id": "R3",
+    "title": "Senior Product Manager",
+    "updated_at": "2026-10-27T23:30:17.548Z"
+  }
+]

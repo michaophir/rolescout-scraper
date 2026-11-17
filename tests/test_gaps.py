@@ -21,22 +21,21 @@ from tests.test_scout import Clock, Scripted, role
 # --- fingerprints ------------------------------------------------------------
 
 def test_fingerprint_in_a_script_url_names_the_system(conn):
-    """A Workable embed script: listings render in the browser, the script tag is in the HTML."""
+    """A job system's widget script: listings render in the browser, the script tag is in the HTML."""
     companies.add_company(conn, "Rivet", website="https://rivet.com")
     (res,), web = run_resolve(conn, {
         "https://rivet.com": '<a href="/careers">Careers</a>',
         "https://rivet.com/careers": '''
-            <div id="whr_embed_hook"></div>
-            <script src="https://www.workable.com/assets/embed.js" type="text/javascript"></script>
-            <script>whr(document).ready(function(){ whr_embed(157387, {detail: 'titles'}); });</script>''',
+            <div class="jobs-widget"></div>
+            <script src="https://scripts.teamtailor-cdn.com/widgets/production/jobs.js" async></script>''',
         GH.format("rivet"): gh_jobs(3, content="<p>rivet.com</p>"),  # must not be guessed
     })
     assert (res.outcome, res.job_system, res.job_system_url) == (
-        "unsupported", "workable", "https://rivet.com/careers")
+        "unsupported", "teamtailor", "https://rivet.com/careers")
     assert res.notes == [
-        "identified as workable by 'workable.com/assets/embed.js' on https://rivet.com/careers"]
+        "identified as teamtailor by 'teamtailor-cdn' on https://rivet.com/careers"]
     saved = resolution(conn, "Rivet")
-    assert (saved["job_system"], saved["manual"]) == ("workable", 0)
+    assert (saved["job_system"], saved["manual"]) == ("teamtailor", 0)
     assert GH.format("rivet") not in web.urls  # a named system outranks guessing
 
 
@@ -126,23 +125,23 @@ def test_links_to_other_sites_need_more_than_career_in_the_path():
 
 def test_manual_entry_survives_re_resolve(conn, capsys):
     companies.add_company(conn, "Ripple", website="https://ripple.com", tier=1)
-    assert cli.main(["companies", "set-system", "ripple", "Rippling",
-                     "https://ats.rippling.com/ripple/jobs", "--note", "found with a browser"]) == 0
-    assert "job system recorded as rippling" in capsys.readouterr().out
+    assert cli.main(["companies", "set-system", "ripple", "JobVite",
+                     "https://jobs.jobvite.com/ripple/jobs", "--note", "found with a browser"]) == 0
+    assert "job system recorded as jobvite" in capsys.readouterr().out
     before = resolution(conn, "Ripple")
     assert (before["job_system"], before["job_system_url"], before["manual"]) == (
-        "rippling", "https://ats.rippling.com/ripple/jobs", 1)
+        "jobvite", "https://jobs.jobvite.com/ripple/jobs", 1)
 
     pages = {
         "https://ripple.com": '<a href="/careers">Careers</a>',
-        "https://ripple.com/careers": '<a href="https://apply.workable.com/ripple/">Jobs</a>',
+        "https://ripple.com/careers": '<a href="https://ripple.recruitee.com/">Jobs</a>',
     }
     # The unattended pass does not even look at it...
     results, web = run_resolve(conn, pages)
     assert results == [] and web.urls == []
     # ...and an explicit re-resolve detects something else but does not overwrite the entry.
     (res,), _ = run_resolve(conn, pages, names=["Ripple"])
-    assert res.job_system == "workable"
+    assert res.job_system == "recruitee"
     assert "recorded by hand" in res.notes[-1]
     assert resolution(conn, "Ripple") == before
 
@@ -150,7 +149,7 @@ def test_manual_entry_survives_re_resolve(conn, capsys):
     assert cli.main(["companies", "clear-system", "Ripple"]) == 0
     run_resolve(conn, pages)
     after = resolution(conn, "Ripple")
-    assert (after["job_system"], after["manual"]) == ("workable", 0)
+    assert (after["job_system"], after["manual"]) == ("recruitee", 0)
 
 
 def test_manual_entry_does_not_block_a_real_board_being_found(conn):
@@ -192,10 +191,10 @@ def add(conn, name, tier, system=None, url=None, manual=False):
 def gappy(conn):
     # icims: three tier-2/3 companies -> candidate by count
     add(conn, "Wa", 2, "icims"); add(conn, "Wb", 3, "icims"); add(conn, "Wc", None, "icims")
-    # rippling: one tier-1 company -> candidate by tier
-    add(conn, "Rip", 1, "rippling", manual=True)
-    # workable: two tier-2 companies -> below both thresholds
-    add(conn, "Ka", 2, "workable"); add(conn, "Kb", 2, "workable")
+    # jobvite: one tier-1 company -> candidate by tier
+    add(conn, "Rip", 1, "jobvite", manual=True)
+    # recruitee: two tier-2 companies -> below both thresholds
+    add(conn, "Ka", 2, "recruitee"); add(conn, "Kb", 2, "recruitee")
     # custom: three hand-recorded home-built sites, none tier 1 -> never a candidate by count
     add(conn, "Ca", 2, "custom", manual=True); add(conn, "Cb", 2, "custom", manual=True)
     add(conn, "Cc", 3, "custom", manual=True)
@@ -216,10 +215,10 @@ def gappy(conn):
 def test_build_candidate_thresholds(gappy):
     report = gaps.gaps_report(gappy)
     groups = {g["system"]: g for g in report["systems"]}
-    assert [g["system"] for g in report["systems"]] == ["icims", "rippling", "custom", "workable"]
+    assert [g["system"] for g in report["systems"]] == ["icims", "jobvite", "custom", "recruitee"]
     assert (groups["icims"]["build_candidate"], groups["icims"]["why"]) == (True, "3 companies")
-    assert (groups["rippling"]["build_candidate"], groups["rippling"]["why"]) == (True, "tier 1: Rip")
-    assert groups["workable"]["build_candidate"] is False        # two companies, none tier 1
+    assert (groups["jobvite"]["build_candidate"], groups["jobvite"]["why"]) == (True, "tier 1: Rip")
+    assert groups["recruitee"]["build_candidate"] is False        # two companies, none tier 1
     assert groups["custom"]["build_candidate"] is False          # three, but they share no connector
     assert [(m["company"], m["tier"]) for m in groups["icims"]["companies"]] == [
         ("Wa", 2), ("Wb", 3), ("Wc", None)]
@@ -230,11 +229,11 @@ def test_build_candidate_thresholds(gappy):
     assert (report["active_companies"], report["covered"]) == (13, 1)
     assert gaps.summary_line(report) == "2 build candidates, 2 unidentified, 1 awaiting mapping"
 
-    # A third workable company tips it over; a tier-1 custom site is flagged on its own.
-    add(gappy, "Kc", 3, "workable")
+    # A third recruitee company tips it over; a tier-1 custom site is flagged on its own.
+    add(gappy, "Kc", 3, "recruitee")
     add(gappy, "Cd", 1, "custom", manual=True)
     groups = {g["system"]: g for g in gaps.gaps_report(gappy)["systems"]}
-    assert groups["workable"]["why"] == "3 companies"
+    assert groups["recruitee"]["why"] == "3 companies"
     assert groups["custom"]["why"] == "tier 1: Cd"
 
 
@@ -245,8 +244,8 @@ def test_gaps_command_and_status_line(gappy, capsys, monkeypatch, tmp_path):
     assert out.startswith("Coverage gaps: 2 build candidates, 2 unidentified, 1 awaiting mapping "
                           "(12 of 13 active companies not covered)\n")
     candidates, rest = out.split("Other unsupported job systems:")
-    assert "icims" in candidates and "rippling" in candidates and "(by hand)" in candidates
-    assert "workable" not in candidates and "workable" in rest
+    assert "icims" in candidates and "jobvite" in candidates and "(by hand)" in candidates
+    assert "recruitee" not in candidates and "recruitee" in rest
     assert "Needs identification - rolescout companies set-system NAME SYSTEM URL" in out
     assert "On a supported system, not mapped yet" in out
 
@@ -273,12 +272,12 @@ def test_connector_brief(gappy, capsys):
     assert "- Identified: automatically" in out
     assert "## What the adapter must do" in out and "`board_url(ref)`" in out
 
-    assert cli.main(["brief", "rippling"]) == 0
+    assert cli.main(["brief", "jobvite"]) == 0
     out = capsys.readouterr().out
     assert "Build candidate: yes (tier 1: Rip)." in out and "- Identified: by hand" in out
 
     assert cli.main(["brief", "taleo"]) == 1
-    assert "Systems with gaps: icims, rippling, custom, workable" in capsys.readouterr().err
+    assert "Systems with gaps: icims, jobvite, custom, recruitee" in capsys.readouterr().err
 
 
 # --- the weekly re-check -----------------------------------------------------
@@ -433,7 +432,7 @@ def test_version_1_database_is_upgraded_in_place(tmp_path, monkeypatch):
 def test_manual_entries_travel_with_the_export(conn, tmp_path):
     from rolescout.transfer import export_companies, import_companies
     companies.add_company(conn, "Rip", website="https://rip.com", tier=1)
-    set_job_system(conn, "Rip", "rippling", "https://ats.rippling.com/rip/jobs")
+    set_job_system(conn, "Rip", "jobvite", "https://jobs.jobvite.com/rip/jobs")
     other = db.connect(tmp_path / "other.db")
     import_companies(other, json.loads(json.dumps(export_companies(conn))))
     assert resolution(other, "Rip")["manual"] == 1

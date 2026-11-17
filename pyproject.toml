@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "rolescout"
 dynamic = ["version"]
-description = "Local job-search tool: fetches open roles from ATS job boards (Greenhouse, Lever, Ashby, Workday)."
+description = "Local job-search tool: fetches open roles from ATS job boards (Greenhouse, Lever, Ashby, Workday, Rippling, Gem, Workable)."
 requires-python = ">=3.11"
 dependencies = [
     "requests>=2.31.0",

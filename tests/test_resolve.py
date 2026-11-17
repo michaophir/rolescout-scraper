@@ -335,10 +335,8 @@ def test_scan_finds_boards_in_links_embeds_and_escaped_json():
     assert set(supported) == {
         ("greenhouse", "acme"), ("greenhouse", "acmeembed"), ("greenhouse", "acmeframe"),
         ("ashby", "Acme.Labs"), ("lever", "acme-co"), ("lever", "acmeapi"),
-        ("workday", "acme/wd1/Careers")}
-    assert unsupported == {
-        "workable": "https://apply.workable.com/acme/",
-        "lever-eu": "https://jobs.eu.lever.co/acme-eu"}
+        ("workday", "acme/wd1/Careers"), ("workable", "acme")}
+    assert unsupported == {"lever-eu": "https://jobs.eu.lever.co/acme-eu"}
 
 
 def test_domain_helpers():

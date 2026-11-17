@@ -1,0 +1,18 @@
+{
+  "id": 100001,
+  "uid": "00000000-0000-0000-0000-000000000001",
+  "subdomain": "acme",
+  "name": "Acme",
+  "url": "https://www.acme.example/",
+  "languages": {
+    "default": "en",
+    "options": [
+      {
+        "enabled": true,
+        "name": "en",
+        "published": true,
+        "visible": true
+      }
+    ]
+  }
+}

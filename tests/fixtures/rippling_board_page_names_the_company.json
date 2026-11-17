@@ -1,0 +1,26 @@
+{
+  "props": {
+    "pageProps": {
+      "apiData": {
+        "jobBoard": {
+          "boardType": "RIPPLING",
+          "slug": "acme",
+          "title": "Acme Careers",
+          "groupJobsByLocation": true,
+          "isTest": false,
+          "boardURL": "https://ats.rippling.com/acme/jobs",
+          "companyName": "Acme"
+        },
+        "jobBoardSlug": "acme",
+        "filtersConfig": {
+          "workLocations": [],
+          "departments": []
+        }
+      }
+    }
+  },
+  "page": "/[jobBoardSlug]/jobs",
+  "query": {
+    "jobBoardSlug": "acme"
+  }
+}

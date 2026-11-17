@@ -7,6 +7,8 @@ Two kinds of evidence, in order:
    A Workday board is only ever found this way, from a URL whose hostname is
    Workday's: its tenant, data center and site cannot be guessed from a name,
    and a page that merely mentions "myworkdayjobs.com" is not evidence.
+   Rippling, Gem and Workable boards are found the same way, from a URL on
+   the job system's own hostname.
 2. **Guess** (weak). A board exists at a slug derived from the company name
    or domain. Saved only when something ties the board to the company's own
    domain; a matching name alone is never enough, because namesakes exist.
@@ -37,6 +39,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from rolescout.adapters import ADAPTERS, BoardNotFound, SourceError, get_adapter
+from rolescout.adapters import gem, rippling, workable
 from rolescout.adapters.workday import WORKDAY_URL, find_refs
 from rolescout.companies import CompanyError, add_board
 from rolescout.db import transaction, utc_now
@@ -91,8 +94,6 @@ BOARD_TOKEN_VAR = re.compile(
 # host (and sometimes the first path segment); the rest of the URL is kept.
 UNSUPPORTED_SYSTEMS: list[tuple[str, str]] = [
     ("smartrecruiters", r"(?:jobs|careers|api)\.smartrecruiters\.com/[\w-]+"),
-    ("workable", r"apply\.workable\.com/[\w-]+|(?!www\.)[\w-]+\.workable\.com"),
-    ("rippling", r"ats\.rippling\.com/[\w-]+"),
     ("eightfold", r"(?!www\.)[\w-]+\.eightfold\.ai"),
     ("icims", r"(?!www\.)[\w.-]+\.icims\.com"),
     ("jobvite", r"jobs\.jobvite\.com/[\w-]+"),
@@ -100,7 +101,6 @@ UNSUPPORTED_SYSTEMS: list[tuple[str, str]] = [
     ("teamtailor", r"(?!www\.)[\w-]+\.teamtailor\.com"),
     ("recruitee", r"(?!www\.)[\w-]+\.recruitee\.com"),
     ("personio", r"[\w-]+\.jobs\.personio\.(?:com|de)"),
-    ("gem", r"jobs\.gem\.com/[\w-]+"),
     ("breezy", r"(?!www\.)[\w-]+\.breezy\.hr"),
     ("jazzhr", r"(?!www\.)[\w-]+\.applytojob\.com"),
     ("taleo", r"[\w.-]+\.taleo\.net"),
@@ -117,6 +117,9 @@ UNSUPPORTED_LINKS = [
     (system, re.compile(r"(?<![\w.-])(?:" + pattern + r")[^\s\"'<>\\)]*", re.I))
     for system, pattern in UNSUPPORTED_SYSTEMS
 ]
+# Sources whose board is named by a URL on the job system's own hostname.
+# Each module finds the references in a page's text itself.
+URL_SOURCES = (("rippling", rippling.find_refs), ("gem", gem.find_refs), ("workable", workable.find_refs))
 CUSTOM = "custom"  # a hand-recorded "they built their own"; never assigned automatically
 
 # Marks a job system leaves in a page even when it gives no board link:
@@ -322,6 +325,9 @@ def scan_for_boards(text: str, *, normalized: bool = False
     # Any Workday URL that names a career site: front page, job, login, apply.
     for ref in find_refs(text)[0]:
         supported.setdefault(("workday", str(ref)))
+    for source, find in URL_SOURCES:
+        for ref in find(text):
+            supported.setdefault((source, ref))
     unsupported: dict[str, str] = {}
     for system, pattern in UNSUPPORTED_LINKS:
         match = pattern.search(text)
@@ -635,8 +641,12 @@ class Resolver:
 
     # -- one company
 
-    def resolve(self, company: str, website: str) -> Resolution:
+    def resolve(self, company: str, website: str, known_url: str = "") -> Resolution:
         """Find the company's board, within the time budget.
+
+        ``known_url`` is a job system URL an earlier resolve recorded for the
+        company, when that system has an adapter now. If it names a board
+        that exists, the company is mapped from it and its site is not read.
 
         If the budget runs out the company comes back unidentified, with a
         note saying so; the caller carries on with the next company.
@@ -647,7 +657,7 @@ class Resolver:
         self._cpu_deadline = time.process_time() + self.cpu_budget
         try:
             with time_budget(self.wall_budget, self.cpu_budget):
-                self._resolve(res, company, website)
+                self._resolve(res, company, website, known_url)
         except BudgetExceeded as exc:
             res.outcome, res.job_system, res.job_system_url = "unresolved", None, None
             res.candidates = []
@@ -657,7 +667,25 @@ class Resolver:
             self._deadline = self._cpu_deadline = float("inf")
         return res
 
-    def _resolve(self, res: Resolution, company: str, website: str) -> Resolution:
+    def _from_known_url(self, res: Resolution, known_url: str) -> bool:
+        """Map from a job system URL recorded earlier. True when a board was confirmed."""
+        for source, ref in scan_for_boards(known_url)[0]:
+            confirmed = self._confirm_link(source, ref, res)
+            if confirmed is None:
+                res.notes.append(f"the URL recorded earlier ({known_url}) names {source}/{ref}, "
+                                 "but that board does not exist")
+                continue
+            ref, roles = confirmed
+            if not any((c.source, c.ref) == (source, ref) for c in res.candidates):
+                res.candidates.append(Candidate(
+                    source, ref, "link", "confirmed", f"job system URL found earlier: {known_url}", roles=roles))
+        if res.candidates:
+            res.outcome = "mapped"
+        return bool(res.candidates)
+
+    def _resolve(self, res: Resolution, company: str, website: str, known_url: str = "") -> Resolution:
+        if known_url and self._from_known_url(res, known_url):
+            return res
         # Stored values are normalized on entry, but never trust that here:
         # a scheme-less or broken value must not reach the HTTP layer.
         try:
@@ -723,7 +751,8 @@ class Resolver:
         # 3. Slug guesses, accepted only with confirmation. If the site shows a
         #    supported system's fingerprint, only that system is tried.
         known = [k for k in fingerprints if k in ADAPTERS]
-        sources = tuple(s for s in (known or GUESS_SOURCES) if ADAPTERS[s].guessable)
+        sources = tuple(s for s in (known or GUESS_SOURCES)
+                        if ADAPTERS[s].guessable or (known and ADAPTERS[s].guess_when_named))
         tried = set(supported)
         for ref in slug_guesses(company, website):
             for source in sources:
@@ -849,19 +878,23 @@ def clear_job_system(conn: sqlite3.Connection, name: str) -> bool:
 
 def recheck_targets(conn: sqlite3.Connection, failing: list[dict]) -> list[sqlite3.Row]:
     """Who the periodic re-check looks at: active companies with no board
-    (unless their job system was recorded by hand), plus the owners of
-    ``failing`` boards (see ``ops.failing_boards``)."""
+    (unless their job system was recorded by hand and still has no adapter),
+    plus the owners of ``failing`` boards (see ``ops.failing_boards``)."""
     names = {b["company"] for b in failing}
     rows = conn.execute(
         "SELECT c.name, c.website, "
         "EXISTS (SELECT 1 FROM boards b WHERE b.company_id = c.id) AS mapped, "
         "COALESCE((SELECT manual FROM company_resolutions r WHERE r.company_id = c.id), 0) AS manual, "
+        "(SELECT job_system FROM company_resolutions r WHERE r.company_id = c.id) AS job_system, "
         "(SELECT resolved_at FROM company_resolutions r WHERE r.company_id = c.id) AS resolved_at "
         # Longest-unchecked first, so a run cut short by its time limit
         # reaches the rest next time instead of repeating the same ones.
         "FROM companies c WHERE c.active = 1 "
         "ORDER BY resolved_at IS NOT NULL, resolved_at, c.tier IS NULL, c.tier, c.name").fetchall()
-    return [r for r in rows if r["name"] in names or (not r["mapped"] and not r["manual"])]
+    # A system recorded by hand is left alone, unless it has an adapter now:
+    # then the board it was recorded with can be mapped.
+    return [r for r in rows if r["name"] in names
+            or (not r["mapped"] and (not r["manual"] or r["job_system"] in ADAPTERS))]
 
 
 def resolve_companies(
@@ -905,8 +938,13 @@ def resolve_companies(
             if not_checked is not None:
                 not_checked.extend(t["name"] for t in targets[position:])
             break
+        earlier = conn.execute(
+            "SELECT r.job_system, r.job_system_url FROM company_resolutions r JOIN companies c "
+            "ON c.id = r.company_id WHERE c.name = ?", (target["name"],)).fetchone()
+        known_url = (earlier["job_system_url"] or "") if earlier and earlier["job_system"] in ADAPTERS else ""
         try:
-            res = resolver.resolve(target["name"], target["website"])
+            res = (resolver.resolve(target["name"], target["website"], known_url) if known_url
+                   else resolver.resolve(target["name"], target["website"]))
         except Exception as exc:  # one company's failure must not stop the rest
             res = Resolution(company=target["name"], notes=[f"resolve failed: {exc!r}"])
         if not dry_run:

@@ -1,0 +1,69 @@
+{
+  "props": {
+    "pageProps": {
+      "apiData": {
+        "jobBoard": {
+          "boardType": "CUSTOM",
+          "slug": "acme",
+          "title": "Acme Careers",
+          "groupJobsByLocation": false,
+          "isTest": false,
+          "boardURL": "https://www.acme.example/careers/open-roles",
+          "companyName": "Acme"
+        },
+        "jobPost": {
+          "uuid": "c57658c2-915c-e23d-75c4-95ca8fe34757",
+          "name": "Business Operations Manager",
+          "description": {
+            "company": "<div><body><h2>About Acme</h2><p>Acme builds tools for small teams.</p></body></div>",
+            "role": "<div><body><p>Acme builds tools for small teams. We are hiring for this role in the places listed.</p><ul><li>Own the roadmap for one product area</li><li>Work with design &amp; engineering</li></ul><p>Questions? Write to jobs@acme.example or see https://www.acme.example/careers.</p></body></div>"
+          },
+          "workLocations": [
+            "San Francisco, CA",
+            "New York, NY"
+          ],
+          "department": {
+            "name": "Bizops",
+            "base_department": "Bizops",
+            "department_tree": [
+              "Bizops"
+            ]
+          },
+          "employmentType": {
+            "label": "SALARIED_FT",
+            "id": "Salaried, full-time"
+          },
+          "createdOn": "2026-03-31T17:37:26.093000-07:00",
+          "url": "https://ats.rippling.com/acme/jobs/c57658c2-915c-e23d-75c4-95ca8fe34757",
+          "payRangeDetails": [
+            {
+              "location": "US",
+              "currency": "USD",
+              "frequency": "YEAR",
+              "rangeStart": 185000,
+              "rangeEnd": 240000,
+              "isRemote": false
+            }
+          ],
+          "companyName": "Acme",
+          "unlistedFromSearch": false
+        },
+        "payRangeDetails": [
+          {
+            "location": "US",
+            "currency": "USD",
+            "frequency": "YEAR",
+            "rangeStart": 185000,
+            "rangeEnd": 240000,
+            "isRemote": false
+          }
+        ]
+      }
+    }
+  },
+  "page": "/[jobBoardSlug]/jobs/[jobId]",
+  "query": {
+    "jobBoardSlug": "acme",
+    "jobId": "c57658c2-915c-e23d-75c4-95ca8fe34757"
+  }
+}

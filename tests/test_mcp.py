@@ -246,14 +246,14 @@ def test_record_job_system_gaps_and_brief(world):
         ("icims", True, "tier 1: Wday")]
     assert [u["company"] for u in before["unidentified"]] == ["Mystery"]
 
-    recorded = session.call("record_job_system", company="mystery", system="Rippling",
-                            url="https://ats.rippling.com/mystery/jobs", note="checked in a browser")
-    assert recorded == {"company": "Mystery", "job_system": "rippling",
-                        "url": "https://ats.rippling.com/mystery/jobs", "recorded_by_hand": True}
+    recorded = session.call("record_job_system", company="mystery", system="Jobvite",
+                            url="https://jobs.jobvite.com/mystery/jobs", note="checked in a browser")
+    assert recorded == {"company": "Mystery", "job_system": "jobvite",
+                        "url": "https://jobs.jobvite.com/mystery/jobs", "recorded_by_hand": True}
     after = session.call("coverage_gaps")
     assert after["unidentified"] == []
-    rippling = next(g for g in after["job_systems"] if g["system"] == "rippling")
-    assert rippling["companies"][0]["recorded_by_hand"] is True
+    jobvite = next(g for g in after["job_systems"] if g["system"] == "jobvite")
+    assert jobvite["companies"][0]["recorded_by_hand"] is True
     assert "map the board instead" in session.error(
         "record_job_system", company="Mystery", system="greenhouse", url="https://x.com")
 

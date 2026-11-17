@@ -1,0 +1,155 @@
+{
+  "items": [
+    {
+      "id": "c57658c2-915c-e23d-75c4-95ca8fe34757",
+      "name": "Business Operations Manager",
+      "url": "https://ats.rippling.com/acme/jobs/c57658c2-915c-e23d-75c4-95ca8fe34757",
+      "department": {
+        "name": "Bizops",
+        "displayName": "Bizops"
+      },
+      "locations": [
+        {
+          "name": "San Francisco, CA",
+          "country": "United States",
+          "countryCode": "US",
+          "state": "California",
+          "stateCode": "CA",
+          "city": "San Francisco",
+          "workplaceType": "ON_SITE"
+        }
+      ],
+      "language": "en-US"
+    },
+    {
+      "id": "c57658c2-915c-e23d-75c4-95ca8fe34757",
+      "name": "Business Operations Manager",
+      "url": "https://ats.rippling.com/acme/jobs/c57658c2-915c-e23d-75c4-95ca8fe34757",
+      "department": {
+        "name": "Bizops",
+        "displayName": "Bizops"
+      },
+      "locations": [
+        {
+          "name": "New York, NY",
+          "country": "United States",
+          "countryCode": "US",
+          "state": "New York",
+          "stateCode": "NY",
+          "city": "New York",
+          "workplaceType": "ON_SITE"
+        }
+      ],
+      "language": "en-US"
+    },
+    {
+      "id": "fdbf61fe-ea29-efc6-d6bc-0034f467eba4",
+      "name": "HR Associate (PST/EST Hours)",
+      "url": "https://ats.rippling.com/acme/jobs/fdbf61fe-ea29-efc6-d6bc-0034f467eba4",
+      "department": {
+        "name": "Bizops",
+        "displayName": "Bizops"
+      },
+      "locations": [
+        {
+          "name": "Philippines",
+          "country": "Philippines",
+          "countryCode": "PH",
+          "state": null,
+          "stateCode": null,
+          "city": null,
+          "workplaceType": "REMOTE"
+        }
+      ],
+      "language": "en-US"
+    },
+    {
+      "id": "b8b73f2b-0e4c-ff5f-2efc-9d2abc39855f",
+      "name": "Senior Program Manager, Knowledge",
+      "url": "https://ats.rippling.com/acme/jobs/b8b73f2b-0e4c-ff5f-2efc-9d2abc39855f",
+      "department": {
+        "name": "Customer Support",
+        "displayName": "Customer Support"
+      },
+      "locations": [
+        {
+          "name": "Remote (United States)",
+          "country": "United States",
+          "countryCode": "US",
+          "state": null,
+          "stateCode": null,
+          "city": null,
+          "workplaceType": "REMOTE"
+        }
+      ],
+      "language": "en-US"
+    },
+    {
+      "id": "b8b73f2b-0e4c-ff5f-2efc-9d2abc39855f",
+      "name": "Senior Program Manager, Knowledge",
+      "url": "https://ats.rippling.com/acme/jobs/b8b73f2b-0e4c-ff5f-2efc-9d2abc39855f",
+      "department": {
+        "name": "Customer Support",
+        "displayName": "Customer Support"
+      },
+      "locations": [
+        {
+          "name": "San Francisco, CA",
+          "country": "United States",
+          "countryCode": "US",
+          "state": "California",
+          "stateCode": "CA",
+          "city": "San Francisco",
+          "workplaceType": "ON_SITE"
+        }
+      ],
+      "language": "en-US"
+    },
+    {
+      "id": "b8b73f2b-0e4c-ff5f-2efc-9d2abc39855f",
+      "name": "Senior Program Manager, Knowledge",
+      "url": "https://ats.rippling.com/acme/jobs/b8b73f2b-0e4c-ff5f-2efc-9d2abc39855f",
+      "department": {
+        "name": "Customer Support",
+        "displayName": "Customer Support"
+      },
+      "locations": [
+        {
+          "name": "New York, NY",
+          "country": "United States",
+          "countryCode": "US",
+          "state": "New York",
+          "stateCode": "NY",
+          "city": "New York",
+          "workplaceType": "ON_SITE"
+        }
+      ],
+      "language": "en-US"
+    },
+    {
+      "id": "5f00367c-c8a7-3d26-9bfd-8b7f69bd2247",
+      "name": "Manager für die Implementierung von Lohnabrechnungssystemen (Deutsch)",
+      "url": "https://ats.rippling.com/acme/jobs/5f00367c-c8a7-3d26-9bfd-8b7f69bd2247",
+      "department": {
+        "name": "Implementation",
+        "displayName": "Implementation"
+      },
+      "locations": [
+        {
+          "name": "Berlin",
+          "country": "Germany",
+          "countryCode": "DE",
+          "state": "Berlin",
+          "stateCode": "BE",
+          "city": null,
+          "workplaceType": "HYBRID"
+        }
+      ],
+      "language": "en-US"
+    }
+  ],
+  "page": 0,
+  "pageSize": 1000,
+  "totalItems": 7,
+  "totalPages": 1
+}

@@ -1,0 +1,156 @@
+{
+  "name": "Acme",
+  "description": "<p>We are <a href=\"https://www.acme.example/\">Acme</a>.</p>",
+  "jobs": [
+    {
+      "title": "(Senior) FP&A Analyst",
+      "shortcode": "AEBA7CB58F",
+      "code": "",
+      "employment_type": "",
+      "telecommuting": true,
+      "department": null,
+      "url": "https://apply.workable.com/j/AEBA7CB58F",
+      "shortlink": "https://apply.workable.com/j/AEBA7CB58F",
+      "application_url": "https://apply.workable.com/j/AEBA7CB58F/apply",
+      "published_on": "2026-11-15",
+      "created_at": "2026-11-04",
+      "country": "Spain",
+      "city": "",
+      "state": "",
+      "education": "",
+      "experience": "",
+      "function": "",
+      "industry": "Internet",
+      "locations": [
+        {
+          "country": "Spain",
+          "countryCode": "ES",
+          "city": "",
+          "region": null,
+          "hidden": false
+        }
+      ],
+      "description": "<p>Acme builds tools for small teams. We are hiring for this role in the places listed.</p><ul><li>Own the roadmap for one product area</li><li>Work with design &amp; engineering</li></ul><p>Questions? Write to jobs@acme.example or see https://www.acme.example/careers.</p>"
+    },
+    {
+      "title": "(Senior) FP&A Analyst",
+      "shortcode": "AEBA7CB58F",
+      "code": "",
+      "employment_type": "",
+      "telecommuting": true,
+      "department": null,
+      "url": "https://apply.workable.com/j/AEBA7CB58F",
+      "shortlink": "https://apply.workable.com/j/AEBA7CB58F",
+      "application_url": "https://apply.workable.com/j/AEBA7CB58F/apply",
+      "published_on": "2026-11-15",
+      "created_at": "2026-11-04",
+      "country": "Germany",
+      "city": "",
+      "state": "",
+      "education": "",
+      "experience": "",
+      "function": "",
+      "industry": "Internet",
+      "locations": [
+        {
+          "country": "Germany",
+          "countryCode": "DE",
+          "city": "",
+          "region": null,
+          "hidden": false
+        }
+      ],
+      "description": "<p>Acme builds tools for small teams. We are hiring for this role in the places listed.</p><ul><li>Own the roadmap for one product area</li><li>Work with design &amp; engineering</li></ul><p>Questions? Write to jobs@acme.example or see https://www.acme.example/careers.</p>"
+    },
+    {
+      "title": "(Senior) FP&A Analyst",
+      "shortcode": "AEBA7CB58F",
+      "code": "",
+      "employment_type": "",
+      "telecommuting": true,
+      "department": null,
+      "url": "https://apply.workable.com/j/AEBA7CB58F",
+      "shortlink": "https://apply.workable.com/j/AEBA7CB58F",
+      "application_url": "https://apply.workable.com/j/AEBA7CB58F/apply",
+      "published_on": "2026-11-15",
+      "created_at": "2026-11-04",
+      "country": "Hungary",
+      "city": "",
+      "state": "",
+      "education": "",
+      "experience": "",
+      "function": "",
+      "industry": "Internet",
+      "locations": [
+        {
+          "country": "Hungary",
+          "countryCode": "HU",
+          "city": "",
+          "region": null,
+          "hidden": false
+        }
+      ],
+      "description": "<p>Acme builds tools for small teams. We are hiring for this role in the places listed.</p><ul><li>Own the roadmap for one product area</li><li>Work with design &amp; engineering</li></ul><p>Questions? Write to jobs@acme.example or see https://www.acme.example/careers.</p>"
+    },
+    {
+      "title": "Assistant Manager - Inventory & Reverse Logistics",
+      "shortcode": "889B8306D7",
+      "code": "",
+      "employment_type": "Full-time",
+      "telecommuting": false,
+      "department": "Fulfillment",
+      "url": "https://apply.workable.com/j/889B8306D7",
+      "shortlink": "https://apply.workable.com/j/889B8306D7",
+      "application_url": "https://apply.workable.com/j/889B8306D7/apply",
+      "published_on": "2026-11-03",
+      "created_at": "2026-10-28",
+      "country": "United States",
+      "city": "La Vergne",
+      "state": "Tennessee",
+      "education": "Bachelor's Degree",
+      "experience": "Mid-Senior level",
+      "function": "",
+      "industry": "Internet",
+      "locations": [
+        {
+          "country": "United States",
+          "countryCode": "US",
+          "city": "La Vergne",
+          "region": "Tennessee",
+          "hidden": false
+        }
+      ],
+      "description": "<p>Acme builds tools for small teams. We are hiring for this role in the places listed.</p><ul><li>Own the roadmap for one product area</li><li>Work with design &amp; engineering</li></ul><p>Questions? Write to jobs@acme.example or see https://www.acme.example/careers.</p>"
+    },
+    {
+      "title": "Campaign Marketing Manager",
+      "shortcode": "0D89B66DDF",
+      "code": "",
+      "employment_type": "Full-time",
+      "telecommuting": false,
+      "department": null,
+      "url": "https://apply.workable.com/j/0D89B66DDF",
+      "shortlink": "https://apply.workable.com/j/0D89B66DDF",
+      "application_url": "https://apply.workable.com/j/0D89B66DDF/apply",
+      "published_on": "2026-11-06",
+      "created_at": "2026-11-06",
+      "country": "United States",
+      "city": "San Diego",
+      "state": "California",
+      "education": "Bachelor's Degree",
+      "experience": "Mid-Senior level",
+      "function": "",
+      "industry": "Internet",
+      "locations": [
+        {
+          "country": "United States",
+          "countryCode": "US",
+          "city": "San Diego",
+          "region": "California",
+          "hidden": false
+        }
+      ],
+      "description": "<p>Acme builds tools for small teams. We are hiring for this role in the places listed.</p><ul><li>Own the roadmap for one product area</li><li>Work with design &amp; engineering</li></ul><p>Questions? Write to jobs@acme.example or see https://www.acme.example/careers.</p>"
+    }
+  ]
+}

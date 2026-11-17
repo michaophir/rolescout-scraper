@@ -4,10 +4,12 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, ClassVar
+from urllib.parse import urlsplit
+from urllib.robotparser import RobotFileParser
 
 import requests
 
-from rolescout.http import DEFAULT_TIMEOUT, make_session
+from rolescout.http import DEFAULT_TIMEOUT, USER_AGENT, make_session
 from rolescout.models import Role
 
 
@@ -68,8 +70,8 @@ class FetchStats:
 class SourceAdapter(ABC):
     """Fetches every open role for one source reference.
 
-    ``ref`` identifies a board within the source. For Greenhouse, Lever and
-    Ashby it is the board slug; for Workday it is tenant/data-center/site.
+    ``ref`` identifies a board within the source. For most sources it is the
+    board slug; for Workday it is tenant/data-center/site.
     Adapters do no filtering and no scoring: an empty list means the board
     exists and has no open roles; a board that cannot be fetched raises
     ``SourceError`` (``BoardNotFound`` for a 404).
@@ -80,10 +82,14 @@ class SourceAdapter(ABC):
     uses_context: ClassVar[bool] = False
     # False when a board cannot be found by trying a slug made from the company name.
     guessable: ClassVar[bool] = True
+    # True when a slug made from the company name is worth trying once the
+    # company's own site shows it uses this source, though not otherwise.
+    guess_when_named: ClassVar[bool] = False
 
     def __init__(self, session: requests.Session | None = None) -> None:
         self.session = session or make_session()
         self.last_stats: FetchStats | None = None   # set by every ``fetch``
+        self._robots: dict[str, RobotFileParser | None] = {}   # by host; None allows everything
 
     def fetch(self, ref: str, *, company: str | None = None,
               context: FetchContext | None = None) -> list[Role]:
@@ -131,6 +137,34 @@ class SourceAdapter(ABC):
 
         Used only by ``companies resolve`` to check a guessed slug.
         """
+
+    def _check_robots(self, url: str, ref: str) -> None:
+        """Raise ``SourceError`` when the host's robots.txt disallows ``url``.
+
+        The file is read once per host for the life of the adapter. A missing
+        or refused file (any 4xx) allows everything; a server error disallows
+        everything, as RFC 9309 asks.
+        """
+        parts = urlsplit(url)
+        host = parts.netloc
+        if host not in self._robots:
+            if self.last_stats is not None:
+                self.last_stats.requests += 1
+            try:
+                resp = self.session.get(f"{parts.scheme}://{host}/robots.txt", timeout=DEFAULT_TIMEOUT,
+                                        headers={"Accept": "*/*"})
+            except requests.RequestException as exc:
+                raise SourceError(f"{self.name}: robots.txt for {host} could not be read: {exc}") from exc
+            if resp.status_code >= 500:
+                raise SourceError(f"{self.name}: robots.txt for {host} answered HTTP {resp.status_code}")
+            rules = None
+            if resp.status_code == 200:
+                rules = RobotFileParser()
+                rules.parse((resp.text or "").splitlines())
+            self._robots[host] = rules
+        rules = self._robots[host]
+        if rules is not None and not rules.can_fetch(USER_AGENT, url):
+            raise SourceError(f"{self.name}: robots.txt on {host} disallows {parts.path} (board {ref!r})")
 
     def _get_text(self, url: str, ref: str) -> str:
         try:

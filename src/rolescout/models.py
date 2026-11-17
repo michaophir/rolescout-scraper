@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 class Role:
     """One open role, normalized across sources. Missing values are ""."""
 
-    source: str             # adapter name: "greenhouse" | "lever" | "ashby" | "workday"
+    source: str             # adapter name: "greenhouse", "lever", "ashby", "workday", ...
     source_job_id: str      # the source's own id for the posting
     company: str
     title: str
