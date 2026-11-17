@@ -253,6 +253,17 @@ is found by the weekly re-check, or at once with `rolescout companies resolve`.
 After editing the filter, `rolescout candidates apply` re-sorts every
 candidate with no network call.
 
+To skip the manual step, put `auto_activate = true` near the top of
+`candidates.toml`, above the first `[section]`. Every harvest, including the
+weekly one in the daily job, then activates all eligible candidates when it
+ends. Candidates in review, rejected or dismissed are left alone;
+`rolescout candidates apply` never activates anything. The new companies get
+tier 3, or the tier in `auto_activate_tier`. Their job boards are looked for
+at once, in the time left of the harvest's limit, so the next day's scout
+already fetches them; any not reached are found by the weekly re-check.
+`rolescout status` shows when the last harvest ran, how many companies it
+activated and how many of those are mapped.
+
 Once a harvest has run, the shortlist, `rolescout why ID` and
 `rolescout companies list` show which boards list each company under
 "Backed by". This covers companies you added by hand as well as activated

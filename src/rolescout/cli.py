@@ -924,7 +924,45 @@ def _run_harvest(conn, args, minutes: float | None, boards: list[str] | None = N
     _print_harvest(summary)
     print()
     print("\n".join(_funnel_lines(cands.funnel(conn))))
+    done, failed = cands.auto_activate(conn, cfg)
+    if done or failed:
+        print(f"\nActivated automatically (auto_activate is on): {len(done)}")
+        for d in done:
+            print(f"  {d['name']} ({d['domain']}), tier {d['tier']}, tagged {', '.join(d['tags']) or 'with no board'}")
+        for message in failed:
+            print(f"  Not activated: {message}")
+    summary.activated = len(done)
+    portfolio.record_harvest(conn, auto_activate=cfg.auto_activate,
+                             company_ids=[d["company_id"] for d in done])
+    if done:
+        _resolve_activated(conn, args, [d["name"] for d in done],
+                           minutes * 60 - summary.seconds if minutes else None)
     return summary
+
+
+def _resolve_activated(conn, args, names: list[str], seconds_left: float | None) -> None:
+    """Look for the job boards of companies a harvest just activated, in what
+    is left of the harvest's time limit. Whatever is not reached stays
+    unmapped and is picked up by the weekly re-check. Never fails the harvest."""
+    try:
+        left: list[str] = []
+        if seconds_left is not None and seconds_left <= 0:
+            left = list(names)
+            results = []
+        else:
+            print(f"\nFinding the job boards of the {len(names)} just activated"
+                  + (f" ({seconds_left / 60:.0f} minutes left of the harvest's limit)"
+                     if seconds_left is not None else ""))
+            results = resolve_companies(conn, names=names, delay=args.delay,
+                                        on_company=lambda r: _print_resolution(r, False),
+                                        time_limit=seconds_left, not_checked=left)
+        if results:
+            _print_resolve_summary(results, False)
+        if left:
+            print(f"\nThe harvest's time limit was reached; the weekly re-check will look for the job "
+                  f"boards of ({len(left)}): {', '.join(left)}")
+    except Exception as exc:
+        print(f"Finding their job boards failed; the weekly re-check will try: {type(exc).__name__}: {exc}")
 
 
 def _cmd_portfolio_harvest(args) -> int:
@@ -936,7 +974,7 @@ def _cmd_portfolio_harvest(args) -> int:
     summary = _run_harvest(conn, args, args.max_minutes, args.boards or None)
     if summary.complete and not args.boards:
         portfolio.mark_harvested(conn)
-    print("\nSee them with: rolescout candidates --status eligible")
+    print("\nSee them with: rolescout candidates --status " + ("tracked" if summary.activated else "eligible"))
     return 1 if summary.boards and all(b.error for b in summary.boards) else 0
 
 
@@ -1174,6 +1212,11 @@ def _cmd_status(args) -> int:
                                 f"companies ({status['companies_active']} active)"))
     lines.append(("Database", f"{status['database']} ({_human_bytes(status['database_bytes'])})"))
     lines.append(("Coverage gaps", status["gaps"]["summary"] + "  (rolescout gaps)"))
+    harvest = status["last_harvest"]
+    if harvest:
+        lines.append(("Last harvest", harvest["at"] + (
+            f"; {harvest['activated']} auto-activated, {harvest['mapped']} of them mapped to a job board"
+            if harvest["auto_activate"] else "; auto-activation is off")))
     backup = status["last_backup"]
     if backup:
         lines.append(("Last backup", f"{backup['path']} ({_human_bytes(backup['bytes'])}, "

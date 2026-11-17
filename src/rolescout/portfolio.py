@@ -32,7 +32,8 @@ PLATFORM = "getro"
 PAGE_TIMEOUT = 20
 MAX_SUB_SITEMAPS = 50
 RECHECK_DAYS = 30                  # a company page is re-read after this long
-HARVEST_META_KEY = "last_harvest_at"
+HARVEST_META_KEY = "last_harvest_at"          # the last whole scheduled harvest: paces the weekly one
+LAST_HARVEST_META_KEY = "last_harvest"        # the last harvest of any kind, for status
 HARVEST_SLACK = timedelta(hours=12)
 NEXT_DATA = re.compile(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.S)
 LOC = re.compile(r"<loc>\s*(.*?)\s*</loc>", re.S)
@@ -273,6 +274,7 @@ class HarvestSummary:
     requests: int = 0
     seconds: float = 0.0
     stopped_early: bool = False
+    activated: int = 0         # candidates activated afterwards by auto_activate
 
     @property
     def complete(self) -> bool:
@@ -477,3 +479,28 @@ def harvest_due(conn: sqlite3.Connection, every_days: float, now: datetime | Non
 
 def mark_harvested(conn: sqlite3.Connection, now: str | None = None) -> None:
     set_meta(conn, HARVEST_META_KEY, now or utc_now())
+
+
+def record_harvest(conn: sqlite3.Connection, *, auto_activate: bool, company_ids: list[int],
+                   now: str | None = None) -> None:
+    """Remember the harvest that just ran, for ``rolescout status``: when, and
+    which companies it activated automatically. Unlike ``mark_harvested``
+    this is written for every harvest, whole or cut short."""
+    set_meta(conn, LAST_HARVEST_META_KEY, json.dumps(
+        {"at": now or utc_now(), "auto_activate": auto_activate, "company_ids": company_ids}))
+
+
+def last_harvest(conn: sqlite3.Connection) -> dict | None:
+    """The last harvest as ``record_harvest`` stored it, with how many of the
+    companies it activated have a job board mapped now. None if no harvest
+    has run."""
+    raw = get_meta(conn, LAST_HARVEST_META_KEY)
+    if raw is None:
+        return None
+    record = json.loads(raw)
+    ids = record["company_ids"]
+    marks = ",".join("?" * len(ids))
+    mapped = conn.execute(
+        f"SELECT COUNT(DISTINCT company_id) FROM boards WHERE company_id IN ({marks})", ids).fetchone()[0]
+    return {"at": record["at"], "auto_activate": record["auto_activate"],
+            "activated": len(ids), "mapped": mapped}

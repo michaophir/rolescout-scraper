@@ -56,6 +56,8 @@ class FilterConfig:
     sector_unknown: str = "review"
     require_open_role: bool = False
     role_locations: list[str] = field(default_factory=list)
+    auto_activate: bool = False
+    auto_activate_tier: int = ACTIVATION_TIER
     source: str = ""
     digest: str = ""
 
@@ -107,9 +109,16 @@ def parse_config(text: str, source: str = "") -> FilterConfig:
         raw = tomllib.loads(text)
     except tomllib.TOMLDecodeError as exc:
         raise ConfigError(f"{source or 'candidates config'} is not valid TOML: {exc}") from None
-    unknown = sorted(set(raw) - {"size", "stage", "sector", "roles"})
+    unknown = sorted(set(raw) - {"auto_activate", "auto_activate_tier", "size", "stage", "sector", "roles"})
     if unknown:
-        raise ConfigError(f"unknown section {', '.join(unknown)}; expected size, stage, sector, roles")
+        raise ConfigError(f"unknown section {', '.join(unknown)}; expected size, stage, sector, roles "
+                          "(and the auto_activate settings above them)")
+    auto = raw.get("auto_activate", False)
+    if not isinstance(auto, bool):
+        raise ConfigError("auto_activate must be true or false, on its own line above the first section")
+    auto_tier = raw.get("auto_activate_tier", ACTIVATION_TIER)
+    if isinstance(auto_tier, bool) or not isinstance(auto_tier, int) or auto_tier < 1:
+        raise ConfigError(f"auto_activate_tier must be a whole number, 1 or more, got {auto_tier!r}")
     size = _table(raw, "size", {"min_employees", "unknown"})
     stage = _table(raw, "stage", {"accept", "reject"})
     sector = _table(raw, "sector", {"keywords", "unknown"})
@@ -131,7 +140,8 @@ def parse_config(text: str, source: str = "") -> FilterConfig:
         min_employees=minimum, size_unknown=_unknown(size, "size"),
         stage_accept=[s.lower() for s in accept], stage_reject=[s.lower() for s in reject],
         sector_keywords=_words(sector, "keywords", "sector"), sector_unknown=_unknown(sector, "sector"),
-        require_open_role=require, role_locations=locations,
+        require_open_role=require, role_locations=locations, auto_activate=auto,
+        auto_activate_tier=auto_tier,
         source=source, digest=hashlib.sha256(text.encode()).hexdigest()[:12])
 
 
@@ -172,6 +182,16 @@ def starter_config(keywords: list[str] | None = None, seeded_from: str = "") -> 
 # it fails rejects it. A rule that cannot be decided sends it to review. A
 # candidate that passes every rule is eligible. `rolescout candidates why NAME`
 # shows each rule's result.
+
+# Start tracking every eligible candidate at the end of each harvest, with no
+# `rolescout candidates activate`. Candidates in review, rejected or dismissed
+# are never activated this way. Their job boards are looked for straight
+# away, in whatever is left of the harvest's time limit; the weekly re-check
+# finds the rest. Off unless set; to turn it on, uncomment the line below.
+# Both lines must stay here, above the first [section].
+# auto_activate = true
+# The tier given to companies activated this way.
+# auto_activate_tier = 3
 
 [size]
 # Smallest company worth tracking, by the board's employee count.
@@ -402,9 +422,10 @@ def _tag(board: dict) -> str:
     return f"portfolio:{label}"
 
 
-def activate(conn: sqlite3.Connection, candidate: dict, *, force: bool = False) -> dict:
-    """Start tracking a candidate: add it as a tier 3 company tagged with the
-    boards that list it. Finding its own job board is left to
+def activate(conn: sqlite3.Connection, candidate: dict, *, force: bool = False,
+             tier: int = ACTIVATION_TIER) -> dict:
+    """Start tracking a candidate: add it as a company (tier 3 unless another
+    is given) tagged with the boards that list it. Finding its own job board is left to
     ``companies resolve``; nothing is fetched here."""
     state = candidate["state"]
     if state == "tracked":
@@ -415,13 +436,34 @@ def activate(conn: sqlite3.Connection, candidate: dict, *, force: bool = False) 
     tags = [_tag(b) for b in candidate["boards"]]
     try:
         company_id = add_company(conn, candidate["name"], website=candidate["website"] or candidate["domain"],
-                                 tier=ACTIVATION_TIER, tags=tags)
+                                 tier=tier, tags=tags)
     except CompanyError as exc:
         raise CandidateError(f"{candidate['name']}: {exc}") from None
     with transaction(conn):
         conn.execute("UPDATE candidates SET company_id = ?, activated_at = ?, dismissed_at = NULL WHERE id = ?",
                      (company_id, utc_now(), candidate["id"]))
-    return {"name": candidate["name"], "domain": candidate["domain"], "tier": ACTIVATION_TIER, "tags": tags}
+    return {"name": candidate["name"], "domain": candidate["domain"], "tier": tier, "tags": tags}
+
+
+def auto_activate(conn: sqlite3.Connection, cfg: FilterConfig) -> tuple[list[dict], list[str]]:
+    """Activate every eligible candidate when the config asks for it.
+
+    Returns what was activated (each with the ``company_id`` it now has)
+    and, for any that could not be (a tracked company already has the
+    name), why. Does nothing when the setting is off.
+    Candidates in review, rejected or dismissed are never touched."""
+    done, failed = [], []
+    if not cfg.auto_activate:
+        return done, failed
+    for candidate in list_candidates(conn, "eligible"):
+        try:
+            result = activate(conn, candidate, tier=cfg.auto_activate_tier)
+            result["company_id"] = conn.execute(
+                "SELECT company_id FROM candidates WHERE id = ?", (candidate["id"],)).fetchone()[0]
+            done.append(result)
+        except CandidateError as exc:
+            failed.append(str(exc))
+    return done, failed
 
 
 def dismiss(conn: sqlite3.Connection, candidate: dict, note: str = "") -> None:

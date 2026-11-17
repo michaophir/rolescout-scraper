@@ -5,6 +5,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from rolescout.portfolio import last_harvest
 from rolescout.scout import database_file, scout_is_running
 
 BACKUP_PREFIX = "rolescout-"
@@ -158,6 +159,7 @@ def collect_status(conn: sqlite3.Connection, *, schedule: dict | None = None,
         }
 
     status["failing_boards"] = failing_boards(conn)
+    status["last_harvest"] = last_harvest(conn)
 
     if schedule and schedule.get("backup_dir"):
         backups = list_backups(schedule["backup_dir"])

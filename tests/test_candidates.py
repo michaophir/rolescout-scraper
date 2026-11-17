@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from rolescout import candidates as cands
-from rolescout import cli, companies, db, portfolio, scout
+from rolescout import cli, companies, db, ops, portfolio, resolve, scout
 from rolescout.portfolio import Fetcher, jobs_filter_path
 from tests.conftest import FakeWeb
 from tests.test_scout import Scripted, role
@@ -641,3 +641,243 @@ def test_version_6_database_upgrades_in_place(tmp_path, monkeypatch, cfg):
     run(conn, cfg, board_pages(A, "Alpha", "1", [co("acme", "acme.example"), co("bolt", "bolt.example")]))
     assert {d: c["state"] for d, c in by_domain(conn).items()} == {
         "acme.example": "tracked", "bolt.example": "eligible"}
+
+
+# --- automatic activation ----------------------------------------------------
+
+AUTO = "auto_activate = true\n" + CONFIG
+
+
+def mixed_board():
+    """One eligible company, one for review, one rejected, one to be dismissed."""
+    return board_pages(A, "Alpha", "1", [
+        co("acme", "acme.example", id=1), co("vague", "vague.example", id=2, stage="other"),
+        co("tiny", "tiny.example", id=3, employees=2), co("bolt", "bolt.example", id=4)])
+
+
+LEVER = "https://api.lever.co/v0/postings/{}?mode=json"
+# Acme's own site links its job board; Bolt's site says nothing.
+ACME_SITE = {
+    "https://acme.example": '<a href="/careers">Careers</a>',
+    "http://acme.example": '<a href="/careers">Careers</a>',
+    "https://acme.example/careers": '<a href="https://jobs.lever.co/acme-inc/1">Engineer</a>',
+    "http://acme.example/careers": '<a href="https://jobs.lever.co/acme-inc/1">Engineer</a>',
+    LEVER.format("acme-inc"): [{"id": "1", "text": "Engineer", "hostedUrl": "https://jobs.lever.co/acme-inc/1",
+                                "descriptionPlain": "Join us"}],
+}
+
+
+def one_web(monkeypatch, pages):
+    """Serve the board pages and the companies' own sites from one fake internet."""
+    web = FakeWeb(pages)
+    real_fetcher, real_resolve = Fetcher, resolve.resolve_companies
+    monkeypatch.setattr(portfolio, "Fetcher", lambda delay=1.0: real_fetcher(session=web))
+    limits = []
+
+    def resolving(c, **kw):
+        limits.append(kw.get("time_limit"))
+        return real_resolve(c, **{**kw, "resolver": resolve.Resolver(session=web, delay=0)})
+    monkeypatch.setattr(cli, "resolve_companies", resolving)
+    web.limits = limits
+    return web
+
+
+def harvest_cli(monkeypatch, pages, *argv):
+    one_web(monkeypatch, pages)
+    return cli.main(["portfolio", "harvest", "--delay", "0", *argv])
+
+
+def mapped(conn):
+    return {c["name"]: [f"{b['source']}/{b['ref']}" for b in c["boards"]] for c in companies.list_companies(conn)}
+
+
+def test_auto_activate_is_off_by_default(conn, monkeypatch, capsys, isolated_db_path):
+    assert cands.parse_config(CONFIG).auto_activate is False
+    (isolated_db_path.parent / "candidates.toml").write_text(CONFIG)
+    portfolio.add_board(conn, A)
+    assert harvest_cli(monkeypatch, mixed_board()) == 0
+    out = capsys.readouterr().out
+    assert "Activated automatically" not in out and "candidates --status eligible" in out
+    assert companies.list_companies(conn) == []
+    assert [c["name"] for c in cands.list_candidates(conn, "eligible")] == ["Acme", "Bolt"]
+
+
+def test_harvest_activates_only_the_eligible_when_auto_activate_is_on(conn, monkeypatch, capsys, isolated_db_path):
+    (isolated_db_path.parent / "candidates.toml").write_text(CONFIG)
+    portfolio.add_board(conn, A, "Alpha Fund")
+    assert harvest_cli(monkeypatch, mixed_board()) == 0
+    cands.dismiss(conn, cands.get_candidate(conn, "bolt.example"), "not for me")
+    capsys.readouterr()
+
+    (isolated_db_path.parent / "candidates.toml").write_text(AUTO)
+    assert cli.main(["candidates", "apply"]) == 0                    # applying the filter activates nothing
+    assert companies.list_companies(conn) == []
+    assert harvest_cli(monkeypatch, mixed_board()) == 0
+    out = capsys.readouterr().out
+    assert "Activated automatically (auto_activate is on): 1" in out
+    assert "  Acme (acme.example), tier 3, tagged portfolio:alpha-fund" in out
+    assert "candidates --status tracked" in out
+    tracked = companies.list_companies(conn)
+    assert [(c["name"], c["tier"], c["tags"], c["boards"]) for c in tracked] == [
+        ("Acme", 3, ["portfolio:alpha-fund"], [])]                   # review, rejected, dismissed left alone
+    states = {c["name"]: c["state"] for c in cands.list_candidates(conn)}
+    assert states == {"Acme": "tracked", "Vague": "review", "Tiny": "rejected", "Bolt": "dismissed"}
+    assert conn.execute("SELECT COUNT(*) FROM roles").fetchone()[0] == 0
+
+    assert harvest_cli(monkeypatch, mixed_board()) == 0              # nothing left: nothing said
+    assert "Activated automatically" not in capsys.readouterr().out
+    assert len(companies.list_companies(conn)) == 1
+
+
+def test_weekly_harvest_in_the_daily_job_activates_too(conn, monkeypatch, capsys, isolated_db_path):
+    (isolated_db_path.parent / "candidates.toml").write_text(AUTO)
+    companies.add_company(conn, "Tracked")
+    companies.add_board(conn, "Tracked", "greenhouse", "tracked")
+    portfolio.add_board(conn, A)
+    pages = {**mixed_board(), **ACME_SITE}
+    script = Scripted(**{"tracked": [[role("T1")]] * 2, "acme-inc": [[role("A1", source="lever")]]})
+
+    def run_daily():
+        monkeypatch.setattr(cli.time, "sleep", lambda s: None)
+        monkeypatch.setattr(cli, "run_scout", lambda c, **kw: scout.run_scout(
+            c, adapter_for=script, on_board=kw.get("on_board")))
+        web = one_web(monkeypatch, pages)
+        return cli.main(["daily", "--recheck-days", "0", "--delay", "0"]), web
+    code, web = run_daily()
+    out = capsys.readouterr().out
+    assert code == 0 and "Activated automatically (auto_activate is on): 2" in out
+    assert sorted(c["name"] for c in companies.list_companies(conn)) == ["Acme", "Bolt", "Tracked"]
+    # Mapped in the same run, after the scout and the harvest, with the weekly re-check switched off.
+    assert out.index("Run 1 completed") < out.index("Weekly portfolio harvest") < out.index(
+        "Finding the job boards of the 2 just activated") < out.index("  Acme ... saved lever/acme-inc")
+    assert mapped(conn) == {"Acme": ["lever/acme-inc"], "Bolt": [], "Tracked": ["greenhouse/tracked"]}
+    assert 0 < web.limits[0] <= 15 * 60                              # what is left of --harvest-minutes
+    assert script.calls == ["tracked"]
+
+    # The next day's scout fetches the new company; no week of waiting, no second harvest.
+    code, web = run_daily()
+    assert code == 0 and sorted(script.calls) == ["acme-inc", "tracked", "tracked"] and web.urls == []
+    assert conn.execute("SELECT COUNT(*) FROM roles r JOIN companies c ON c.id = r.company_id "
+                        "WHERE c.name = 'Acme'").fetchone()[0] == 1
+
+
+def test_a_name_already_tracked_is_reported_and_stops_nothing(conn, monkeypatch, capsys, isolated_db_path):
+    (isolated_db_path.parent / "candidates.toml").write_text(AUTO)
+    companies.add_company(conn, "Acme", website="https://another-acme.example")   # same name, another company
+    portfolio.add_board(conn, A)
+    assert harvest_cli(monkeypatch, mixed_board()) == 0
+    out = capsys.readouterr().out
+    assert "Activated automatically (auto_activate is on): 1" in out and "  Not activated: Acme:" in out
+    assert sorted(c["name"] for c in companies.list_companies(conn)) == ["Acme", "Bolt"]
+    assert cands.get_candidate(conn, "acme.example")["state"] == "eligible"
+
+
+def test_auto_activate_setting_is_validated_and_shown_in_the_starter():
+    assert cands.parse_config(AUTO).auto_activate is True
+    with pytest.raises(cands.ConfigError, match="auto_activate must be true or false"):
+        cands.parse_config('auto_activate = "yes"\n' + CONFIG)
+    with pytest.raises(cands.ConfigError, match=r"unknown setting auto_activate in \[roles\]"):
+        cands.parse_config(CONFIG + "auto_activate = true\n")        # below a section: refused, not ignored
+    starter = cands.starter_config()
+    assert cands.parse_config(starter).auto_activate is False
+    assert cands.parse_config(starter.replace("# auto_activate = true", "auto_activate = true")).auto_activate is True
+
+
+def test_only_the_newly_activated_are_resolved_within_the_harvest_limit(conn, monkeypatch, capsys, isolated_db_path):
+    (isolated_db_path.parent / "candidates.toml").write_text(AUTO)
+    companies.add_company(conn, "Old", website="https://old.example")      # unmapped, tracked before: not touched
+    portfolio.add_board(conn, A)
+    web = one_web(monkeypatch, {**mixed_board(), **ACME_SITE})
+    assert cli.main(["portfolio", "harvest", "--delay", "0", "--max-minutes", "20"]) == 0
+    out = capsys.readouterr().out
+    assert "Finding the job boards of the 2 just activated (20 minutes left of the harvest's limit)" in out
+    assert "  Acme ... saved lever/acme-inc" in out and "  Bolt ... unresolved" in out
+    assert mapped(conn) == {"Acme": ["lever/acme-inc"], "Bolt": [], "Old": []}
+    assert not any("old.example" in url for url in web.urls)
+    assert len(web.limits) == 1 and 0 < web.limits[0] <= 20 * 60
+    assert conn.execute("SELECT COUNT(*) FROM roles").fetchone()[0] == 0   # resolve maps; the scout fetches
+
+    # Bolt, not found, is an ordinary unmapped company: the weekly re-check has it.
+    assert "Bolt" in [t["name"] for t in resolve.recheck_targets(conn, [])]
+
+
+def test_no_time_left_leaves_the_new_companies_to_the_weekly_recheck(conn, monkeypatch, capsys, isolated_db_path):
+    (isolated_db_path.parent / "candidates.toml").write_text(AUTO)
+    portfolio.add_board(conn, A)
+    web = one_web(monkeypatch, {**mixed_board(), **ACME_SITE})
+    real = portfolio.harvest
+
+    def used_it_all(*args, **kwargs):
+        summary = real(*args, **kwargs)
+        summary.seconds = kwargs["time_limit"]
+        return summary
+    monkeypatch.setattr(portfolio, "harvest", used_it_all)
+    assert cli.main(["portfolio", "harvest", "--delay", "0", "--max-minutes", "20"]) == 0
+    out = capsys.readouterr().out
+    assert "Activated automatically (auto_activate is on): 2" in out
+    assert ("The harvest's time limit was reached; the weekly re-check will look for the job boards of (2): "
+            "Acme, Bolt") in out
+    assert web.limits == [] and mapped(conn) == {"Acme": [], "Bolt": []}
+    assert [t["name"] for t in resolve.recheck_targets(conn, [])] == ["Acme", "Bolt"]
+
+
+def test_a_failing_resolve_does_not_fail_the_harvest(conn, monkeypatch, capsys, isolated_db_path):
+    (isolated_db_path.parent / "candidates.toml").write_text(AUTO)
+    portfolio.add_board(conn, A)
+    one_web(monkeypatch, mixed_board())
+    monkeypatch.setattr(cli, "resolve_companies", lambda c, **kw: (_ for _ in ()).throw(RuntimeError("boom")))
+    assert cli.main(["portfolio", "harvest", "--delay", "0"]) == 0
+    assert "Finding their job boards failed; the weekly re-check will try: RuntimeError: boom" in capsys.readouterr().out
+    assert sorted(mapped(conn)) == ["Acme", "Bolt"]
+
+
+def test_tier_of_auto_activated_companies_is_a_setting(conn, monkeypatch, capsys, isolated_db_path):
+    assert cands.parse_config(AUTO).auto_activate_tier == 3          # the default
+    for bad in ("0", "2.5", '"two"', "true"):
+        with pytest.raises(cands.ConfigError, match="auto_activate_tier must be a whole number, 1 or more"):
+            cands.parse_config(f"auto_activate_tier = {bad}\n" + AUTO)
+    starter = cands.starter_config()
+    assert cands.parse_config(starter.replace("# auto_activate_tier = 3", "auto_activate_tier = 1")).auto_activate_tier == 1
+
+    (isolated_db_path.parent / "candidates.toml").write_text("auto_activate_tier = 2\n" + AUTO)
+    portfolio.add_board(conn, A)
+    assert harvest_cli(monkeypatch, {**board_pages(A, "Alpha", "1", [co("acme", "acme.example", id=1)])}) == 0
+    assert "  Acme (acme.example), tier 2, tagged portfolio:alpha" in capsys.readouterr().out
+    assert [(c["name"], c["tier"]) for c in companies.list_companies(conn)] == [("Acme", 2)]
+
+    # Activating by hand is not affected by the setting.
+    harvest_cli(monkeypatch, {**board_pages(A, "Alpha", "1", [co("acme", "acme.example", id=1),
+                                                             co("vague", "vague.example", id=2, stage="other")])})
+    assert cli.main(["candidates", "activate", "Vague"]) == 0
+    assert {c["name"]: c["tier"] for c in companies.list_companies(conn)} == {"Acme": 2, "Vague": 3}
+
+
+def test_status_has_one_line_for_the_last_harvest(conn, monkeypatch, capsys, tmp_path, isolated_db_path):
+    monkeypatch.setenv("HOME", str(tmp_path))                        # no real launchd schedule is read
+    cli.main(["status"])
+    assert "Last harvest" not in capsys.readouterr().out             # never harvested: no line
+    assert ops.collect_status(conn)["last_harvest"] is None
+
+    (isolated_db_path.parent / "candidates.toml").write_text(CONFIG)
+    portfolio.add_board(conn, A)
+    assert harvest_cli(monkeypatch, {**mixed_board(), **ACME_SITE}) == 0
+    capsys.readouterr()
+    cli.main(["status"])
+    line = next(l for l in capsys.readouterr().out.splitlines() if l.startswith("Last harvest:"))
+    stamp = ops.collect_status(conn)["last_harvest"]["at"]
+    assert line == f"Last harvest:   {stamp}; auto-activation is off"
+
+    (isolated_db_path.parent / "candidates.toml").write_text(AUTO)
+    assert harvest_cli(monkeypatch, {**mixed_board(), **ACME_SITE}) == 0
+    capsys.readouterr()
+    cli.main(["status"])
+    lines = [l for l in capsys.readouterr().out.splitlines() if l.startswith("Last harvest:")]
+    last = ops.collect_status(conn)["last_harvest"]
+    assert lines == [f"Last harvest:   {last['at']}; 2 auto-activated, 1 of them mapped to a job board"]
+    assert (last["auto_activate"], last["activated"], last["mapped"]) == (True, 2, 1)
+
+    # "Mapped" is counted when you look: a board found later by the re-check shows up.
+    companies.add_board(conn, "Bolt", "greenhouse", "bolt")
+    assert ops.collect_status(conn)["last_harvest"]["mapped"] == 2
+    cli.main(["status", "--json"])
+    assert json.loads(capsys.readouterr().out)["last_harvest"]["mapped"] == 2
