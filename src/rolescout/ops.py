@@ -5,6 +5,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from rolescout import jobs
 from rolescout.portfolio import last_harvest
 from rolescout.scout import database_file, scout_is_running
 
@@ -160,6 +161,7 @@ def collect_status(conn: sqlite3.Connection, *, schedule: dict | None = None,
 
     status["failing_boards"] = failing_boards(conn)
     status["last_harvest"] = last_harvest(conn)
+    status["now"] = jobs.current(conn, now)
 
     if schedule and schedule.get("backup_dir"):
         backups = list_backups(schedule["backup_dir"])
@@ -185,6 +187,13 @@ def collect_status(conn: sqlite3.Connection, *, schedule: dict | None = None,
             attention.append("the last run could not fetch any board (network down?)")
         if scheduled and now - started > timedelta(hours=STALE_AFTER_HOURS):
             attention.append(f"no run for {last['hours_ago']:.0f} hours although a daily run is scheduled")
+    for job in status["now"]["stopped"]:
+        # A scout that died or was cut short is already reported from its run, above.
+        if job["kind"] != "scout":
+            started = job["started_at"][:16].replace("T", " ")
+            attention.append(
+                f"a {jobs.LABELS.get(job['kind'], job['kind'])} started {started} UTC "
+                + ("died without finishing" if job["died"] else f"stopped on an error: {job['error']}"))
     for board in status["failing_boards"]:
         attention.append(
             f"{board['company']} ({board['source']}/{board['ref']}) has failed "

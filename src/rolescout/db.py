@@ -287,6 +287,25 @@ MIGRATIONS: list[list] = [
         )
         """,
     ],
+    [
+        """
+        -- Jobs in progress, so another process can say what is running.
+        -- A row is removed when its job ends normally (see rolescout.jobs).
+        CREATE TABLE jobs (
+            id          INTEGER PRIMARY KEY,
+            kind        TEXT NOT NULL,             -- daily | scout | resolve | harvest
+            pid         INTEGER NOT NULL,          -- the process doing it
+            started_at  TEXT NOT NULL,
+            updated_at  TEXT NOT NULL,             -- last progress written
+            done        INTEGER NOT NULL DEFAULT 0,
+            total       INTEGER,                   -- NULL when not known in advance
+            unit        TEXT NOT NULL DEFAULT '',  -- what done and total count: boards, companies
+            step        TEXT NOT NULL DEFAULT '',  -- for a job made of steps: the current one
+            ended_at    TEXT,                      -- set only when it stopped on an error
+            error       TEXT
+        )
+        """,
+    ],
 ]
 
 SCHEMA_VERSION = len(MIGRATIONS)

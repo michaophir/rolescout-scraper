@@ -23,6 +23,7 @@ from urllib.robotparser import RobotFileParser
 
 import requests
 
+from rolescout import jobs
 from rolescout.db import get_meta, set_meta, transaction, utc_now
 from rolescout.http import USER_AGENT, make_session
 from rolescout.resolve import read_body, registrable_domain
@@ -306,7 +307,7 @@ def _upsert_candidate(conn, board_id: int, slug: str, info: dict, now: str) -> i
 
 
 def _harvest_board(conn, board, fetcher: Fetcher, out: BoardHarvest, deadline: float,
-                   recheck_days: float) -> bool:
+                   recheck_days: float, job=None) -> bool:
     """Read one board's companies. Returns False if the time limit cut it short."""
     base = board["url"]
     status, page = fetcher.get(base, "/jobs")
@@ -358,9 +359,11 @@ def _harvest_board(conn, board, fetcher: Fetcher, out: BoardHarvest, deadline: f
     # short picks up where it stopped.
     todo = sorted((s for s in slugs if last_checked(s) < cutoff), key=last_checked)
     out.fresh = len(slugs) - len(todo)
-    for slug in todo:
+    for position, slug in enumerate(todo):
         if time.monotonic() >= deadline:
             return False
+        if job is not None and position % 10 == 0:
+            job.advance(step=f"{out.name or base}: {position} of {len(todo)} companies read")
         status, page = fetcher.get(base, f"/companies/{slug}")
         try:
             info = parse_company_page(page) if status == 200 else None
@@ -429,39 +432,42 @@ def harvest(conn: sqlite3.Connection, cfg, *, boards: list[str] | None = None, d
         conn.execute("SELECT * FROM portfolio_boards ORDER BY id").fetchall()
     summary = HarvestSummary()
     by_url: dict[str, BoardHarvest] = {}
-    try:
-        for board in targets:
-            out = BoardHarvest(url=board["url"], name=board["name"])
-            summary.boards.append(out)
-            by_url[board["url"]] = out
-            if time.monotonic() >= deadline:
+    with jobs.track(conn, "harvest", total=len(targets), unit="boards") as job:
+        try:
+            for board in targets:
+                out = BoardHarvest(url=board["url"], name=board["name"])
+                summary.boards.append(out)
+                by_url[board["url"]] = out
+                if time.monotonic() >= deadline:
+                    summary.stopped_early = True
+                    break
+                try:
+                    out.finished = _harvest_board(conn, board, fetcher, out, deadline, recheck_days, job)
+                except Forbidden:
+                    raise
+                except Exception as exc:  # one board's failure must not stop the others
+                    out.error = f"{type(exc).__name__}: {exc}"
+                with transaction(conn):
+                    conn.execute("UPDATE portfolio_boards SET last_harvest_at = ?, last_error = ? WHERE id = ?",
+                                 (utc_now(), out.error, board["id"]))
+                if on_board:
+                    on_board(out)
+                job.advance(len(summary.boards), step="")
+                if not out.finished and not out.error:
+                    summary.stopped_early = True
+                    break
+            # The filter needs no network; the role rule does, for those still in the running.
+            job.advance(step="checking open roles of the candidates still in the running")
+            pending = rules.apply_filter(conn, cfg)
+            if pending and cfg.require_open_role and not summary.stopped_early:
+                if not check_roles(conn, fetcher, pending, cfg.role_locations, deadline, by_url):
+                    summary.stopped_early = True
+                rules.apply_filter(conn, cfg)
+            elif pending and cfg.require_open_role:
                 summary.stopped_early = True
-                break
-            try:
-                out.finished = _harvest_board(conn, board, fetcher, out, deadline, recheck_days)
-            except Forbidden:
-                raise
-            except Exception as exc:  # one board's failure must not stop the others
-                out.error = f"{type(exc).__name__}: {exc}"
-            with transaction(conn):
-                conn.execute("UPDATE portfolio_boards SET last_harvest_at = ?, last_error = ? WHERE id = ?",
-                             (utc_now(), out.error, board["id"]))
-            if on_board:
-                on_board(out)
-            if not out.finished and not out.error:
-                summary.stopped_early = True
-                break
-        # The filter needs no network; the role rule does, for those still in the running.
-        pending = rules.apply_filter(conn, cfg)
-        if pending and cfg.require_open_role and not summary.stopped_early:
-            if not check_roles(conn, fetcher, pending, cfg.role_locations, deadline, by_url):
-                summary.stopped_early = True
-            rules.apply_filter(conn, cfg)
-        elif pending and cfg.require_open_role:
-            summary.stopped_early = True
-    finally:
-        summary.requests = fetcher.requests
-        summary.seconds = time.monotonic() - started
+        finally:
+            summary.requests = fetcher.requests
+            summary.seconds = time.monotonic() - started
     return summary
 
 

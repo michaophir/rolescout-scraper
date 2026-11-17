@@ -8,7 +8,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from rolescout import __version__
+from rolescout import __version__, digest, jobs
 from rolescout.adapters import ADAPTERS, SourceError, get_adapter
 from rolescout.companies import (
     CompanyError, add_board, add_company, board_ref, get_company, import_csv, list_companies,
@@ -1157,37 +1157,64 @@ def _cmd_daily(args) -> int:
     code = 0
     try:
         conn = connect(args.db)
-        for attempt in range(1, args.attempts + 1):
-            try:
-                summary = _scout_once(conn, args)
-            except ScoutAlreadyRunning as exc:
-                print(f"Not starting: {exc}. Skipping this run.")
+        with jobs.track(conn, "daily") as job:
+            code = _daily_steps(conn, args, job)
+            if code is None:
                 return 0
-            if not summary.boards or summary.ok:
-                break
-            # Every board failed: most often the Mac just woke and has no network yet.
-            if attempt < args.attempts:
-                print(f"Every board failed (attempt {attempt} of {args.attempts}); "
-                      f"retrying in {args.retry_wait:g} seconds.")
-                time.sleep(args.retry_wait)
-            else:
-                print(f"Every board failed on all {args.attempts} attempts.")
-                code = 1
-        # Backup before the re-check: the day's essential work is finished
-        # and safe before the optional part starts.
-        if args.backup_dir:
-            _print_backup(conn, args.backup_dir, args.keep)
-        if code == 0 and recheck_due(conn, args.recheck_days):
-            _weekly_recheck(conn, args)
-        # Last, and optional: nothing it does can change the scout's result.
-        if code == 0 and portfolio.harvest_due(conn, args.harvest_days):
-            _weekly_harvest(conn, args)
     except Exception as exc:  # the log must say why an unattended run died
         print(f"error: {type(exc).__name__}: {exc}")
         code = 1
     print(f"=== finished {datetime.now().astimezone().strftime('%H:%M:%S')}, "
           f"{'ok' if code == 0 else 'FAILED'} ===\n")
     return code
+
+
+def _daily_steps(conn, args, job) -> int | None:
+    """The daily job's work. Returns its exit code, or None when another scout
+    was already running and this run was skipped."""
+    code = 0
+    job.advance(step="scout")
+    for attempt in range(1, args.attempts + 1):
+        try:
+            summary = _scout_once(conn, args)
+        except ScoutAlreadyRunning as exc:
+            print(f"Not starting: {exc}. Skipping this run.")
+            return None
+        if not summary.boards or summary.ok:
+            break
+        # Every board failed: most often the Mac just woke and has no network yet.
+        if attempt < args.attempts:
+            print(f"Every board failed (attempt {attempt} of {args.attempts}); "
+                  f"retrying in {args.retry_wait:g} seconds.")
+            time.sleep(args.retry_wait)
+        else:
+            print(f"Every board failed on all {args.attempts} attempts.")
+            code = 1
+    # Backup before the re-check: the day's essential work is finished
+    # and safe before the optional part starts.
+    if args.backup_dir:
+        job.advance(step="backup")
+        _print_backup(conn, args.backup_dir, args.keep)
+    if code == 0 and recheck_due(conn, args.recheck_days):
+        job.advance(step="weekly coverage re-check")
+        _weekly_recheck(conn, args)
+    # Last, and optional: nothing it does can change the scout's result.
+    if code == 0 and portfolio.harvest_due(conn, args.harvest_days):
+        job.advance(step="weekly portfolio harvest")
+        _weekly_harvest(conn, args)
+    # The last word in the log: what this run changed.
+    job.advance(step="digest")
+    try:
+        print("\n" + digest.digest_text(digest.build_digest(conn)))
+    except Exception as exc:
+        print(f"Digest not written: {type(exc).__name__}: {exc}")
+    return code
+
+
+def _cmd_digest(args) -> int:
+    data = digest.build_digest(connect(args.db), since=args.since)
+    print(json.dumps(data, indent=2, ensure_ascii=False) if args.json else digest.digest_text(data))
+    return 0
 
 
 def _cmd_status(args) -> int:
@@ -1209,8 +1236,7 @@ def _cmd_status(args) -> int:
         lines.append(("Changes", f"{last['roles_opened']} opened, {last['roles_closed']} closed in that run"))
     else:
         lines.append(("Last run", "never"))
-    if status["scout_running"]:
-        lines.append(("Right now", "a scout is running"))
+    lines.append(("Right now", status["now"]["line"]))
     failing = status["failing_boards"]
     lines.append(("Failing boards", f"{len(failing)} failing more than two runs in a row"
                   if failing else "none failing more than two runs in a row"))
@@ -1590,9 +1616,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = commands.add_parser(
         "status", parents=[db],
-        help="health at a glance, no network: last run, failures, open roles, next run")
+        help="health at a glance, no network: what is running now, last run, failures, open roles, next run")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=_cmd_status)
+
+    p = commands.add_parser(
+        "digest", parents=[db],
+        help="what changed since the previous completed scout: roles, shortlist, companies, coverage")
+    p.add_argument("--since", metavar="DATE",
+                   help="compare with the last scout completed before this day began (YYYY-MM-DD)")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=_cmd_digest)
 
     p = commands.add_parser(
         "backup", parents=[db],
@@ -1665,7 +1699,7 @@ def main(argv: list[str] | None = None) -> int:
         return args.func(args)
     except (CompanyError, SchemaError, FileNotFoundError, TransferError, BackupError,
             launchd.ScheduleError, GapsError, ConfigError, MarkError, cands.ConfigError,
-            cands.CandidateError, portfolio.PortfolioError) as exc:
+            cands.CandidateError, portfolio.PortfolioError, digest.DigestError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:

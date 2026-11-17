@@ -11,6 +11,7 @@ from itertools import groupby
 
 from rolescout.adapters import FetchContext, KnownRole, get_adapter
 from rolescout.db import transaction, utc_now
+from rolescout import jobs
 from rolescout.http import make_session
 from rolescout.models import Role
 
@@ -219,7 +220,8 @@ def run_scout(conn: sqlite3.Connection, **kwargs) -> RunSummary:
     See ``_run_scout`` for the arguments.
     """
     with scout_lock(conn):
-        return _run_scout(conn, **kwargs)
+        with jobs.track(conn, "scout", unit="boards") as job:
+            return _run_scout(conn, job=job, **kwargs)
 
 
 def _run_scout(
@@ -230,6 +232,7 @@ def _run_scout(
     clock: Callable[[], str] = utc_now,
     on_board: Callable[[BoardResult], None] | None = None,
     wants_description: Callable[[str], bool] | None = None,
+    job: "jobs.Job | None" = None,
 ) -> RunSummary:
     """Fetch every board of every active company once and record the run.
 
@@ -268,6 +271,8 @@ def _run_scout(
             "INSERT INTO runs (started_at, companies_total, boards_total) VALUES (?, ?, ?)",
             (now, len({t["company_id"] for t in targets}), len(targets))).lastrowid
     summary = RunSummary(run_id=run_id, started_at=now, unmapped=unmapped)
+    if job is not None:
+        job.advance(0, total=len(targets))
 
     try:
         for company_id, boards in groupby(targets, key=lambda t: t["company_id"]):
@@ -342,6 +347,8 @@ def _run_scout(
                 summary.boards.append(result)
                 if on_board:
                     on_board(result)
+            if job is not None:
+                job.advance(len(summary.boards))
         summary.status = "completed"
     finally:
         if summary.status == "running":

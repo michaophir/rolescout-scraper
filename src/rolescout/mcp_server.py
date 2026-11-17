@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from rolescout import candidates as cands
+from rolescout import digest as changes
 from rolescout import shortlist as ranking
 from rolescout.adapters import ADAPTERS
 from rolescout.companies import CompanyError, add_board, add_company, backed_by, get_company, list_companies, set_active, set_website
@@ -473,12 +474,16 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
 
     @server.tool(title="Health", annotations=reads)
     def health() -> dict[str, Any]:
-        """Whether rolescout is running properly, without any network call: when the last scout
-        ran and how it went, companies and boards that failed, boards failing more than two
+        """Whether rolescout is running properly and what it is doing right now, without any
+        network call. right_now is one line: the job in progress (scout, resolve, harvest or the
+        daily job) with when it started, how far it is and when it should finish; or "Idle"; and
+        any job that died without finishing. jobs_running has the same as data. Also: when the
+        last scout ran and how it went, companies and boards that failed, boards failing more than two
         runs in a row, open role count, database size, coverage gap summary, and when the next
         scheduled run is due.
 
-        Check it first when data looks stale or the owner asks "is it working". healthy is false
+        Check it first when data looks stale or the owner asks "is it working" or "is anything
+        running". For "what changed", use digest. healthy is false
         when something needs attention, and attention lists what.
         """
         with database() as conn:
@@ -492,6 +497,9 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
                                          "companies_failed", "boards_ok", "boards_failed",
                                          "roles_opened", "roles_closed")} | {
                     "failed": [f"{f['name']} ({f['source']}/{f['ref']}): {f['error']}" for f in last["failed"]]},
+                "right_now": status["now"]["line"],
+                "jobs_running": [{k: j[k] for k in ("kind", "started_at", "done", "total", "unit", "step")}
+                                 | {"estimated_finish": j["eta"]} for j in status["now"]["running"]],
                 "scout_running_now": status["scout_running"],
                 "failing_boards": [f"{b['company']} ({b['source']}/{b['ref']}): failed "
                                    f"{b['failed_runs_in_a_row']} runs in a row" for b in status["failing_boards"]],
@@ -505,6 +513,29 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
                     else "scheduling is only built for macOS"),
                 "server_mode": "read-only" if read_only else "read-write",
             }
+
+    @server.tool(title="Digest of what changed", annotations=reads)
+    def digest(
+        since: Annotated[str | None, Field(description=(
+            "Compare with the last scout completed before this day began (YYYY-MM-DD, the owner's "
+            "local date). Omit to compare with the previous completed scout, which answers "
+            "\"what changed today\"."))] = None,
+    ) -> dict[str, Any]:
+        """What changed since the previous completed scout, from the local database only.
+
+        Use it for "what changed today" or "anything new since Monday". text is a short summary
+        ready to show as it is. The same content as data: roles opened and closed with the
+        companies that opened and closed most, companies fetched for the first time, roles new
+        on the shortlist (rank, company, title, role_id), companies added, mapped to a board
+        or newly failing, and coverage now against then. Follow up with get_role or
+        get_shortlist for details.
+        """
+        with database() as conn:
+            try:
+                data = changes.build_digest(conn, since=since)
+            except changes.DigestError as exc:
+                raise ToolError(str(exc)) from None
+            return {"text": changes.digest_text(data), **data}
 
     CandidateRef = Annotated[str, Field(description=(
         "The candidate's website domain (e.g. example.com) or its name, as list_candidates shows them."))]

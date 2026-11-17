@@ -17,7 +17,7 @@ from tests.test_scout import Clock, Scripted  # noqa: E402
 from tests.test_shortlist import SMALL_CONFIG, mk  # noqa: E402
 
 READ_TOOLS = {"get_shortlist", "get_role", "search_roles", "explain_rank", "list_marks",
-              "list_target_companies", "coverage_gaps", "connector_brief", "hiring_trends", "health",
+              "list_target_companies", "coverage_gaps", "connector_brief", "hiring_trends", "health", "digest",
               "list_candidates", "explain_candidate"}
 WRITE_TOOLS = {"mark_role", "unmark_role", "add_target_company", "deactivate_company",
                "reactivate_company", "map_board", "record_job_system",

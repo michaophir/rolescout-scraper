@@ -97,7 +97,8 @@ Read (always available):
 | `coverage_gaps` | Companies that cannot be fetched, grouped by job system, with build candidates |
 | `connector_brief` | A Markdown brief for building an adapter for one job system |
 | `hiring_trends` | Open counts and roles opened and closed over a date range, overall and by department |
-| `health` | What `rolescout status` shows |
+| `health` | What `rolescout status` shows, including what is running right now |
+| `digest` | What changed since the previous completed scout, or since a date |
 | `list_candidates` | Companies found on portfolio boards, with status and reason, and the funnel |
 | `explain_candidate` | Each filter rule's result for one candidate |
 

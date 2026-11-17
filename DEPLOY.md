@@ -211,6 +211,21 @@ paste any URL from the career site, a job page included:
 rolescout companies map "Acme" workday "https://acme.wd5.myworkdayjobs.com/en-US/Careers/login"
 ```
 
+## What is running, and what changed
+
+`rolescout status` has a "Right now" line: the job in progress (scout,
+resolve, harvest, or the daily job and the step it is on), when it started,
+how far it is and when it should finish at its pace so far. It says "Idle"
+when nothing is running, and names a job that died or stopped on an error
+until the next job of that kind starts.
+
+`rolescout digest` says what changed since the previous completed scout:
+roles opened and closed, companies fetched for the first time, roles new on
+the shortlist, companies added, mapped or newly failing, and coverage now
+against then. `rolescout digest --since 2026-01-31` compares with the last
+scout completed before that day began. The daily job ends its log with the
+digest. Over MCP the same two are the `health` and `digest` tools.
+
 ## Rippling, Gem and Workable boards
 
 These three are named by the board name in their URL: `ats.rippling.com/NAME/jobs`,

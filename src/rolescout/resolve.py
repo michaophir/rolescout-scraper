@@ -41,6 +41,7 @@ from bs4 import BeautifulSoup
 from rolescout.adapters import ADAPTERS, BoardNotFound, SourceError, get_adapter
 from rolescout.adapters import gem, rippling, workable
 from rolescout.adapters.workday import WORKDAY_URL, find_refs
+from rolescout import jobs
 from rolescout.companies import CompanyError, add_board
 from rolescout.db import transaction, utc_now
 from rolescout.http import USER_AGENT, make_session
@@ -933,25 +934,27 @@ def resolve_companies(
         targets = recheck_targets(conn, failing or [])
     resolver = resolver or Resolver(delay=delay)
     results = []
-    for position, target in enumerate(targets):
-        if time_limit is not None and time.monotonic() - started >= time_limit:
-            if not_checked is not None:
-                not_checked.extend(t["name"] for t in targets[position:])
-            break
-        earlier = conn.execute(
-            "SELECT r.job_system, r.job_system_url FROM company_resolutions r JOIN companies c "
-            "ON c.id = r.company_id WHERE c.name = ?", (target["name"],)).fetchone()
-        known_url = (earlier["job_system_url"] or "") if earlier and earlier["job_system"] in ADAPTERS else ""
-        try:
-            res = (resolver.resolve(target["name"], target["website"], known_url) if known_url
-                   else resolver.resolve(target["name"], target["website"]))
-        except Exception as exc:  # one company's failure must not stop the rest
-            res = Resolution(company=target["name"], notes=[f"resolve failed: {exc!r}"])
-        if not dry_run:
-            save_resolution(conn, res)
-        results.append(res)
-        if on_company:
-            on_company(res)
+    with jobs.track(conn, "resolve", total=len(targets), unit="companies") as job:
+        for position, target in enumerate(targets):
+            if time_limit is not None and time.monotonic() - started >= time_limit:
+                if not_checked is not None:
+                    not_checked.extend(t["name"] for t in targets[position:])
+                break
+            earlier = conn.execute(
+                "SELECT r.job_system, r.job_system_url FROM company_resolutions r JOIN companies c "
+                "ON c.id = r.company_id WHERE c.name = ?", (target["name"],)).fetchone()
+            known_url = (earlier["job_system_url"] or "") if earlier and earlier["job_system"] in ADAPTERS else ""
+            try:
+                res = (resolver.resolve(target["name"], target["website"], known_url) if known_url
+                       else resolver.resolve(target["name"], target["website"]))
+            except Exception as exc:  # one company's failure must not stop the rest
+                res = Resolution(company=target["name"], notes=[f"resolve failed: {exc!r}"])
+            if not dry_run:
+                save_resolution(conn, res)
+            results.append(res)
+            if on_company:
+                on_company(res)
+            job.advance(len(results))
     return results
 
 
