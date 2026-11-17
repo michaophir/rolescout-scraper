@@ -107,8 +107,18 @@ posted it, falling back to the date rolescout first saw it. Roles that were
 already open when a company was first fetched and carry no posted date get
 no points for being new.
 
+The ranking file can also require a location. Add `require = ["United States"]`
+under `[location]` (above `[location.preferred]`) and a role reaches the
+shortlist only if one of its locations is in the United States, in any form
+boards use, or it is remote with no country named. Off unless set; the
+starter file carries the line commented out. In the table, a role with
+several locations shows the one that mattered first, then "+N more".
+
 After changing the file, `rolescout shortlist rebuild` re-ranks at once, with
-no network call. Marks (dismissed, saved, applied) are stored in the database
+no network call.
+
+A wrong company website can be corrected in place with
+`rolescout companies set-website NAME URL`. Marks (dismissed, saved, applied) are stored in the database
 on the machine where you make them.
 
 ## 4. First run

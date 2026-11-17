@@ -110,6 +110,7 @@ Write (absent in read-only mode):
 | `add_target_company` | Add a company to the target list |
 | `deactivate_company` | Stop tracking a company, keeping its history |
 | `reactivate_company` | Resume tracking it |
+| `set_company_website` | Correct the website stored for a company |
 | `map_board` | Map a company to a Greenhouse, Lever, Ashby or Workday board |
 | `record_job_system` | Record by hand which unsupported job system a company uses |
 | `activate_candidate` | Start tracking a candidate as a tier 3 company |

@@ -13,7 +13,7 @@ from rolescout.adapters import ADAPTERS, SourceError, get_adapter
 from rolescout.companies import (
     CompanyError, add_board, add_company, board_ref, get_company, import_csv, list_companies,
     remove_board,
-    set_active,
+    set_active, set_website,
 )
 from rolescout.db import DB_ENV_VAR, DEFAULT_DB_PATH, SchemaError, connect, resolve_db_path
 from rolescout import schedule as launchd
@@ -160,6 +160,17 @@ def _cmd_companies_add(args) -> int:
     add_company(conn, args.name, website=args.website, tier=args.tier,
                 tags=args.tags.split(",") if args.tags else None)
     print(f"Added {args.name.strip()}.")
+    return 0
+
+
+def _cmd_companies_set_website(args) -> int:
+    name, old, new = set_website(connect(args.db), args.name, args.url)
+    if new == old:
+        print(f"{name}: website is already {new or 'empty'}.")
+    else:
+        print(f"{name}: website changed from {old or '(none)'} to {new or '(none)'}.")
+        print("Its job board is looked for again at the next weekly re-check, or now with: "
+              f'rolescout companies resolve "{name}"')
     return 0
 
 
@@ -577,7 +588,11 @@ def _cmd_shortlist(args) -> int:
     except ValueError:
         print(f"error: --since must be a date like 2026-01-31, got {args.since!r}", file=sys.stderr)
         return 1
-    entries = ranking.shortlist_entries(conn, current["id"])
+    try:
+        shown_with = ranking.load_config(path) if path.exists() else None
+    except ConfigError:
+        shown_with = None
+    entries = ranking.shortlist_entries(conn, current["id"], shown_with)
     total = len(entries)
     if args.new:
         entries = [e for e in entries if e["id"] in new_ids]
@@ -633,14 +648,14 @@ def _cmd_shortlist(args) -> int:
                   + (f"; {more} more held back by the per-company cap" if more else ""))
             print(format_table(
                 ["Rank", "ID", "Score", "Title", "Location", "Flags", "URL"],
-                [[e["rank"], e["id"], f"{e['score']:g}", e["title"], e["location"],
+                [[e["rank"], e["id"], f"{e['score']:g}", e["title"], e["location_shown"],
                   _flags(e, new_ids), e["url"]] for e in members], widths))
             print()
     else:
         print(format_table(
             ["Rank", "ID", "Score", "Company", "Tier", "Title", "Location", "Flags", "URL"],
             [[e["rank"], e["id"], f"{e['score']:g}", e["company"], _tier(e["tier"]), e["title"],
-              e["location"], _flags(e, new_ids), e["url"]] for e in entries], widths))
+              e["location_shown"], _flags(e, new_ids), e["url"]] for e in entries], widths))
         print()
     print("Why a role ranks where it does: rolescout why ID.  "
           "Mark one: rolescout mark ID dismissed|saved|applied")
@@ -1275,6 +1290,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--tier", type=int)
     p.add_argument("--tags", help="comma-separated, e.g. ai,fintech")
     p.set_defaults(func=_cmd_companies_add)
+
+    p = sub.add_parser("set-website", parents=[db],
+                       help="correct a company's website, e.g. set-website Acme acme.example")
+    p.add_argument("name")
+    p.add_argument("url", help='the website; "example.com" becomes https://example.com')
+    p.set_defaults(func=_cmd_companies_set_website)
 
     p = sub.add_parser("deactivate", parents=[db], help="stop scouting a company (keeps its history)")
     p.add_argument("name")

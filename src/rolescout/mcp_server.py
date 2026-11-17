@@ -18,7 +18,7 @@ from typing import Annotated, Any, Literal
 from rolescout import candidates as cands
 from rolescout import shortlist as ranking
 from rolescout.adapters import ADAPTERS
-from rolescout.companies import CompanyError, add_board, add_company, get_company, list_companies, set_active
+from rolescout.companies import CompanyError, add_board, add_company, get_company, list_companies, set_active, set_website
 from rolescout.db import SchemaError, connect
 from rolescout.gaps import GapsError, classify, connector_brief, gaps_report, summary_line
 from rolescout.ops import collect_status
@@ -186,7 +186,11 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
                     "No shortlist has been built yet. It is built at the end of a scout once a "
                     "ranking config exists (rolescout shortlist init).")}
             previous, new_ids = ranking.new_since(conn, current["id"], since)
-            entries = ranking.shortlist_entries(conn, current["id"])
+            try:
+                shown_with = load_ranking() if config_path.exists() else None
+            except ConfigError:
+                shown_with = None
+            entries = ranking.shortlist_entries(conn, current["id"], shown_with)
             held = ranking.held_back(conn, current["id"])
             limit, offset = _page(limit, offset)
 
@@ -194,7 +198,7 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
                 row = {"rank": e["rank"], "role_id": e["id"], "score": e["score"]}
                 if with_company:
                     row.update(company=e["company"], tier=e["tier"])
-                row.update(title=e["title"], location=e["location"], mark=e["mark"],
+                row.update(title=e["title"], location=e["location_shown"], mark=e["mark"],
                            new=bool(previous) and e["id"] in new_ids, url=e["url"])
                 if include_reasons:
                     row["reasons"] = e["reasons"]
@@ -655,6 +659,25 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
         with database() as conn:
             set_active(conn, name, True)
             return {"name": get_company(conn, name)["name"], "active": True}
+
+    @server.tool(title="Correct a company's website", annotations=writes)
+    def set_company_website(
+        name: CompanyName,
+        website: Annotated[str, Field(description=(
+            "The correct website, e.g. example.com or https://example.com. It is stored as a full "
+            "https URL. An empty string clears it."))],
+    ) -> dict[str, Any]:
+        """Change the website stored for a target company. Use it when the stored website is
+        wrong or missing: the website is how rolescout finds a company's job board, confirms a
+        guessed board belongs to it, and recognizes the company on portfolio boards.
+
+        Nothing is fetched now. The company's board is looked for again at the weekly re-check.
+        A value that cannot be a website is rejected with the reason.
+        """
+        with database() as conn:
+            company, old, new = set_website(conn, name, website)
+            return {"name": company, "website": new or None, "previous_website": old or None,
+                    "changed": new != old}
 
     @server.tool(title="Map a company to a job board", annotations=writes)
     def map_board(

@@ -17,6 +17,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from rolescout.db import transaction, utc_now
+from rolescout.locations import Requirement, is_remote, split_locations
 
 CONFIG_NAME = "ranking.toml"
 CONFIG_ENV_VAR = "ROLESCOUT_RANKING"
@@ -57,6 +58,7 @@ class RankingConfig:
     exclude: list[str] = field(default_factory=list)             # title phrases never wanted
     seniority: dict[str, float] = field(default_factory=dict)    # word -> points
     preferred_locations: dict[str, float] = field(default_factory=dict)
+    required_locations: list[str] = field(default_factory=list)   # empty = no requirement
     remote_points: float = 0.0
     recency_max_points: float = 0.0
     recency_full_days: int = 0     # first seen this recently: full points
@@ -70,6 +72,7 @@ class RankingConfig:
         self._seniority = [(p, pts, _phrase(p)) for p, pts in self.seniority.items()]
         self._locations = [(p, pts, re.compile(re.escape(p), re.I))
                            for p, pts in self.preferred_locations.items()]
+        self._required = Requirement(self.required_locations)
 
     def wants_title(self, title: str) -> bool:
         """Whether a role with this title can reach the shortlist at all: it
@@ -122,7 +125,10 @@ def parse_config(text: str, source: str = "") -> RankingConfig:
                       "recency"},
                 "top level")
     title = _only(raw.get("title"), {"wanted", "exclude"}, "title")
-    location = _only(raw.get("location"), {"preferred", "remote_points"}, "location")
+    location = _only(raw.get("location"), {"preferred", "remote_points", "require"}, "location")
+    required = location.get("require", [])
+    if not isinstance(required, list) or not all(isinstance(x, str) and x.strip() for x in required):
+        raise ConfigError('location.require must be a list of places, e.g. ["United States"]')
     recency = _only(raw.get("recency"), {"max_points", "full_days", "zero_days"}, "recency")
 
     size = raw.get("size", 100)
@@ -150,6 +156,7 @@ def parse_config(text: str, source: str = "") -> RankingConfig:
         seniority=_points_table(_only(raw.get("seniority"), {"words"}, "seniority").get("words"),
                                 "[seniority.words]"),
         preferred_locations=_points_table(location.get("preferred"), "[location.preferred]"),
+        required_locations=[x.strip() for x in required],
         remote_points=float(_number(location, "remote_points", 0, "location")),
         recency_max_points=float(_number(recency, "max_points", 0, "recency")),
         recency_full_days=full, recency_zero_days=zero,
@@ -236,6 +243,16 @@ exclude = []
 # Points when the role is remote (the board says so, or the location does).
 remote_points = 10
 
+# Location requirement, off unless you remove the "#" below. With it, a role
+# reaches the shortlist only if at least one of its locations is in one of
+# these places. "United States" covers every form boards use: United States,
+# USA, US, each state and its two-letter code, and major US cities. Any other
+# entry is matched as written, e.g. "London". A remote role that names no
+# country or city counts as a match; "Remote - Canada" does not. A role with
+# no location at all does not match. `rolescout why ID` says when a role was
+# kept off the list by this rule.
+# require = ["United States"]
+
 # Points when the location contains one of these, e.g. "New York" = 10.
 # Any capitalization. A role that is both remote and in a preferred place
 # gets the larger of the two, not both.
@@ -255,6 +272,57 @@ zero_days = 30
 
 
 # --- scoring -----------------------------------------------------------------
+
+@dataclass
+class LocationRead:
+    places: list[str]                 # the separate locations, as given
+    preferred: tuple[str, float] | None = None   # (phrase, points) of the best preferred match
+    preferred_place: str | None = None
+    remote: bool = False
+    remote_place: str | None = None
+    required_place: str | None = None  # the location that satisfied the requirement
+    meets_requirement: bool = True
+
+
+def read_location(role, cfg: RankingConfig) -> LocationRead:
+    """Split a role's location text and work out which place matters."""
+    places = split_locations(role["location"])
+    out = LocationRead(places=places)
+    out.preferred = _best([(p, pts) for p, pts, pattern in cfg._locations
+                           if any(pattern.search(place) for place in places)])
+    if out.preferred:
+        pattern = next(pat for p, _, pat in cfg._locations if p == out.preferred[0])
+        out.preferred_place = next(place for place in places if pattern.search(place))
+    out.remote_place = next((place for place in places if is_remote(place)), None)
+    out.remote = role["workplace_type"] == "remote" or out.remote_place is not None
+    if cfg._required:
+        out.required_place = cfg._required.first_match(places)
+        # Marked remote by the board with no place given at all: nothing rules it out.
+        out.meets_requirement = out.required_place is not None or (not places and out.remote)
+    return out
+
+
+def display_location(role, cfg: RankingConfig | None) -> str:
+    """The location to show in a table: the place that earned the location
+    points (or met the requirement) first, then how many more there are."""
+    places = split_locations(role["location"])
+    if len(places) <= 1 or cfg is None:
+        lead = places[0] if places else (role["location"] or "")
+        return lead + (f" +{len(places) - 1} more" if len(places) > 1 else "")
+    read = read_location(role, cfg)
+    place_points = read.preferred[1] if read.preferred else 0.0
+    remote_points = cfg.remote_points if read.remote else 0.0
+    if remote_points > place_points and read.remote_place:
+        # Remote earned the points. With a requirement, lead with a remote place
+        # that meets it ("Remote - US"), not one that does not ("Remote - Canada").
+        fits = [p for p in places if is_remote(p) and (not cfg._required or cfg._required.accepts(p))]
+        lead = fits[0] if fits else (read.required_place or read.remote_place)
+    elif read.preferred_place:
+        lead = read.preferred_place
+    else:
+        lead = read.required_place or read.remote_place or places[0]
+    return f"{lead} +{len(places) - 1} more"
+
 
 @dataclass
 class Evaluation:
@@ -332,9 +400,19 @@ def evaluate(role, cfg: RankingConfig, today: date, baseline: bool = False) -> E
     add(senior[1] if senior else 0.0, f'Seniority: "{senior[0]}"' if senior else "",
         "No seniority word in the title")
 
-    location = role["location"] or ""
-    place = _best([(p, pts) for p, pts, pattern in cfg._locations if pattern.search(location)])
-    remote = role["workplace_type"] == "remote" or "remote" in location.lower()
+    where = read_location(role, cfg)
+    place, remote = where.preferred, where.remote
+    if cfg._required:
+        if where.meets_requirement:
+            ev.detail.append(f"Location requirement met by {where.required_place or 'a remote role with no place given'}")
+        else:
+            given = "; ".join(where.places) if where.places else "no location given"
+            ev.detail.append(f"Location requirement not met ({given})")
+            if ev.eligible:
+                ev.eligible = False
+                ev.why_not = (f"none of its locations ({given}) is in the places you require "
+                              f"({cfg._required.describe()})" if where.places else
+                              f"it gives no location, and you require one in {cfg._required.describe()}")
     place_points = place[1] if place else 0.0
     remote_points = cfg.remote_points if remote else 0.0
     if remote_points > place_points:
@@ -479,7 +557,10 @@ def new_since(conn: sqlite3.Connection, shortlist_id: int, since: str | None = N
     return previous, {r["role_id"] for r in rows}
 
 
-def shortlist_entries(conn: sqlite3.Connection, shortlist_id: int) -> list[dict]:
+def shortlist_entries(conn: sqlite3.Connection, shortlist_id: int,
+                      cfg: RankingConfig | None = None) -> list[dict]:
+    """The roles on a list, in rank order. ``location_shown`` leads with the
+    place that mattered when ``cfg`` is given."""
     rows = conn.execute(
         "SELECT e.rank, e.score, e.reasons, r.id, r.title, r.department, r.location, "
         "r.workplace_type, r.url, r.date_posted, r.compensation_text, r.first_seen_at, r.closed_at, "
@@ -487,7 +568,8 @@ def shortlist_entries(conn: sqlite3.Connection, shortlist_id: int) -> list[dict]
         "FROM shortlist_entries e JOIN roles r ON r.id = e.role_id "
         "JOIN companies c ON c.id = r.company_id LEFT JOIN role_marks m ON m.role_id = r.id "
         "WHERE e.shortlist_id = ? ORDER BY e.rank", (shortlist_id,))
-    return [{**dict(r), "reasons": json.loads(r["reasons"])} for r in rows]
+    return [{**dict(r), "reasons": json.loads(r["reasons"]), "location_shown": display_location(r, cfg)}
+            for r in rows]
 
 
 def held_back(conn: sqlite3.Connection, shortlist_id: int) -> list[dict]:

@@ -21,7 +21,7 @@ READ_TOOLS = {"get_shortlist", "get_role", "search_roles", "explain_rank", "list
               "list_candidates", "explain_candidate"}
 WRITE_TOOLS = {"mark_role", "unmark_role", "add_target_company", "deactivate_company",
                "reactivate_company", "map_board", "record_job_system",
-               "activate_candidate", "dismiss_candidate"}
+               "activate_candidate", "dismiss_candidate", "set_company_website"}
 
 
 class Session:

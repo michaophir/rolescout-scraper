@@ -43,6 +43,16 @@ def get_company(conn: sqlite3.Connection, name: str) -> sqlite3.Row:
     return row
 
 
+def set_website(conn, name: str, website: str) -> tuple[str, str, str]:
+    """Correct a company's website. The value is normalized like every other
+    entry point; an empty value clears it. Returns (name, old, new)."""
+    company = get_company(conn, name)
+    new = clean_website(website, company["name"])
+    with transaction(conn):
+        conn.execute("UPDATE companies SET website = ? WHERE id = ?", (new, company["id"]))
+    return company["name"], company["website"], new
+
+
 def add_company(conn, name: str, *, website: str = "", tier=None, tags=None) -> int:
     name = name.strip()
     if not name:
