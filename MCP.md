@@ -88,8 +88,8 @@ Read (always available):
 
 | Tool | What it does |
 |---|---|
-| `get_shortlist` | The ranked shortlist: flat, grouped by company, or only what is new since the previous list |
-| `get_role` | One role in full; the description only when asked for |
+| `get_shortlist` | The ranked shortlist: flat, grouped by company, or only what is new since the previous list; each company with the portfolio boards that list it |
+| `get_role` | One role in full; the description only when asked for; includes the portfolio boards that list its company |
 | `search_roles` | Search all stored roles by title, company, open/closed and first-seen date |
 | `explain_rank` | Why a role ranks where it does, or why it is not on the shortlist |
 | `list_marks` | Roles marked dismissed, saved or applied |

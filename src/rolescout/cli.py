@@ -137,6 +137,7 @@ def _cmd_companies_list(args) -> int:
         print(json.dumps(companies, indent=2, ensure_ascii=False))
         return 0
     rows = []
+    backed = any(c["backed_by"] for c in companies)
     for c in companies:
         boards = c["boards"]
         successes = [b["last_success_at"] for b in boards if b["last_success_at"]]
@@ -146,10 +147,12 @@ def _cmd_companies_list(args) -> int:
             ", ".join(f"{b['source']}/{b['ref']}" for b in boards) or "-",
             c["open_roles"] if boards else "",
             max(successes)[:16].replace("T", " ") if successes else "",
-            "; ".join(errors), ", ".join(c["tags"])])
+            "; ".join(errors), ", ".join(c["tags"]),
+            *([", ".join(c["backed_by"])] if backed else [])])
     print(format_table(
-        ["Company", "Tier", "Active", "Boards", "Open", "Last success (UTC)", "Last error", "Tags"],
-        rows, {"Last error": 50}))
+        ["Company", "Tier", "Active", "Boards", "Open", "Last success (UTC)", "Last error", "Tags",
+         *(["Backed by"] if backed else [])],
+        rows, {"Last error": 50, "Backed by": 40}))
     mapped = sum(1 for c in companies if c["boards"])
     print(f"\n{len(companies)} companies, {mapped} mapped to a board.")
     return 0
@@ -634,7 +637,12 @@ def _cmd_shortlist(args) -> int:
         print("\nNo roles to show.")
         return 0
     print()
-    widths = {"Title": 52, "Location": 26, "Company": 18}
+    widths = {"Title": 52, "Location": 26, "Company": 18, "Backed by": 28}
+    # The column appears once any role shown is at a company a portfolio board lists.
+    backed = ["Backed by"] if any(e["backed_by"] for e in entries) else []
+
+    def backers(e: dict) -> list[str]:
+        return [", ".join(e["backed_by"])] if backed else []
     if args.by_company:
         groups: dict[str, list[dict]] = {}
         for e in entries:
@@ -647,15 +655,15 @@ def _cmd_shortlist(args) -> int:
                   f"best rank {members[0]['rank']}"
                   + (f"; {more} more held back by the per-company cap" if more else ""))
             print(format_table(
-                ["Rank", "ID", "Score", "Title", "Location", "Flags", "URL"],
-                [[e["rank"], e["id"], f"{e['score']:g}", e["title"], e["location_shown"],
+                ["Rank", "ID", "Score", "Title", "Location", *backed, "Flags", "URL"],
+                [[e["rank"], e["id"], f"{e['score']:g}", e["title"], e["location_shown"], *backers(e),
                   _flags(e, new_ids), e["url"]] for e in members], widths))
             print()
     else:
         print(format_table(
-            ["Rank", "ID", "Score", "Company", "Tier", "Title", "Location", "Flags", "URL"],
+            ["Rank", "ID", "Score", "Company", "Tier", "Title", "Location", *backed, "Flags", "URL"],
             [[e["rank"], e["id"], f"{e['score']:g}", e["company"], _tier(e["tier"]), e["title"],
-              e["location_shown"], _flags(e, new_ids), e["url"]] for e in entries], widths))
+              e["location_shown"], *backers(e), _flags(e, new_ids), e["url"]] for e in entries], widths))
         print()
     print("Why a role ranks where it does: rolescout why ID.  "
           "Mark one: rolescout mark ID dismissed|saved|applied")
@@ -713,6 +721,8 @@ def _cmd_why(args) -> int:
     tier = f"tier {role['tier']}" if role["tier"] is not None else "no tier"
     print(f"{role['title']}  (ID {role['id']})")
     print(f"{role['company']} ({tier}) | {role['location'] or 'no location given'} | {role['url']}")
+    if role["backed_by"]:
+        print(f"Backed by: {', '.join(role['backed_by'])}")
     if role["mark"]:
         print(f"Marked {role['mark']}" + (f": {role['mark_note']}" if role["mark_note"] else ""))
     print()

@@ -167,6 +167,24 @@ def remove_board(conn, name: str, source: str, ref: str) -> int:
     return closed
 
 
+def backed_by(conn) -> dict[int, list[str]]:
+    """The portfolio boards that list each company, by company id, as the board
+    names in the order the boards were registered. Read from the listings a
+    harvest stored; a company no board lists is absent. A board with no name
+    is shown by its host."""
+    out: dict[int, list[str]] = {}
+    for row in conn.execute(
+            "SELECT c.company_id, b.name, b.url FROM candidates c "
+            "JOIN candidate_listings l ON l.candidate_id = c.id "
+            "JOIN portfolio_boards b ON b.id = l.board_id "
+            "WHERE c.company_id IS NOT NULL ORDER BY b.id"):
+        label = row["name"].strip() or row["url"].split("//")[-1]
+        names = out.setdefault(row["company_id"], [])
+        if label not in names:
+            names.append(label)
+    return out
+
+
 def list_companies(conn, *, active_only: bool = False) -> list[dict]:
     rows = conn.execute(
         """
@@ -183,6 +201,7 @@ def list_companies(conn, *, active_only: bool = False) -> list[dict]:
             "last_error_at FROM boards ORDER BY id"):
         board = dict(b)
         boards.setdefault(board.pop("company_id"), []).append(board)
+    backers = backed_by(conn)
     return [{**{k: r[k] for k in ("name", "website", "tier", "open_roles")},
              "tags": json.loads(r["tags"]), "active": bool(r["active"]),
-             "boards": boards.get(r["id"], [])} for r in rows]
+             "boards": boards.get(r["id"], []), "backed_by": backers.get(r["id"], [])} for r in rows]

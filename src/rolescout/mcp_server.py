@@ -18,7 +18,7 @@ from typing import Annotated, Any, Literal
 from rolescout import candidates as cands
 from rolescout import shortlist as ranking
 from rolescout.adapters import ADAPTERS
-from rolescout.companies import CompanyError, add_board, add_company, get_company, list_companies, set_active, set_website
+from rolescout.companies import CompanyError, add_board, add_company, backed_by, get_company, list_companies, set_active, set_website
 from rolescout.db import SchemaError, connect
 from rolescout.gaps import GapsError, classify, connector_brief, gaps_report, summary_line
 from rolescout.ops import collect_status
@@ -175,7 +175,8 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
         Use this first for questions like "what should I look at today" or "anything new".
         The list is rebuilt after every daily scout from the owner's ranking rules; rank 1 is
         best. Each entry has role_id, rank, score, company, tier, title, location, mark
-        ("saved" or null) and whether it is new since the previous list. For view=by_company,
+        ("saved" or null), whether it is new since the previous list, and backed_by: the names
+        of the portfolio boards that list the company (empty if none). For view=by_company,
         limit and offset page over companies. Follow up with get_role for a description or
         explain_rank for the scoring.
         """
@@ -197,7 +198,7 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
             def compact(e: dict, with_company: bool = True) -> dict:
                 row = {"rank": e["rank"], "role_id": e["id"], "score": e["score"]}
                 if with_company:
-                    row.update(company=e["company"], tier=e["tier"])
+                    row.update(company=e["company"], tier=e["tier"], backed_by=e["backed_by"])
                 row.update(title=e["title"], location=e["location_shown"], mark=e["mark"],
                            new=bool(previous) and e["id"] in new_ids, url=e["url"])
                 if include_reasons:
@@ -222,6 +223,7 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
                 page = names[offset:offset + limit]
                 result["companies"] = [{
                     "company": name, "tier": groups[name][0]["tier"],
+                    "backed_by": groups[name][0]["backed_by"],
                     "roles_on_list": len(groups[name]), "best_rank": groups[name][0]["rank"],
                     "held_back_by_cap": held_by.get(name, 0),
                     "roles": [compact(e, with_company=False) for e in groups[name]]} for name in page]
@@ -245,7 +247,8 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
     ) -> dict[str, Any]:
         """Everything stored about one role: company, title, department, location, workplace
         type, URL, posted date, compensation text, when it was first and last seen, whether it
-        is open or closed, and the owner's mark on it.
+        is open or closed, the owner's mark on it, and backed_by: the names of the portfolio
+        boards that list the company (empty if none).
 
         Use it after get_shortlist or search_roles when you need the details or the description
         of a specific role. The description of a closed role is deleted unless the owner marked
@@ -258,7 +261,8 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
                 "LEFT JOIN role_descriptions d ON d.role_id = r.id WHERE r.id = ?", (role_id,)).fetchone()
             result = {
                 "role_id": role["id"], "company": role["company"], "tier": role["tier"],
-                "company_active": bool(role["active"]), "title": role["title"],
+                "company_active": bool(role["active"]),
+                "backed_by": backed_by(conn).get(role["company_id"], []), "title": role["title"],
                 "department": role["department"], "location": role["location"],
                 "workplace_type": role["workplace_type"], "url": role["url"],
                 "date_posted": role["date_posted"], "compensation_text": role["compensation_text"],

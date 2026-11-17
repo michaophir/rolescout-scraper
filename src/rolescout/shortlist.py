@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
+from rolescout.companies import backed_by
 from rolescout.db import transaction, utc_now
 from rolescout.locations import Requirement, is_remote, split_locations
 
@@ -459,7 +460,7 @@ def in_baseline(role, baselines: dict[int, set[str]]) -> bool:
 
 
 ROLE_SELECT = (
-    "SELECT r.id, r.board_id, r.title, r.department, r.location, r.workplace_type, r.url, r.date_posted, "
+    "SELECT r.id, r.board_id, r.company_id, r.title, r.department, r.location, r.workplace_type, r.url, r.date_posted, "
     "r.compensation_text, r.first_seen_at, r.closed_at, c.name AS company, c.tier, c.active, "
     "m.status AS mark, m.note AS mark_note "
     "FROM roles r JOIN companies c ON c.id = r.company_id "
@@ -560,16 +561,18 @@ def new_since(conn: sqlite3.Connection, shortlist_id: int, since: str | None = N
 def shortlist_entries(conn: sqlite3.Connection, shortlist_id: int,
                       cfg: RankingConfig | None = None) -> list[dict]:
     """The roles on a list, in rank order. ``location_shown`` leads with the
-    place that mattered when ``cfg`` is given."""
+    place that mattered when ``cfg`` is given; ``backed_by`` names the
+    portfolio boards that list the company."""
+    backers = backed_by(conn)
     rows = conn.execute(
         "SELECT e.rank, e.score, e.reasons, r.id, r.title, r.department, r.location, "
         "r.workplace_type, r.url, r.date_posted, r.compensation_text, r.first_seen_at, r.closed_at, "
-        "c.name AS company, c.tier, m.status AS mark, m.note AS mark_note "
+        "c.id AS company_id, c.name AS company, c.tier, m.status AS mark, m.note AS mark_note "
         "FROM shortlist_entries e JOIN roles r ON r.id = e.role_id "
         "JOIN companies c ON c.id = r.company_id LEFT JOIN role_marks m ON m.role_id = r.id "
         "WHERE e.shortlist_id = ? ORDER BY e.rank", (shortlist_id,))
-    return [{**dict(r), "reasons": json.loads(r["reasons"]), "location_shown": display_location(r, cfg)}
-            for r in rows]
+    return [{**dict(r), "reasons": json.loads(r["reasons"]), "location_shown": display_location(r, cfg),
+             "backed_by": backers.get(r["company_id"], [])} for r in rows]
 
 
 def held_back(conn: sqlite3.Connection, shortlist_id: int) -> list[dict]:
@@ -678,7 +681,8 @@ def explain(conn: sqlite3.Connection, role_id: int, cfg: RankingConfig,
     else:
         why_not = ""
     return {
-        "role": dict(role), "score": ev.score, "detail": ev.detail,
+        "role": {**dict(role), "backed_by": backed_by(conn).get(role["company_id"], [])},
+        "score": ev.score, "detail": ev.detail,
         "rank": entry["rank"] if entry and not why_not else None,
         "listed_score": entry["score"] if entry else None,
         "list_date": current["list_date"] if current else None,

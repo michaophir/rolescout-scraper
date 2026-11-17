@@ -253,6 +253,12 @@ is found by the weekly re-check, or at once with `rolescout companies resolve`.
 After editing the filter, `rolescout candidates apply` re-sorts every
 candidate with no network call.
 
+Once a harvest has run, the shortlist, `rolescout why ID` and
+`rolescout companies list` show which boards list each company under
+"Backed by". This covers companies you added by hand as well as activated
+ones: a harvest (or `rolescout candidates apply`) links a listing to a
+tracked company with the same website domain.
+
 ## Agents (MCP)
 
 To let an AI agent read the shortlist and work with rolescout without the

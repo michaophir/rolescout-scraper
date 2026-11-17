@@ -120,7 +120,8 @@ def test_get_shortlist_flat_by_company_and_new(world):
     assert (flat["list_date"], flat["roles_on_list"], flat["compared_with"], flat["new_count"]) == (
         "2026-01-03", 5, "2026-01-02", 0)
     first = flat["entries"][0]
-    assert set(first) == {"rank", "role_id", "score", "company", "tier", "title", "location", "mark", "new", "url"}
+    assert set(first) == {"rank", "role_id", "score", "company", "tier", "backed_by", "title", "location", "mark",
+                          "new", "url"}
     # Scores: a4 85, a1 80, b2 75, a2 60, b1 50 (run-1 roles are baseline, so they get no recency points).
     assert [e["role_id"] for e in flat["entries"]] == [ids[j] for j in ("a4", "a1", "b2", "a2", "b1")]
     assert [e["rank"] for e in flat["entries"]] == [1, 2, 3, 4, 5] and flat["next_offset"] is None
