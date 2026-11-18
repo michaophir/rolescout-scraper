@@ -124,7 +124,7 @@ def test_links_to_other_sites_need_more_than_career_in_the_path():
 # --- hand-recorded job systems -----------------------------------------------
 
 def test_manual_entry_survives_re_resolve(conn, capsys):
-    companies.add_company(conn, "Ripple", website="https://ripple.com", tier=1)
+    companies.add_company(conn, "Ripple", website="https://ripple.com")
     assert cli.main(["companies", "set-system", "ripple", "JobVite",
                      "https://jobs.jobvite.com/ripple/jobs", "--note", "found with a browser"]) == 0
     assert "job system recorded as jobvite" in capsys.readouterr().out
@@ -177,7 +177,7 @@ def test_set_system_validation(conn, capsys):
 # --- gaps report and thresholds ----------------------------------------------
 
 def add(conn, name, tier, system=None, url=None, manual=False):
-    companies.add_company(conn, name, website=f"https://{name.lower()}.com", tier=tier)
+    companies.add_company(conn, name, website=f"https://{name.lower()}.com")
     if system and manual:
         set_job_system(conn, name, system, url or f"https://{system}.example/{name.lower()}")
     elif system:
@@ -201,9 +201,9 @@ def gappy(conn):
     # an old automatic "custom" row says nothing -> unidentified
     add(conn, "Old", 2, "custom")
     add(conn, "Never", 1)                                          # never resolved -> unidentified
-    companies.add_company(conn, "Mapped", tier=1)
+    companies.add_company(conn, "Mapped")
     companies.add_board(conn, "Mapped", "lever", "mapped")           # covered
-    companies.add_company(conn, "Gone", tier=1)
+    companies.add_company(conn, "Gone")
     companies.set_active(conn, "Gone", False)                       # inactive: not counted
     resolve.save_resolution(conn, resolve.Resolution(              # supported system, no board
         company="Never", outcome="needs_review", job_system="greenhouse",
@@ -220,12 +220,12 @@ def test_build_candidate_thresholds(gappy):
     assert (groups["jobvite"]["build_candidate"], groups["jobvite"]["why"]) == (False, "")   # tier 1, but one company
     assert groups["recruitee"]["build_candidate"] is False        # two companies
     assert groups["custom"]["build_candidate"] is False          # three, but they share no connector
-    assert [(m["company"], m["tier"]) for m in groups["icims"]["companies"]] == [
-        ("Wa", 2), ("Wb", 3), ("Wc", None)]
+    assert [m["company"] for m in groups["icims"]["companies"]] == ["Wa", "Wb", "Wc"]
+    assert not any("tier" in m for g in report["systems"] for m in g["companies"])
     assert report["build_candidates"] == 1
     assert [e["company"] for e in report["needs_mapping"]] == ["Never"]
     assert [(e["company"], e["reason"]) for e in report["unidentified"]] == [
-        ("Old", "careers page names no job system we recognize"), ("Blank", "not resolved yet")]
+        ("Blank", "not resolved yet"), ("Old", "careers page names no job system we recognize")]
     assert (report["active_companies"], report["covered"]) == (13, 1)
     assert gaps.summary_line(report) == "1 build candidate, 2 unidentified, 1 awaiting mapping"
 
@@ -266,7 +266,7 @@ def test_connector_brief(gappy, capsys):
     out = capsys.readouterr().out
     assert out.startswith("# Connector brief: icims\n")
     assert "cannot fetch 3 target companies" in out and "Build candidate: yes (3 companies)." in out
-    assert "### Wa (tier 2)" in out and "### Wc (no tier)" in out
+    assert "### Wa\n" in out and "### Wc\n" in out and "tier" not in out
     assert "- Careers page: https://wa.com/careers" in out
     assert "- Job system URL: https://icims.example/wa" in out
     assert "- Identified: automatically" in out
@@ -347,7 +347,7 @@ def test_recheck_is_skipped_when_the_scout_could_not_reach_anything(conn, monkey
 
 def test_failing_board_is_re_resolved_and_the_move_is_recorded(conn, monkeypatch, capsys):
     """Three failed runs in a row: the company probably changed job systems."""
-    companies.add_company(conn, "Mover", website="https://mover.com", tier=1)
+    companies.add_company(conn, "Mover", website="https://mover.com")
     companies.add_board(conn, "Mover", "greenhouse", "mover")
     companies.add_company(conn, "Hopper", website="https://hopper.com")
     companies.add_board(conn, "Hopper", "lever", "hopper")
@@ -431,7 +431,7 @@ def test_version_1_database_is_upgraded_in_place(tmp_path, monkeypatch):
 
 def test_manual_entries_travel_with_the_export(conn, tmp_path):
     from rolescout.transfer import export_companies, import_companies
-    companies.add_company(conn, "Rip", website="https://rip.com", tier=1)
+    companies.add_company(conn, "Rip", website="https://rip.com")
     set_job_system(conn, "Rip", "jobvite", "https://jobs.jobvite.com/rip/jobs")
     other = db.connect(tmp_path / "other.db")
     import_companies(other, json.loads(json.dumps(export_companies(conn))))

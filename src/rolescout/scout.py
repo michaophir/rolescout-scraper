@@ -262,7 +262,7 @@ def _run_scout(
     targets = conn.execute(
         "SELECT c.id AS company_id, c.name, b.id AS board_id, b.source, b.ref, b.last_success_at "
         "FROM companies c JOIN boards b ON b.company_id = c.id WHERE c.active = 1 "
-        "ORDER BY c.tier IS NULL, c.tier, c.name, b.id").fetchall()
+        "ORDER BY c.name COLLATE NOCASE, c.id, b.id").fetchall()
     unmapped = conn.execute(
         "SELECT COUNT(*) FROM companies c WHERE c.active = 1 AND NOT EXISTS "
         "(SELECT 1 FROM boards b WHERE b.company_id = c.id)").fetchone()[0]

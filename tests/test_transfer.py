@@ -9,8 +9,8 @@ from rolescout.transfer import TransferError, export_companies, import_companies
 
 @pytest.fixture
 def source(conn):
-    companies.add_company(conn, "Acme", website="https://acme.com", tier=1, tags=["ai", "b2b"])
-    companies.add_company(conn, "Bolt", website="https://bolt.com", tier=2)
+    companies.add_company(conn, "Acme", website="https://acme.com", tags=["ai", "b2b"])
+    companies.add_company(conn, "Bolt", website="https://bolt.com")
     companies.add_company(conn, "Cobalt")
     companies.add_board(conn, "Acme", "greenhouse", "acme", origin="link", evidence="linked from x")
     companies.add_board(conn, "Acme", "lever", "acme-eu")
@@ -24,7 +24,7 @@ def source(conn):
 
 def snapshot(conn):
     """Everything an export is meant to carry, in a comparable form."""
-    listed = [{k: c[k] for k in ("name", "website", "tier", "tags", "active")}
+    listed = [{k: c[k] for k in ("name", "website", "tags", "active")}
               | {"boards": [(b["source"], b["ref"], b["origin"], b["evidence"]) for b in c["boards"]]}
               for c in companies.list_companies(conn)]
     resolutions = [tuple(r) for r in conn.execute(
@@ -40,21 +40,23 @@ def test_export_import_round_trip(source, tmp_path):
 
     target = db.connect(tmp_path / "other.db")
     result = import_companies(target, data)
-    assert result == {"companies_added": 3, "companies_updated": 0, "boards_added": 3, "warnings": []}
+    assert result == {"companies_added": 3, "companies_updated": 0, "boards_added": 3, "warnings": [],
+                      "vcs_added": 0, "vcs_updated": 0, "profile_values": 0, "vc_links": 0}
     assert snapshot(target) == snapshot(source)
     # Mappings arrive unfetched: the first scout on the new machine is a baseline.
     assert [r[0] for r in target.execute("SELECT last_success_at FROM boards")] == [None, None, None]
 
     # Importing the same file again changes nothing.
     assert import_companies(target, data) == {
-        "companies_added": 0, "companies_updated": 3, "boards_added": 0, "warnings": []}
+        "companies_added": 0, "companies_updated": 3, "boards_added": 0, "warnings": [],
+        "vcs_added": 0, "vcs_updated": 0, "profile_values": 0, "vc_links": 0}
     assert snapshot(target) == snapshot(source)
 
 
 def test_import_merges_and_never_removes(source, tmp_path):
     data = export_companies(source)
     target = db.connect(tmp_path / "other.db")
-    companies.add_company(target, "acme", website="https://old.example", tier=9)   # will be updated
+    companies.add_company(target, "acme", website="https://old.example")   # will be updated
     companies.add_board(target, "acme", "ashby", "acme-local")                     # will be kept
     companies.add_company(target, "Local Only")                                    # will be kept
     companies.add_board(target, "Local Only", "ashby", "Cobalt")                   # conflicts with the file
@@ -63,7 +65,7 @@ def test_import_merges_and_never_removes(source, tmp_path):
     assert (result["companies_added"], result["companies_updated"], result["boards_added"]) == (2, 1, 2)
     assert result["warnings"] == ["Cobalt: skipped board ashby/Cobalt, already mapped to 'Local Only' here"]
     listed = {c["name"]: c for c in companies.list_companies(target)}
-    assert (listed["acme"]["website"], listed["acme"]["tier"]) == ("https://acme.com", 1)
+    assert listed["acme"]["website"] == "https://acme.com"
     assert [b["ref"] for b in listed["acme"]["boards"]] == ["acme-local", "acme", "acme-eu"]
     assert "Local Only" in listed and listed["Cobalt"]["boards"] == []
 

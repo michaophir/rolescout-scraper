@@ -172,5 +172,12 @@ class Requirement:
             return True
         return is_remote(place) and names_no_place(place)
 
+    def names(self, place: str) -> bool:
+        """Whether the location itself is in a wanted place. Unlike ``accepts``,
+        a remote location that names no place does not count."""
+        if self.united_states and in_united_states(place):
+            return True
+        return self._literal is not None and bool(self._literal.search(place))
+
     def first_match(self, places: list[str]) -> str | None:
         return next((p for p in places if self.accepts(p)), None)

@@ -41,15 +41,15 @@ def classify(conn: sqlite3.Connection) -> list[dict]:
 
     entries = []
     for c in conn.execute(
-            "SELECT c.id, c.name, c.website, c.tier, r.outcome, r.job_system, r.job_system_url, "
+            "SELECT c.id, c.name, c.website, r.outcome, r.job_system, r.job_system_url, "
             "r.careers_url, r.evidence, r.resolved_at, r.manual FROM companies c "
             "LEFT JOIN company_resolutions r ON r.company_id = c.id WHERE c.active = 1 "
-            "ORDER BY c.tier IS NULL, c.tier, c.name"):
+            "ORDER BY c.name COLLATE NOCASE"):
         evidence = json.loads(c["evidence"]) if c["evidence"] else {"candidates": [], "notes": []}
         pending = [x for x in evidence.get("candidates", []) if x["status"] == "unconfirmed"]
         dead = failing.get(c["name"], [])
         entry = {
-            "company": c["name"], "tier": c["tier"], "website": c["website"],
+            "company": c["name"], "website": c["website"],
             "system": c["job_system"], "url": c["job_system_url"], "careers_url": c["careers_url"],
             "manual": bool(c["manual"]), "resolved_at": c["resolved_at"],
             "notes": evidence.get("notes", []), "candidates": pending,
@@ -118,10 +118,6 @@ def summary_line(report: dict) -> str:
     return ", ".join(parts)
 
 
-def _tier(tier) -> str:
-    return f"tier {tier}" if tier is not None else "no tier"
-
-
 def connector_brief(conn: sqlite3.Connection, system: str) -> str:
     """A Markdown brief for one job system, ready to paste into a planning chat."""
     report = gaps_report(conn)
@@ -143,8 +139,8 @@ def connector_brief(conn: sqlite3.Connection, system: str) -> str:
         "## Affected companies",
         "",
     ]
-    for m in sorted(members, key=lambda m: (m["tier"] is None, m["tier"], m["company"])):
-        lines.append(f"### {m['company']} ({_tier(m['tier'])})")
+    for m in sorted(members, key=lambda m: m["company"].lower()):
+        lines.append(f"### {m['company']}")
         lines.append(f"- Website: {m['website'] or 'not recorded'}")
         lines.append(f"- Careers page: {m['careers_url'] or 'not recorded'}")
         lines.append(f"- Job system URL: {m['url'] or 'not recorded'}")

@@ -17,7 +17,7 @@ from typing import Annotated, Any, Literal
 
 from rolescout import candidates as cands
 from rolescout import digest as changes
-from rolescout import portfolio, profiles, vcs
+from rolescout import filters, overview, portfolio, profiles, vcs
 from rolescout import shortlist as ranking
 from rolescout.adapters import ADAPTERS
 from rolescout.companies import CompanyError, add_board, add_company, backed_by, get_company, list_companies, set_active, set_website
@@ -140,6 +140,7 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
             yield conn
         except (CompanyError, MarkError, ConfigError, GapsError, ValueError, cands.CandidateError,
                 cands.ConfigError, profiles.ProfileError, profiles.MappingError, vcs.VcError,
+                filters.FilterError,
                 portfolio.PortfolioError) as exc:
             raise ToolError(str(exc)) from None
         finally:
@@ -160,6 +161,23 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
     Offset = Annotated[int, Field(description="Rows to skip; pass the previous result's next_offset to get the next page.", ge=0)]
     CompanyName = Annotated[str, Field(description="The company's name exactly as list_companies shows it (case does not matter).")]
 
+    # Filters shared by get_shortlist and search_roles.
+    StageFilter = Annotated[list[str] | None, Field(description=(
+        "Only companies at one of these stages: " + ", ".join(profiles.STAGES) + "."))]
+    SectorFilter = Annotated[list[str] | None, Field(description=(
+        "Only companies in one of these sectors. The sector list is in get_company_profile's sector_list."))]
+    HqFilter = Annotated[str | None, Field(description='Only companies whose HQ location contains this text, e.g. "New York".')]
+    RoleLocationFilter = Annotated[str | None, Field(description=(
+        'Only roles in this place: one of the role\'s locations must name it. "United States" covers '
+        'every US form (states, state codes, major cities); "remote" wants remote roles.'))]
+    EmployeesMin = Annotated[int | None, Field(description="Only companies with at least this many employees.", ge=0)]
+    EmployeesMax = Annotated[int | None, Field(description="Only companies with at most this many employees.", ge=0)]
+    VcFilter = Annotated[str | None, Field(description="Only companies linked to this VC or ecosystem group (name or short name, as list_vcs shows).")]
+
+    def make_filter(conn, stage, sector, hq, role_location, employees_min, employees_max, vc) -> filters.RoleFilter:
+        return filters.build_filter(conn, stage=stage, sector=sector, hq=hq, location=role_location,
+                                    employees_min=employees_min, employees_max=employees_max, vc=vc)
+
     # ------------------------------------------------------------------ roles
 
     @server.tool(title="Get the shortlist", annotations=reads)
@@ -173,18 +191,67 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
             "For view=new: compare with the list of this date (YYYY-MM-DD) instead of the previous "
             "one. Lists are kept for 30 days."))] = None,
         include_reasons: Annotated[bool, Field(description="Include the plain-language reasons behind each score.")] = False,
+        stage: StageFilter = None,
+        sector: SectorFilter = None,
+        hq: HqFilter = None,
+        role_location: RoleLocationFilter = None,
+        employees_min: EmployeesMin = None,
+        employees_max: EmployeesMax = None,
+        vc: VcFilter = None,
     ) -> dict[str, Any]:
         """The ranked shortlist: the open roles the owner should look at first.
 
+        With any filter (stage, sector, hq, role_location, employees_min, employees_max, vc) it
+        answers a narrower question, such as "the best roles at seed-stage fintech companies":
+        every qualifying role that passes the filter is ranked as of now, not only the roles on
+        today's list, so results can include roles that never made the list. Each entry then has
+        shortlist_rank (its rank on today's list, or null) and rank is its rank within the filter.
+
         Use this first for questions like "what should I look at today" or "anything new".
         The list is rebuilt after every daily scout from the owner's ranking rules; rank 1 is
-        best. Each entry has role_id, rank, score, company, tier, title, location, mark
+        best. Each entry has role_id, rank, score, company, title, location, mark
         ("saved" or null), whether it is new since the previous list, and backed_by: the names
         of the portfolio boards that list the company (empty if none). For view=by_company,
         limit and offset page over companies. Follow up with get_role for a description or
         explain_rank for the scoring.
         """
         with database() as conn:
+            only = make_filter(conn, stage, sector, hq, role_location, employees_min, employees_max, vc)
+            if only:
+                found = ranking.filtered_entries(conn, load_ranking(), only)
+                limit, offset = _page(limit, offset)
+
+                def narrow(e: dict, with_company: bool = True) -> dict:
+                    row = {"rank": e["rank"], "role_id": e["id"], "score": e["score"]}
+                    if with_company:
+                        row.update(company=e["company"], backed_by=e["backed_by"])
+                    row.update(title=e["title"], location=e["location_shown"], mark=e["mark"],
+                               shortlist_rank=e["list_rank"], url=e["url"])
+                    if include_reasons:
+                        row["reasons"] = e["reasons"]
+                    return row
+                matching = found["entries"]
+                result = {"filter": only.describe(), "ranked_as_of_now": True,
+                          "roles_matching": len(matching), "roles_that_qualify_overall": found["qualifying"],
+                          "not_on_todays_shortlist": sum(1 for e in matching if e["list_rank"] is None)}
+                if view == "by_company":
+                    grouped: dict[str, list[dict]] = {}
+                    for e in matching:
+                        grouped.setdefault(e["company"], []).append(e)
+                    names = list(grouped)
+                    page = names[offset:offset + limit]
+                    result["companies"] = [{
+                        "company": name, "backed_by": grouped[name][0]["backed_by"],
+                        "roles_matching": len(grouped[name]), "best_rank": grouped[name][0]["rank"],
+                        "roles": [narrow(e, with_company=False) for e in grouped[name]]} for name in page]
+                    result["next_offset"] = _next(offset, len(page), len(names))
+                    return result
+                if view == "new":
+                    result["note"] = "view=new compares stored lists and does not apply with a filter; showing all matches."
+                page = matching[offset:offset + limit]
+                result["entries"] = [narrow(e) for e in page]
+                result["next_offset"] = _next(offset, len(page), len(matching))
+                return result
             current = ranking.latest_shortlist(conn)
             if current is None:
                 return {"list_date": None, "entries": [], "note": (
@@ -202,7 +269,7 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
             def compact(e: dict, with_company: bool = True) -> dict:
                 row = {"rank": e["rank"], "role_id": e["id"], "score": e["score"]}
                 if with_company:
-                    row.update(company=e["company"], tier=e["tier"], backed_by=e["backed_by"])
+                    row.update(company=e["company"], backed_by=e["backed_by"])
                 row.update(title=e["title"], location=e["location_shown"], mark=e["mark"],
                            new=bool(previous) and e["id"] in new_ids, url=e["url"])
                 if include_reasons:
@@ -226,7 +293,7 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
                 names = list(groups)
                 page = names[offset:offset + limit]
                 result["companies"] = [{
-                    "company": name, "tier": groups[name][0]["tier"],
+                    "company": name,
                     "backed_by": groups[name][0]["backed_by"],
                     "roles_on_list": len(groups[name]), "best_rank": groups[name][0]["rank"],
                     "held_back_by_cap": held_by.get(name, 0),
@@ -264,7 +331,7 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
                 "SELECT r.source, r.last_seen_at, d.description FROM roles r "
                 "LEFT JOIN role_descriptions d ON d.role_id = r.id WHERE r.id = ?", (role_id,)).fetchone()
             result = {
-                "role_id": role["id"], "company": role["company"], "tier": role["tier"],
+                "role_id": role["id"], "company": role["company"],
                 "company_active": bool(role["active"]),
                 "backed_by": backed_by(conn).get(role["company_id"], []), "title": role["title"],
                 "department": role["department"], "location": role["location"],
@@ -296,20 +363,29 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
             "'open' may be stale."))] = False,
         limit: Limit = 25,
         offset: Offset = 0,
+        stage: StageFilter = None,
+        sector: SectorFilter = None,
+        hq: HqFilter = None,
+        role_location: RoleLocationFilter = None,
+        employees_min: EmployeesMin = None,
+        employees_max: EmployeesMax = None,
+        vc: VcFilter = None,
     ) -> dict[str, Any]:
-        """Search every stored role, not just the shortlist, by title, company, status and date.
+        """Search every stored role, not just the shortlist, by title, company, status and date,
+        and by the company's stage, sector, HQ, size or VC and the role's place.
 
-        Use it for questions the shortlist does not answer: "does Stripe have any design roles",
-        "what closed at Anthropic", "what appeared since Monday". Results are ordered by company
-        then title and include role_id for follow-up calls. Descriptions are not searched and
-        not returned; use get_role for one.
+        Use it for questions the shortlist does not answer: "does Acme have any design roles",
+        "what closed at Acme", "what appeared since Monday", "design roles at series B health
+        companies". Results are ordered by company then title, not ranked, and include role_id
+        for follow-up calls. Descriptions are not searched and not returned; use get_role for one.
         """
         with database() as conn:
             if company:
                 company = get_company(conn, company)["name"]
             limit, offset = _page(limit, offset)
+            only = make_filter(conn, stage, sector, hq, role_location, employees_min, employees_max, vc)
             common = dict(company=company, title=title, status=status, since=first_seen_since,
-                          include_inactive=include_inactive)
+                          include_inactive=include_inactive, only=only)
             total = len(query_roles(conn, **common))
             rows = query_roles(conn, **common, limit=limit, offset=offset)
             return {
@@ -382,8 +458,7 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
     ) -> dict[str, Any]:
         """The owner's target companies and whether rolescout can fetch each one.
 
-        Each row has the name (the identifier other tools take), tier (1 is highest priority),
-        whether it is active, its job boards as "source/board_ref", open role count, and a
+        Each row has the name (the identifier other tools take), whether it is active, its job boards as "source/board_ref", open role count, and a
         coverage state: covered, unsupported (on a job system with no adapter; job_system says
         which), needs_mapping (on a supported system but no board mapped), unidentified, or
         inactive. Use it to answer "which companies am I tracking" and to find exact names.
@@ -394,7 +469,7 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
             for c in list_companies(conn):
                 state = states.get(c["name"])
                 rows.append({
-                    "name": c["name"], "tier": c["tier"], "active": c["active"],
+                    "name": c["name"], "active": c["active"],
                     "coverage": state["state"] if state else "inactive",
                     "boards": [f"{b['source']}/{b['ref']}" for b in c["boards"]],
                     "open_roles": c["open_roles"],
@@ -428,15 +503,15 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
                 "active_companies": report["active_companies"], "covered": report["covered"],
                 "job_systems": [{
                     "system": g["system"], "build_candidate": g["build_candidate"], "why": g["why"] or None,
-                    "companies": [{"company": m["company"], "tier": m["tier"], "url": m["url"],
+                    "companies": [{"company": m["company"], "url": m["url"],
                                    "recorded_by_hand": m["manual"]} for m in g["companies"]]}
                     for g in report["systems"]],
                 "needs_mapping": [{
-                    "company": e["company"], "tier": e["tier"], "system": e["system"],
+                    "company": e["company"], "system": e["system"],
                     "candidates": [f"{c['source']}/{c['ref']}: {c['detail']}" for c in e["candidates"]],
                     "note": e["notes"][-1] if e["notes"] and not e["candidates"] else None}
                     for e in report["needs_mapping"]],
-                "unidentified": [{"company": e["company"], "tier": e["tier"],
+                "unidentified": [{"company": e["company"],
                                   "careers_page": e["careers_url"] or e["website"], "why": e["reason"]}
                                  for e in report["unidentified"]],
             }
@@ -446,7 +521,7 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
         system: Annotated[str, Field(description="A job system named by coverage_gaps, e.g. workable.")],
     ) -> dict[str, Any]:
         """A Markdown brief for building an adapter for one unsupported job system: the affected
-        companies with tiers, their careers and job-system URLs, what an adapter must implement,
+        companies, their careers and job-system URLs, what an adapter must implement,
         and open questions. Use it when the owner wants to plan or spec a new connector.
         """
         with database() as conn:
@@ -463,7 +538,7 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
         """How hiring changed over a date range: open roles at the start and end, and how many
         roles opened and closed in between, overall and by department.
 
-        Use it for "is Anthropic hiring more than last month", "who opened the most roles this
+        Use it for "is Acme hiring more than last month", "who opened the most roles this
         week", "which departments are growing". Figures come from the snapshot stored after each
         daily scout, so the range can only reach back to when a company was first fetched.
         A company's first fetch (its baseline) is not counted as roles opened. Department rows
@@ -615,6 +690,49 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
                     "ecosystem_groups": [l["name"] for l in links if l["type"] == "ecosystem"],
                     "stages": list(profiles.STAGES), "sector_list": list(profiles.load_mapping(conn).sectors)}
 
+    @server.tool(title="Company overview", annotations=reads)
+    def company_overview(
+        company: CompanyName,
+        top_roles: Annotated[int, Field(description="How many of its open roles to return (1-25).", ge=1, le=25)] = 5,
+    ) -> dict[str, Any]:
+        """One tracked company at a glance: its profile (description, sectors, stage, employees,
+        HQ, each with its source), the VCs backing it and any ecosystem groups, its job boards,
+        its top open roles, and its hiring over the last 30 days (roles opened and closed, in
+        total and per week, and open roles now).
+
+        Use it for "tell me about Acme" or "is Acme hiring". The roles are in the owner's ranked
+        order, the ones that qualify for the shortlist first; qualifies says which do. Follow
+        up with get_role for a description or search_roles for every role there.
+        """
+        with database() as conn:
+            try:
+                cfg = load_ranking() if config_path.exists() else None
+            except ConfigError:
+                cfg = None
+            return overview.company_overview(conn, company, cfg, top=top_roles)
+
+    @server.tool(title="List incomplete profiles", annotations=reads)
+    def list_incomplete_profiles(
+        fields: Annotated[list[ProfileField] | None, Field(description=(
+            "Only look at these fields. Omit for all five: description, sectors, stage, employees, hq."))] = None,
+        limit: Limit = 25,
+        offset: Offset = 0,
+    ) -> dict[str, Any]:
+        """Active companies whose profile has empty fields, the ones with the most open roles
+        first: the work list for filling profiles in from the web.
+
+        Each row has the company's name, website, open role count and the fields that are
+        missing (a stage of "unknown" counts as missing). Work through a page, look each company
+        up, then call set_company_profile once per company with every field you found. Fields
+        the owner set by hand never appear as missing.
+        """
+        with database() as conn:
+            rows = profiles.missing(conn, list(fields) if fields else None)
+            limit, offset = _page(limit, offset)
+            page = rows[offset:offset + limit]
+            return {"total": len(rows), "companies": page, "next_offset": _next(offset, len(page), len(rows)),
+                    "stages": list(profiles.STAGES), "sector_list": list(profiles.load_mapping(conn).sectors)}
+
     @server.tool(title="List VCs", annotations=reads)
     def list_vcs() -> dict[str, Any]:
         """The VC list: every investor and ecosystem group with its short name, type (vc or
@@ -632,23 +750,30 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
     if read_only:
         return server
 
-    @server.tool(title="Set a company profile field", annotations=writes)
+    @server.tool(title="Set company profile fields", annotations=writes)
     def set_company_profile(
         company: CompanyName,
-        field: Annotated[ProfileField, Field(description="Which field to set.")],
-        value: Annotated[str, Field(description=(
-            "The value. description: one or two plain sentences. stage: one of the stages "
-            "get_company_profile lists. sectors: a comma-separated list from sector_list. "
-            "employees: a whole number. hq: a place, e.g. \"Austin, TX\"."))],
+        description: Annotated[str | None, Field(description="What the company does, in one or two plain sentences.")] = None,
+        sectors: Annotated[list[str] | None, Field(description="One or more sectors from sector_list (get_company_profile or list_incomplete_profiles).")] = None,
+        stage: Annotated[str | None, Field(description="One of the stages those tools list, e.g. \"series B\".")] = None,
+        employees: Annotated[int | None, Field(description="Approximate employee count, a whole number.", ge=1)] = None,
+        hq: Annotated[str | None, Field(description="Headquarters location, e.g. \"Austin, TX\".")] = None,
     ) -> dict[str, Any]:
-        """Fill in one profile field for a tracked company, recorded with source "agent".
+        """Fill in profile fields for one tracked company, recorded with source "agent". Give
+        every field you have a reliable value for in one call; omit the rest.
 
-        Use it for a field that is empty or came from a board and that you have a reliable
-        value for. A value the owner set by hand is never replaced: the call fails and says so.
-        Returns the profile after the change.
+        Each field is handled on its own: set lists the fields written, kept the fields the
+        owner set by hand (those are never replaced, and that is not an error), refused the
+        values that could not be used and why. A value from a board is replaced; an earlier
+        agent value is replaced. Returns the profile after the change. Use
+        list_incomplete_profiles to find the companies and fields worth filling.
         """
         with database() as conn:
-            return profiles.set_field(conn, company, field, value, source="agent")
+            values = {"description": description, "sectors": ", ".join(sectors) if sectors else None,
+                      "stage": stage, "employees": employees, "hq": hq}
+            if not any(v is not None and str(v).strip() for v in values.values()):
+                raise ToolError("give at least one field to set: description, sectors, stage, employees or hq")
+            return profiles.set_fields(conn, company, values, source="agent")
 
     @server.tool(title="Add a VC", annotations=writes)
     def add_vc(
@@ -738,7 +863,7 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
             "Activate even though the candidate is rejected or dismissed. Leave false unless the "
             "owner said to override."))] = False,
     ) -> dict[str, Any]:
-        """Start tracking a candidate: it becomes one of the owner's target companies at tier 3,
+        """Start tracking a candidate: it becomes one of the owner's target companies,
         tagged with the portfolio boards that list it. Its own job board is not known yet; the
         weekly re-check looks for it, and its roles appear after that. Nothing is fetched now.
 
@@ -803,7 +928,6 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
     def add_target_company(
         name: Annotated[str, Field(description="The company's name. Must not already exist.")],
         website: Annotated[str, Field(description="Its homepage URL, e.g. https://example.com. Used to find its job board.")] = "",
-        tier: Annotated[int | None, Field(description="Priority tier: 1 highest, then 2, 3. Omit if unknown.", ge=1)] = None,
         tags: Annotated[list[str] | None, Field(description="Free-form labels, e.g. [\"ai\", \"fintech\"].")] = None,
     ) -> dict[str, Any]:
         """Add a company to the target list. It is not fetched until it is mapped to a job
@@ -811,8 +935,8 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
         it with map_board if you know the board. This tool does not look anything up.
         """
         with database() as conn:
-            add_company(conn, name, website=website, tier=tier, tags=tags)
-            return {"name": name.strip(), "tier": tier, "active": True, "boards": [],
+            add_company(conn, name, website=website, tags=tags)
+            return {"name": name.strip(), "active": True, "boards": [],
                     "next": "map_board if the board is known; otherwise the weekly re-check will look for it"}
 
     @server.tool(title="Deactivate a company", annotations=writes)

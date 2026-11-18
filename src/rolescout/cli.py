@@ -8,7 +8,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from rolescout import __version__, digest, jobs, profiles, vcs
+from rolescout import __version__, digest, filters, jobs, overview, profiles, vcs
 from rolescout.adapters import ADAPTERS, SourceError, get_adapter
 from rolescout.companies import (
     CompanyError, add_board, add_company, board_ref, get_company, import_csv, list_companies,
@@ -98,6 +98,9 @@ def _cmd_companies_import(args) -> int:
         print(f"Imported {'standard input' if args.file == '-' else args.file}: "
               f"{result['companies_added']} companies added, {result['companies_updated']} updated, "
               f"{result['boards_added']} boards added.")
+        if result["vcs_added"] or result["vcs_updated"] or result["profile_values"] or result["vc_links"]:
+            print(f"Also: {result['vcs_added']} VCs added, {result['vcs_updated']} updated, "
+                  f"{result['profile_values']} profile values set by hand, {result['vc_links']} VC links made by hand.")
         for warning in result["warnings"]:
             print(f"  warning: {warning}")
         return 0
@@ -126,7 +129,11 @@ def _cmd_companies_export(args) -> int:
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         f.write(text)
     boards = sum(len(c["boards"]) for c in data["companies"])
+    by_hand = sum(len(c.get("profile") or {}) for c in data["companies"])
+    links = sum(len(c.get("vcs") or []) for c in data["companies"])
     print(f"Exported {len(data['companies'])} companies and {boards} boards to {path}")
+    if data["vcs"] or by_hand or links:
+        print(f"With them: {len(data['vcs'])} VCs, {by_hand} profile values set by hand, {links} VC links made by hand.")
     repo = _inside_git_repo(path)
     if repo:
         print(f"warning: {path} is inside the git repository at {repo}. It is personal data; "
@@ -146,14 +153,14 @@ def _cmd_companies_list(args) -> int:
         successes = [b["last_success_at"] for b in boards if b["last_success_at"]]
         errors = [f"{b['source']}/{b['ref']}: {b['last_error']}" for b in boards if b["last_error"]]
         rows.append([
-            c["name"], c["tier"], "yes" if c["active"] else "no",
+            c["name"], "yes" if c["active"] else "no",
             ", ".join(f"{b['source']}/{b['ref']}" for b in boards) or "-",
             c["open_roles"] if boards else "",
             max(successes)[:16].replace("T", " ") if successes else "",
             "; ".join(errors), ", ".join(c["tags"]),
             *([", ".join(c["backed_by"])] if backed else [])])
     print(format_table(
-        ["Company", "Tier", "Active", "Boards", "Open", "Last success (UTC)", "Last error", "Tags",
+        ["Company", "Active", "Boards", "Open", "Last success (UTC)", "Last error", "Tags",
          *(["Backed by"] if backed else [])],
         rows, {"Last error": 50, "Backed by": 40}))
     mapped = sum(1 for c in companies if c["boards"])
@@ -163,7 +170,7 @@ def _cmd_companies_list(args) -> int:
 
 def _cmd_companies_add(args) -> int:
     conn = connect(args.db)
-    add_company(conn, args.name, website=args.website, tier=args.tier,
+    add_company(conn, args.name, website=args.website,
                 tags=args.tags.split(",") if args.tags else None)
     print(f"Added {args.name.strip()}.")
     return 0
@@ -321,10 +328,6 @@ def _cmd_companies_clear_system(args) -> int:
 
 # --- gaps and connector briefs ----------------------------------------------
 
-def _tier(tier) -> str:
-    return "" if tier is None else f"T{tier}"
-
-
 def _print_gaps(report: dict) -> None:
     uncovered = report["active_companies"] - report["covered"]
     print(f"Coverage gaps: {summary_line(report)} "
@@ -332,10 +335,10 @@ def _print_gaps(report: dict) -> None:
 
     def system_rows(groups):
         return [[g["system"] if i == 0 else "", len(g["companies"]) if i == 0 else "",
-                 g["why"] if i == 0 else "", m["company"], _tier(m["tier"]),
+                 g["why"] if i == 0 else "", m["company"],
                  (m["url"] or "") + ("  (by hand)" if m["manual"] else "")]
                 for g in groups for i, m in enumerate(g["companies"])]
-    headers = ["Job system", "Count", "Why", "Company", "Tier", "URL"]
+    headers = ["Job system", "Count", "Why", "Company", "URL"]
     candidates = [g for g in report["systems"] if g["build_candidate"]]
     others = [g for g in report["systems"] if not g["build_candidate"]]
     print("\nBuild candidates (3 or more companies) "
@@ -348,14 +351,14 @@ def _print_gaps(report: dict) -> None:
     rows = []
     for e in report["needs_mapping"]:
         boards = "; ".join(f"{c['source']}/{c['ref']}: {c['detail']}" for c in e["candidates"])
-        rows.append([e["company"], _tier(e["tier"]), e["system"] or "",
+        rows.append([e["company"], e["system"] or "",
                      boards or (e["notes"][-1] if e["notes"] else "")])
-    print(format_table(["Company", "Tier", "System", "Detail"], rows, {"Detail": 110}) if rows else "  (none)")
+    print(format_table(["Company", "System", "Detail"], rows, {"Detail": 110}) if rows else "  (none)")
 
     print("\nNeeds identification - rolescout companies set-system NAME SYSTEM URL")
-    rows = [[e["company"], _tier(e["tier"]), e["careers_url"] or e["website"] or "", e["reason"]]
+    rows = [[e["company"], e["careers_url"] or e["website"] or "", e["reason"]]
             for e in report["unidentified"]]
-    print(format_table(["Company", "Tier", "Careers page", "Why"], rows, {"Why": 80}) if rows else "  (none)")
+    print(format_table(["Company", "Careers page", "Why"], rows, {"Why": 80}) if rows else "  (none)")
 
 
 def _cmd_gaps(args) -> int:
@@ -583,8 +586,59 @@ def _flags(entry: dict, new_ids: set[int]) -> str:
                                            ("new", entry["id"] in new_ids)) if on)
 
 
+def _filter(conn, args) -> filters.RoleFilter:
+    return filters.build_filter(conn, stage=args.stage, sector=args.sector, hq=args.hq,
+                                location=args.location, employees=args.employees, vc=args.vc)
+
+
+def _cmd_shortlist_filtered(conn, args, only: filters.RoleFilter) -> int:
+    """Rank every qualifying role that passes the filter, as of now."""
+    cfg = ranking.load_config(_ranking_path(args))
+    result = ranking.filtered_entries(conn, cfg, only)
+    entries = result["entries"]
+    total = len(entries)
+    if args.top:
+        entries = entries[:args.top]
+    if args.json:
+        print(json.dumps({"filter": only.describe(), "matching": total, "qualifying_overall": result["qualifying"],
+                          "entries": entries}, indent=2, ensure_ascii=False))
+        return 0
+    off_list = sum(1 for e in result["entries"] if e["list_rank"] is None)
+    print(f"Filtered ranking ({only.describe()}): {total} of the {result['qualifying']} roles that qualify, "
+          f"ranked now; {off_list} of them are not on today's shortlist")
+    if not entries:
+        print("\nNo roles to show.")
+        return 0
+    print()
+    widths = {"Title": 52, "Location": 26, "Company": 18, "Backed by": 28}
+    backed = ["Backed by"] if any(e["backed_by"] for e in entries) else []
+
+    def row(e: dict, with_company: bool) -> list:
+        return [e["rank"], e["id"], f"{e['score']:g}", *([e["company"]] if with_company else []), e["title"],
+                e["location_shown"], *([", ".join(e["backed_by"])] if backed else []),
+                "-" if e["list_rank"] is None else e["list_rank"], "saved" if e["mark"] == "saved" else "", e["url"]]
+    if args.by_company:
+        groups: dict[str, list[dict]] = {}
+        for e in entries:
+            groups.setdefault(e["company"], []).append(e)
+        for company, members in groups.items():
+            print(f"{company}: {len(members)} role{'' if len(members) == 1 else 's'}, best rank {members[0]['rank']}")
+            print(format_table(["Rank", "ID", "Score", "Title", "Location", *backed, "On list", "Flags", "URL"],
+                               [row(e, False) for e in members], widths))
+            print()
+    else:
+        print(format_table(["Rank", "ID", "Score", "Company", "Title", "Location", *backed, "On list", "Flags", "URL"],
+                           [row(e, True) for e in entries], widths))
+        print()
+    print("\"On list\" is the role's rank on today's shortlist; - means it is not on it.")
+    return 0
+
+
 def _cmd_shortlist(args) -> int:
     conn = connect(args.db)
+    only = _filter(conn, args)
+    if only:
+        return _cmd_shortlist_filtered(conn, args, only)
     current = ranking.latest_shortlist(conn)
     path = _ranking_path(args)
     if current is None:
@@ -655,9 +709,8 @@ def _cmd_shortlist(args) -> int:
             groups.setdefault(e["company"], []).append(e)
         # Entries arrive in rank order, so groups are already ordered by their best role.
         for company, members in groups.items():
-            tier = f"tier {members[0]['tier']}" if members[0]["tier"] is not None else "no tier"
             more = held_by_company.get(company, 0)
-            print(f"{company} ({tier}): {len(members)} role{'' if len(members) == 1 else 's'}, "
+            print(f"{company}: {len(members)} role{'' if len(members) == 1 else 's'}, "
                   f"best rank {members[0]['rank']}"
                   + (f"; {more} more held back by the per-company cap" if more else ""))
             print(format_table(
@@ -667,8 +720,8 @@ def _cmd_shortlist(args) -> int:
             print()
     else:
         print(format_table(
-            ["Rank", "ID", "Score", "Company", "Tier", "Title", "Location", *backed, "Flags", "URL"],
-            [[e["rank"], e["id"], f"{e['score']:g}", e["company"], _tier(e["tier"]), e["title"],
+            ["Rank", "ID", "Score", "Company", "Title", "Location", *backed, "Flags", "URL"],
+            [[e["rank"], e["id"], f"{e['score']:g}", e["company"], e["title"],
               e["location_shown"], *backers(e), _flags(e, new_ids), e["url"]] for e in entries], widths))
         print()
     print("Why a role ranks where it does: rolescout why ID.  "
@@ -724,9 +777,8 @@ def _cmd_why(args) -> int:
         print(json.dumps(info, indent=2, ensure_ascii=False))
         return 0
     role = info["role"]
-    tier = f"tier {role['tier']}" if role["tier"] is not None else "no tier"
     print(f"{role['title']}  (ID {role['id']})")
-    print(f"{role['company']} ({tier}) | {role['location'] or 'no location given'} | {role['url']}")
+    print(f"{role['company']} | {role['location'] or 'no location given'} | {role['url']}")
     if role["backed_by"]:
         print(f"Backed by: {', '.join(role['backed_by'])}")
     if role["mark"]:
@@ -937,7 +989,7 @@ def _run_harvest(conn, args, minutes: float | None, boards: list[str] | None = N
     if done or failed:
         print(f"\nActivated automatically (auto_activate is on): {len(done)}")
         for d in done:
-            print(f"  {d['name']} ({d['domain']}), tier {d['tier']}, tagged {', '.join(d['tags']) or 'with no board'}")
+            print(f"  {d['name']} ({d['domain']}), tagged {', '.join(d['tags']) or 'with no board'}")
         for message in failed:
             print(f"  Not activated: {message}")
     summary.activated = len(done)
@@ -1119,7 +1171,7 @@ def _cmd_candidates_activate(args) -> int:
         except cands.CandidateError as exc:
             failed.append(str(exc))
     for d in done:
-        print(f"Activated {d['name']} ({d['domain']}) as a tier {d['tier']} company, tagged {', '.join(d['tags']) or 'with no board'}.")
+        print(f"Activated {d['name']} ({d['domain']}), tagged {', '.join(d['tags']) or 'with no board'}.")
     for message in failed:
         print(f"Not activated: {message}", file=sys.stderr)
     if done:
@@ -1295,6 +1347,57 @@ def _coverage_lines(conn) -> list[str]:
         share = f"{100 * c[key] / total:.0f}%" if total else "-"
         lines.append(f"  {label + ':':<22}{c[key]:>6}  {share}")
     return lines
+
+
+def _cmd_profile_missing(args) -> int:
+    conn = connect(args.db)
+    rows = profiles.missing(conn, args.field)
+    if args.json:
+        print(json.dumps(rows[:args.limit] if args.limit else rows, indent=2, ensure_ascii=False))
+        return 0
+    shown = rows[:args.limit] if args.limit else rows
+    if not rows:
+        print("Every active company has " + ("those fields" if args.field else "every profile field") + " filled.")
+        return 0
+    print(format_table(["Company", "Open roles", "Missing", "Website"],
+                       [[r["company"], r["open_roles"], ", ".join(r["missing"]), r["website"] or ""] for r in shown]))
+    print(f"\n{len(rows)} companies with a field missing" + (f", {len(shown)} shown" if len(shown) < len(rows) else "")
+          + ". Set one with: rolescout profile set NAME FIELD VALUE")
+    return 0
+
+
+def _cmd_company(args) -> int:
+    conn = connect(args.db)
+    path = _ranking_path(args)
+    try:
+        cfg = ranking.load_config(path) if path.exists() else None
+    except ConfigError:
+        cfg = None
+    data = overview.company_overview(conn, args.name, cfg, top=args.top)
+    if args.json:
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+        return 0
+    _print_profile(conn, profiles.get_profile(conn, data["company"]))
+    print(f"\nWebsite: {data['website'] or '-'}   Job boards: {', '.join(data['job_boards']) or 'none mapped'}"
+          + ("" if data["active"] else "   (deactivated)"))
+    trend = data["hiring_30_days"]
+    print(f"\nLast 30 days: {trend['opened']} opened, {trend['closed']} closed; {data['open_roles']} open now")
+    if trend["weeks"]:
+        print(format_table(["Week of", "Opened", "Closed", "Net", "Open at week end"],
+                           [[w["week_start"], w["opened"], w["closed"], f"{w['net']:+d}", w["open_roles"]]
+                            for w in trend["weeks"]]))
+    roles = data["top_roles"]
+    print(f"\nTop {len(roles)} of {data['open_roles']} open roles ({data['top_roles_ranked_by']}):")
+    if roles:
+        print(format_table(
+            ["ID", "Score", "Title", "Location", "Posted", "Note", "URL"],
+            [[r["role_id"], "" if r["score"] is None else f"{r['score']:g}", r["title"], r["location"],
+              r["date_posted"] or "", " ".join(x for x in (r["mark"] or "", "" if r["qualifies"] in (True, None)
+                                                            else "does not qualify") if x), r["url"]]
+             for r in roles], {"Title": 52, "Location": 30}))
+    else:
+        print("  (none)")
+    return 0
 
 
 def _cmd_profile_coverage(args) -> int:
@@ -1528,7 +1631,7 @@ def _cmd_query(args) -> int:
     try:
         roles = query_roles(conn, company=args.company, title=args.title, status=args.status,
                             since=args.since, include_inactive=args.include_inactive,
-                            limit=args.limit)
+                            limit=args.limit, only=_filter(conn, args))
     except ValueError:
         print(f"error: --since must be a date like 2026-01-31, got {args.since!r}", file=sys.stderr)
         return 1
@@ -1545,6 +1648,21 @@ def _cmd_query(args) -> int:
 
 
 # --- parser -----------------------------------------------------------------
+
+def _add_filter_flags(parser: argparse.ArgumentParser, title: str) -> None:
+    group = parser.add_argument_group("filters", title)
+    group.add_argument("--stage", action="append", metavar="STAGE",
+                       help="company stage; repeat or separate with commas for any of several: "
+                            + ", ".join(profiles.STAGES))
+    group.add_argument("--sector", action="append", metavar="SECTOR",
+                       help="company sector (rolescout sectors list); repeat for any of several")
+    group.add_argument("--hq", metavar="PLACE", help="text the company's HQ location contains")
+    group.add_argument("--location", metavar="PLACE",
+                       help='where the role is: a place one of its locations names ("United States" '
+                            'covers every US form), or "remote"')
+    group.add_argument("--employees", metavar="RANGE", help="company size: 50-500, 200- or -50")
+    group.add_argument("--vc", metavar="VC", help="companies linked to this VC or ecosystem group")
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="rolescout", description=__doc__)
@@ -1571,7 +1689,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser(
         "import", parents=[db],
-        help="import companies: a CSV (company_name, website, tier) or a .json export with boards")
+        help="import companies: a CSV (company_name, website) or a .json export with boards")
     p.add_argument("file", help="CSV file, .json export, or - to read an export from standard input")
     p.set_defaults(func=_cmd_companies_import)
 
@@ -1589,7 +1707,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("add", parents=[db], help="add one company")
     p.add_argument("name")
     p.add_argument("--website", default="")
-    p.add_argument("--tier", type=int)
+    p.add_argument("--tier", type=int, help=argparse.SUPPRESS)      # accepted for old scripts; ignored
     p.add_argument("--tags", help="comma-separated, e.g. ai,fintech")
     p.set_defaults(func=_cmd_companies_add)
 
@@ -1608,7 +1726,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=_cmd_companies_set_active, active=True)
 
     p = sub.add_parser("map", parents=[db],
-                       help="add a board to a company, e.g. map Anthropic greenhouse anthropic")
+                       help="add a board to a company, e.g. map Acme greenhouse acme")
     p.add_argument("name")
     p.add_argument("source", choices=sorted(ADAPTERS))
     p.add_argument("ref", help="board reference: the slug; for workday, TENANT/wdN/SITE "
@@ -1689,6 +1807,8 @@ def build_parser() -> argparse.ArgumentParser:
     sl.add_argument("--since", metavar="YYYY-MM-DD",
                     help="compare with the list of this day instead of the previous one (30 days are kept)")
     sl.add_argument("--json", action="store_true")
+    _add_filter_flags(sl, "With any of these, every qualifying role that passes is ranked now, "
+                          "not only today's list:")
     sl.set_defaults(func=_cmd_shortlist)
     slsub = sl.add_subparsers(dest="subcommand", metavar="SUBCOMMAND")
     # The same two flags, accepted after the subcommand as well. No default
@@ -1805,7 +1925,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=_cmd_candidates_why)
     p = cdsub.add_parser(
         "activate", parents=[late_c],
-        help="start tracking candidates: adds them as tier 3 companies tagged with their boards")
+        help="start tracking candidates: adds them as companies tagged with their boards")
     p.add_argument("names", nargs="*", metavar="NAME", help="candidates by name or domain")
     p.add_argument("--all", action="store_true", help="every eligible candidate")
     p.add_argument("--first", type=int, metavar="N", help="the first N eligible candidates, as listed")
@@ -1837,6 +1957,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=_cmd_status)
 
+    p = commands.add_parser(
+        "company", parents=[db, config],
+        help="one company at a glance: profile, VCs, its top open roles and 30 days of hiring")
+    p.add_argument("name")
+    p.add_argument("--top", type=int, default=5, metavar="N", help="how many roles to show (default: 5)")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=_cmd_company)
+
     pr = commands.add_parser("profile", help="company profiles: description, sectors, stage, employees, HQ")
     prsub = pr.add_subparsers(dest="subcommand", required=True, metavar="SUBCOMMAND")
     mapping_flag = argparse.ArgumentParser(add_help=False)
@@ -1857,6 +1985,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("name")
     p.add_argument("field", choices=profiles.FIELDS)
     p.set_defaults(func=_cmd_profile_clear)
+    p = prsub.add_parser("missing", parents=[db], help="companies with empty profile fields, most open roles first")
+    p.add_argument("--field", action="append", choices=profiles.FIELDS,
+                   help="only look at this field; repeat for several (default: all)")
+    p.add_argument("--limit", type=int, default=40, metavar="N", help="rows to show (default: 40; 0 for all)")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=_cmd_profile_missing)
     p = prsub.add_parser("coverage", parents=[db], help="how many companies have each field filled")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=_cmd_profile_coverage)
@@ -1981,6 +2115,7 @@ def build_parser() -> argparse.ArgumentParser:
     query.add_argument("--include-inactive", action="store_true",
                        help="also show open roles of deactivated companies (not refreshed, may be stale)")
     query.add_argument("--limit", type=int, metavar="N")
+    _add_filter_flags(query, "Narrow by the company's profile, its VC, or the role's place:")
     query.add_argument("--json", action="store_true")
     query.set_defaults(func=_cmd_query, status="open")
     return parser
@@ -1993,7 +2128,7 @@ def main(argv: list[str] | None = None) -> int:
     except (CompanyError, SchemaError, FileNotFoundError, TransferError, BackupError,
             launchd.ScheduleError, GapsError, ConfigError, MarkError, cands.ConfigError,
             cands.CandidateError, portfolio.PortfolioError, digest.DigestError,
-            profiles.ProfileError, profiles.MappingError, vcs.VcError) as exc:
+            profiles.ProfileError, profiles.MappingError, vcs.VcError, filters.FilterError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:

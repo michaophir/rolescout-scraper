@@ -217,7 +217,7 @@ def three_runs(conn, isolated_db_path):
     (isolated_db_path.parent / "ranking.toml").write_text(RANKING)
     cfg = ranking.parse_config(RANKING, "test")
     for name, tier in (("Alpha", 1), ("Beta", 2)):
-        companies.add_company(conn, name, tier=tier)
+        companies.add_company(conn, name)
         companies.add_board(conn, name, "greenhouse", name.lower())
     with transaction(conn):                                    # both were there from the start
         conn.execute("UPDATE companies SET created_at = '2025-12-01T00:00:00Z'")
@@ -232,7 +232,7 @@ def three_runs(conn, isolated_db_path):
     clock = Clock()
     for run in (1, 2, 3):
         if run == 3:
-            companies.add_company(conn, "Gamma", tier=2)
+            companies.add_company(conn, "Gamma")
             companies.add_board(conn, "Gamma", "greenhouse", "gamma")
             with transaction(conn):
                 conn.execute("UPDATE companies SET created_at = '2026-01-02T09:00:00Z' WHERE name = 'Gamma'")

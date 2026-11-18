@@ -41,11 +41,11 @@ def hiring_trends(conn: sqlite3.Connection, *, company: str | None = None, start
 
     per_company: dict[str, dict] = {}
     for s in conn.execute(
-            "SELECT c.name, c.tier, s.taken_at, s.baseline, s.open_roles, s.opened, s.closed, "
+            "SELECT c.name, s.taken_at, s.baseline, s.open_roles, s.opened, s.closed, "
             "s.open_by_department FROM company_snapshots s JOIN companies c ON c.id = s.company_id "
             f"WHERE {where} ORDER BY s.taken_at, s.run_id", params):
         entry = per_company.setdefault(s["name"], {
-            "company": s["name"], "tier": s["tier"], "snapshots": 0, "baseline_in_range": False,
+            "company": s["name"], "snapshots": 0, "baseline_in_range": False,
             "first_snapshot": s["taken_at"][:10], "open_start": s["open_roles"],
             "opened": 0, "closed": 0, "_first": json.loads(s["open_by_department"])})
         entry["snapshots"] += 1

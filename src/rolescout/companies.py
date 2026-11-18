@@ -18,16 +18,6 @@ def _clean_tags(tags) -> list[str]:
     return sorted({t.strip() for t in tags or [] if t and t.strip()})
 
 
-def _parse_tier(value) -> int | None:
-    text = str(value).strip() if value is not None else ""
-    if not text:
-        return None
-    try:
-        return int(text)
-    except ValueError:
-        raise CompanyError(f"tier must be a whole number, got {text!r}") from None
-
-
 def clean_website(value: object, company: str = "") -> str:
     """``normalize_website`` with the error turned into a CompanyError that names the company."""
     try:
@@ -53,7 +43,7 @@ def set_website(conn, name: str, website: str) -> tuple[str, str, str]:
     return company["name"], company["website"], new
 
 
-def add_company(conn, name: str, *, website: str = "", tier=None, tags=None) -> int:
+def add_company(conn, name: str, *, website: str = "", tags=None) -> int:
     name = name.strip()
     if not name:
         raise CompanyError("company name is empty")
@@ -61,17 +51,18 @@ def add_company(conn, name: str, *, website: str = "", tier=None, tags=None) -> 
     try:
         with transaction(conn):
             cur = conn.execute(
-                "INSERT INTO companies (name, website, tier, tags, created_at) VALUES (?, ?, ?, ?, ?)",
-                (name, website, _parse_tier(tier), json.dumps(_clean_tags(tags)), utc_now()))
+                "INSERT INTO companies (name, website, tags, created_at) VALUES (?, ?, ?, ?)",
+                (name, website, json.dumps(_clean_tags(tags)), utc_now()))
     except sqlite3.IntegrityError:
         raise CompanyError(f"company {name!r} already exists") from None
     return cur.lastrowid
 
 
 def import_csv(conn, path: str | Path) -> tuple[int, int]:
-    """Import a target_company_list.csv-style file (company_name, website, tier).
+    """Import a target_company_list.csv-style file (company_name, website; a
+    tier column, if the file has one, is ignored).
 
-    New names are added. Existing names get their website and tier updated;
+    New names are added. Existing names get their website updated;
     their tags, active flag and mapping are left alone. Returns (added, updated).
     Websites are normalized ("acme.com" becomes "https://acme.com"). A row
     with a value that cannot be a website stops the import before anything
@@ -90,15 +81,14 @@ def import_csv(conn, path: str | Path) -> tuple[int, int]:
     with transaction(conn):
         for row, website in zip(rows, websites):
             name = row["company_name"].strip()
-            tier = _parse_tier(row.get("tier"))
             cur = conn.execute(
-                "UPDATE companies SET website = ?, tier = ? WHERE name = ?", (website, tier, name))
+                "UPDATE companies SET website = ? WHERE name = ?", (website, name))
             if cur.rowcount:
                 updated += 1
             else:
                 conn.execute(
-                    "INSERT INTO companies (name, website, tier, created_at) VALUES (?, ?, ?, ?)",
-                    (name, website, tier, now))
+                    "INSERT INTO companies (name, website, created_at) VALUES (?, ?, ?)",
+                    (name, website, now))
                 added += 1
     return added, updated
 
@@ -184,12 +174,12 @@ def backed_by(conn) -> dict[int, list[str]]:
 def list_companies(conn, *, active_only: bool = False) -> list[dict]:
     rows = conn.execute(
         """
-        SELECT c.id, c.name, c.website, c.tier, c.tags, c.active,
+        SELECT c.id, c.name, c.website, c.tags, c.active,
                (SELECT COUNT(*) FROM roles r WHERE r.company_id = c.id AND r.closed_at IS NULL)
                    AS open_roles
         FROM companies c
         WHERE c.active = 1 OR NOT ?
-        ORDER BY c.tier IS NULL, c.tier, c.name
+        ORDER BY c.name COLLATE NOCASE
         """, (active_only,)).fetchall()
     boards: dict[int, list[dict]] = {}
     for b in conn.execute(
@@ -198,6 +188,6 @@ def list_companies(conn, *, active_only: bool = False) -> list[dict]:
         board = dict(b)
         boards.setdefault(board.pop("company_id"), []).append(board)
     backers = backed_by(conn)
-    return [{**{k: r[k] for k in ("name", "website", "tier", "open_roles")},
+    return [{**{k: r[k] for k in ("name", "website", "open_roles")},
              "tags": json.loads(r["tags"]), "active": bool(r["active"]),
              "boards": boards.get(r["id"], []), "backed_by": backers.get(r["id"], [])} for r in rows]

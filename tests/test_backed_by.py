@@ -52,7 +52,7 @@ def test_shortlist_has_a_backed_by_column(backed, capsys):
     assert cli.main(["shortlist"]) == 0
     lines = capsys.readouterr().out.splitlines()
     header = next(line for line in lines if line.startswith("Rank"))
-    assert header.split() == ["Rank", "ID", "Score", "Company", "Tier", "Title", "Location",
+    assert header.split() == ["Rank", "ID", "Score", "Company", "Title", "Location",
                               "Backed", "by", "Flags", "URL"]
     start = header.index("Backed by")
 

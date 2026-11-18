@@ -258,6 +258,39 @@ For browsing (in Datasette, for example) the database has read-only views:
 `v_company_sectors` (one row per company and sector) and `v_hiring_weekly`
 (opened and closed per company per week).
 
+## Cuts, company overviews and filling in profiles
+
+The shortlist and the role search take filters on the company's profile and
+on where the role is. With a filter, `rolescout shortlist` ranks every
+qualifying role that passes it as of now, not only today's list, and shows
+each role's rank on today's list beside it:
+
+```sh
+rolescout shortlist --stage seed --sector fintech
+rolescout shortlist --vc "Acme Venture Partners" --location "United States"
+rolescout shortlist --employees 50-500 --hq "New York" --by-company
+rolescout query --title designer --stage "series B" --location remote
+```
+
+`rolescout company NAME` shows one company: profile, VCs, its top open roles
+and the last 30 days of hiring. `rolescout profile missing` lists companies
+with empty profile fields, the ones with the most open roles first; an agent
+can fill them over MCP (`list_incomplete_profiles`, `set_company_profile`),
+and what it sets is recorded as set by an agent and never replaces a value
+you set.
+
+At some companies a Senior title is what others call Staff. Name them in
+`ranking.toml` and a Senior title there earns the Staff points:
+
+```toml
+[leveling]
+senior_as_staff = ["Acme", "Globex"]
+```
+
+`rolescout companies export` also carries the profile values you set by
+hand, the VC list and the VC links you made by hand; `companies import` on
+the other machine restores them as yours.
+
 ## What is running, and what changed
 
 `rolescout status` has a "Right now" line: the job in progress (scout,
@@ -333,7 +366,7 @@ request per second, obeys each board's robots.txt, and stops at its time
 limit; the next one continues where it stopped. The daily job runs a harvest
 once a week after the scout and the backup, for at most 15 minutes a day
 (`--harvest-days`, `--harvest-minutes`), and nothing it does can fail the
-scout. Activating a candidate adds it as a tier 3 company; its own job board
+scout. Activating a candidate adds it as a company; its own job board
 is found by the weekly re-check, or at once with `rolescout companies resolve`.
 After editing the filter, `rolescout candidates apply` re-sorts every
 candidate with no network call.
@@ -342,8 +375,7 @@ To skip the manual step, put `auto_activate = true` near the top of
 `candidates.toml`, above the first `[section]`. Every harvest, including the
 weekly one in the daily job, then activates all eligible candidates when it
 ends. Candidates in review, rejected or dismissed are left alone;
-`rolescout candidates apply` never activates anything. The new companies get
-tier 3, or the tier in `auto_activate_tier`. Their job boards are looked for
+`rolescout candidates apply` never activates anything. Their job boards are looked for
 at once, in the time left of the harvest's limit, so the next day's scout
 already fetches them; any not reached are found by the weekly re-check.
 `rolescout status` shows when the last harvest ran, how many companies it

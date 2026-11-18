@@ -88,12 +88,12 @@ Read (always available):
 
 | Tool | What it does |
 |---|---|
-| `get_shortlist` | The ranked shortlist: flat, grouped by company, or only what is new since the previous list; each company with the portfolio boards that list it |
+| `get_shortlist` | The ranked shortlist: flat, grouped by company, or only what is new. With a filter (stage, sector, HQ, role location, employees, VC) it ranks every qualifying role that passes, not only today's list |
 | `get_role` | One role in full; the description only when asked for; includes the portfolio boards that list its company |
-| `search_roles` | Search all stored roles by title, company, open/closed and first-seen date |
+| `search_roles` | Search all stored roles by title, company, open/closed and first-seen date, with the same filters as `get_shortlist` |
 | `explain_rank` | Why a role ranks where it does, or why it is not on the shortlist |
 | `list_marks` | Roles marked dismissed, saved or applied |
-| `list_target_companies` | Target companies with tier, boards and coverage state |
+| `list_target_companies` | Target companies with boards and coverage state |
 | `coverage_gaps` | Companies that cannot be fetched, grouped by job system, with build candidates |
 | `connector_brief` | A Markdown brief for building an adapter for one job system |
 | `hiring_trends` | Open counts and roles opened and closed over a date range, overall and by department |
@@ -101,6 +101,8 @@ Read (always available):
 | `digest` | What changed since the previous completed scout, or since a date |
 | `get_company_profile` | A company's description, sectors, stage, employees and HQ, each with its source; and its VCs |
 | `list_vcs` | The VC list: investors and ecosystem groups, their boards and linked companies |
+| `company_overview` | One company: profile, VCs, its top open roles and 30 days of hiring |
+| `list_incomplete_profiles` | Companies with empty profile fields, most open roles first: the work list for filling them in |
 | `list_candidates` | Companies found on portfolio boards, with status and reason, and the funnel |
 | `explain_candidate` | Each filter rule's result for one candidate |
 
@@ -114,13 +116,13 @@ Write (absent in read-only mode):
 | `deactivate_company` | Stop tracking a company, keeping its history |
 | `reactivate_company` | Resume tracking it |
 | `set_company_website` | Correct the website stored for a company |
-| `set_company_profile` | Fill in one profile field (recorded as set by an agent; never replaces a value set by hand) |
+| `set_company_profile` | Fill in a company's profile fields in one call (recorded as set by an agent; a value set by hand is kept) |
 | `add_vc`, `edit_vc`, `remove_vc` | Maintain the VC list; `edit_vc` can mark a group as an ecosystem |
 | `attach_board_to_vc` | Say which VC a portfolio board belongs to |
 | `link_company_to_vc`, `unlink_company_from_vc` | Link a company to a VC by hand, or undo it |
 | `map_board` | Map a company to a Greenhouse, Lever, Ashby, Workday, Rippling, Gem or Workable board |
 | `record_job_system` | Record by hand which unsupported job system a company uses |
-| `activate_candidate` | Start tracking a candidate as a tier 3 company |
+| `activate_candidate` | Start tracking a candidate |
 | `dismiss_candidate` | Mark a candidate as never wanted |
 
 Roles are identified by `role_id`, the integer every role-returning tool

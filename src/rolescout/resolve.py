@@ -891,7 +891,7 @@ def recheck_targets(conn: sqlite3.Connection, failing: list[dict]) -> list[sqlit
         # Longest-unchecked first, so a run cut short by its time limit
         # reaches the rest next time instead of repeating the same ones.
         "FROM companies c WHERE c.active = 1 "
-        "ORDER BY resolved_at IS NOT NULL, resolved_at, c.tier IS NULL, c.tier, c.name").fetchall()
+        "ORDER BY resolved_at IS NOT NULL, resolved_at, c.name COLLATE NOCASE").fetchall()
     # A system recorded by hand is left alone, unless it has an adapter now:
     # then the board it was recorded with can be mapped.
     return [r for r in rows if r["name"] in names

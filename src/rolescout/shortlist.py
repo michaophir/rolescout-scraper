@@ -59,6 +59,7 @@ class RankingConfig:
     seniority: dict[str, float] = field(default_factory=dict)    # word -> points
     preferred_locations: dict[str, float] = field(default_factory=dict)
     required_locations: list[str] = field(default_factory=list)   # empty = no requirement
+    senior_as_staff: list[str] = field(default_factory=list)      # companies whose "Senior" is a "Staff"
     remote_points: float = 0.0
     recency_max_points: float = 0.0
     recency_full_days: int = 0     # first seen this recently: full points
@@ -73,6 +74,9 @@ class RankingConfig:
         self._locations = [(p, pts, re.compile(re.escape(p), re.I))
                            for p, pts in self.preferred_locations.items()]
         self._required = Requirement(self.required_locations)
+        self._leveled = {name.casefold() for name in self.senior_as_staff}
+        by_word = {word.casefold(): (word, points) for word, points in self.seniority.items()}
+        self._senior, self._staff = by_word.get("senior"), by_word.get("staff")
 
     def wants_title(self, title: str) -> bool:
         """Whether a role with this title can reach the shortlist at all: it
@@ -121,9 +125,12 @@ def parse_config(text: str, source: str = "") -> RankingConfig:
         raw = tomllib.loads(text)
     except tomllib.TOMLDecodeError as exc:
         raise ConfigError(f"{source or 'ranking config'} is not valid TOML: {exc}") from None
-    raw = _only(raw, {"size", "max_per_company", "tier_points", "title", "seniority", "location",
-                      "recency"},
+    raw = _only(raw, {"size", "max_per_company", "tier_points", "title", "seniority", "leveling",
+                      "location", "recency"},
                 "top level")
+    leveled = _only(raw.get("leveling"), {"senior_as_staff"}, "leveling").get("senior_as_staff", [])
+    if not isinstance(leveled, list) or not all(isinstance(x, str) and x.strip() for x in leveled):
+        raise ConfigError('leveling.senior_as_staff must be a list of company names, e.g. ["Acme"]')
     title = _only(raw.get("title"), {"wanted", "exclude"}, "title")
     location = _only(raw.get("location"), {"preferred", "remote_points", "require"}, "location")
     required = location.get("require", [])
@@ -146,12 +153,16 @@ def parse_config(text: str, source: str = "") -> RankingConfig:
                   int(_number(recency, "zero_days", 30, "recency")))
     if zero <= full:
         raise ConfigError("recency.zero_days must be larger than recency.full_days")
+    seniority = _points_table(_only(raw.get("seniority"), {"words"}, "seniority").get("words"),
+                              "[seniority.words]")
+    if leveled and not {"senior", "staff"} <= {word.casefold() for word in seniority}:
+        raise ConfigError('leveling.senior_as_staff needs both "Senior" and "Staff" in [seniority.words]: '
+                          "it gives a Senior title the points of Staff")
     return RankingConfig(
         size=size, max_per_company=cap,
         wanted=_points_table(title.get("wanted"), "[title.wanted]"),
         exclude=[x.strip() for x in exclude],
-        seniority=_points_table(_only(raw.get("seniority"), {"words"}, "seniority").get("words"),
-                                "[seniority.words]"),
+        seniority=seniority, senior_as_staff=[x.strip() for x in leveled],
         preferred_locations=_points_table(location.get("preferred"), "[location.preferred]"),
         required_locations=[x.strip() for x in required],
         remote_points=float(_number(location, "remote_points", 0, "location")),
@@ -229,6 +240,14 @@ exclude = []
 # If several match, the one worth the most counts.
 [seniority.words]
 {table(seniority or EXAMPLE_SENIORITY, 10)}
+
+# Leveling: at the companies named here a "Senior" title is what most others
+# call "Staff", so it earns the points of "Staff" above instead of "Senior".
+# Use the names as `rolescout companies list` shows them (capitals do not
+# matter), e.g. senior_as_staff = ["Acme", "Globex"]. `rolescout why ID` says
+# when this applied.
+[leveling]
+senior_as_staff = []
 
 [location]
 # Points when the role is remote (the board says so, or the location does).
@@ -357,7 +376,7 @@ def role_age(role, today: date, baseline: bool = False) -> tuple[int | None, str
 
 def evaluate(role, cfg: RankingConfig, today: date, baseline: bool = False) -> Evaluation:
     """Score one role. ``role`` needs title, location, workplace_type, date_posted,
-    first_seen_at and tier. ``baseline`` says the role was first seen in its
+    first_seen_at. ``baseline`` says the role was first seen in its
     board's baseline fetch."""
     title = role["title"] or ""
     ev = Evaluation(eligible=True)
@@ -385,8 +404,14 @@ def evaluate(role, cfg: RankingConfig, today: date, baseline: bool = False) -> E
     else:
         ev.detail.append("Title matches no wanted phrase (+0)")
     senior = _best([(p, pts) for p, pts, pattern in cfg._seniority if pattern.search(title)])
-    add(senior[1] if senior else 0.0, f'Seniority: "{senior[0]}"' if senior else "",
-        "No seniority word in the title")
+    company = role["company"] if "company" in role.keys() else ""
+    # Leveling: at the listed companies a Senior title is another company's Staff.
+    if (senior and cfg._senior and cfg._staff and senior[0] == cfg._senior[0]
+            and (company or "").casefold() in cfg._leveled and cfg._staff[1] > senior[1]):
+        add(cfg._staff[1], f'Seniority: "{senior[0]}" counts as "{cfg._staff[0]}" at {company} (leveling)', "")
+    else:
+        add(senior[1] if senior else 0.0, f'Seniority: "{senior[0]}"' if senior else "",
+            "No seniority word in the title")
 
     where = read_location(role, cfg)
     place, remote = where.preferred, where.remote
@@ -448,10 +473,67 @@ def in_baseline(role, baselines: dict[int, set[str]]) -> bool:
 
 ROLE_SELECT = (
     "SELECT r.id, r.board_id, r.company_id, r.title, r.department, r.location, r.workplace_type, r.url, r.date_posted, "
-    "r.compensation_text, r.first_seen_at, r.closed_at, c.name AS company, c.tier, c.active, "
+    "r.compensation_text, r.first_seen_at, r.closed_at, c.name AS company, c.active, "
     "m.status AS mark, m.note AS mark_note "
     "FROM roles r JOIN companies c ON c.id = r.company_id "
     "LEFT JOIN role_marks m ON m.role_id = r.id ")
+
+
+def rank_roles(conn: sqlite3.Connection, cfg: RankingConfig, now: datetime | None = None,
+               company_id: int | None = None, qualifying_only: bool = True) -> list[tuple]:
+    """Every open role that qualifies, best first, as (role, evaluation).
+
+    Left out: closed roles, roles of deactivated companies, roles marked
+    dismissed or applied, and (unless ``qualifying_only`` is False) roles that
+    fail the title or location rules. No size cut and no per-company cap.
+    """
+    now = now or datetime.now().astimezone()
+    today = now.astimezone(timezone.utc).date()
+    baselines = baseline_fetches(conn)
+    ranked = []
+    for role in conn.execute(
+            ROLE_SELECT + "WHERE r.closed_at IS NULL AND c.active = 1 "
+            "AND (m.status IS NULL OR m.status NOT IN ('dismissed', 'applied')) "
+            "AND (? IS NULL OR r.company_id = ?)", (company_id, company_id)):
+        baseline = in_baseline(role, baselines)
+        ev = evaluate(role, cfg, today, baseline)
+        if ev.eligible or not qualifying_only:
+            age = role_age(role, today, baseline)[0]
+            ranked.append((role, ev, age if age is not None else 10 ** 6))
+    # Qualifying roles first, best score first; between equals: newer, then a fixed order.
+    ranked.sort(key=lambda item: (
+        not item[1].eligible, -item[1].score, item[2],
+        item[0]["company"].lower(), item[0]["title"].lower(), item[0]["id"]))
+    return [(role, ev) for role, ev, _ in ranked]
+
+
+def filtered_entries(conn: sqlite3.Connection, cfg: RankingConfig, only, now: datetime | None = None) -> dict:
+    """Rank, right now, every qualifying role that passes a filter
+    (``rolescout.filters.RoleFilter``): not a cut of today's stored list, so
+    a role that never made the list can lead here. No size cut, no
+    per-company cap. Each entry has the shape ``shortlist_entries`` gives,
+    plus ``list_rank``: its rank on today's stored list, or None.
+    """
+    ranked = rank_roles(conn, cfg, now)
+    companies = only.company_ids(conn)
+    current = latest_shortlist(conn)
+    on_list = {r["role_id"]: r["rank"] for r in conn.execute(
+        "SELECT role_id, rank FROM shortlist_entries WHERE shortlist_id = ?", (current["id"],))} if current else {}
+    backers = backed_by(conn)
+    entries = []
+    for role, ev in ranked:
+        if companies is not None and role["company_id"] not in companies:
+            continue
+        if not only.role_matches(role["location"], role["workplace_type"]):
+            continue
+        entries.append({
+            "rank": len(entries) + 1, "score": ev.score, "reasons": ev.reasons,
+            **{k: role[k] for k in ("id", "title", "department", "location", "workplace_type", "url",
+                                    "date_posted", "compensation_text", "first_seen_at", "closed_at",
+                                    "company_id", "company", "mark", "mark_note")},
+            "location_shown": display_location(role, cfg), "backed_by": backers.get(role["company_id"], []),
+            "list_rank": on_list.get(role["id"])})
+    return {"entries": entries, "qualifying": len(ranked)}
 
 
 def build_shortlist(conn: sqlite3.Connection, cfg: RankingConfig, *, run_id: int | None = None,
@@ -466,23 +548,7 @@ def build_shortlist(conn: sqlite3.Connection, cfg: RankingConfig, *, run_id: int
     """
     now = now or datetime.now().astimezone()
     list_date = now.date().isoformat()
-    today = now.astimezone(timezone.utc).date()
-
-    baselines = baseline_fetches(conn)
-    ranked = []
-    for role in conn.execute(
-            ROLE_SELECT + "WHERE r.closed_at IS NULL AND c.active = 1 "
-            "AND (m.status IS NULL OR m.status NOT IN ('dismissed', 'applied'))"):
-        baseline = in_baseline(role, baselines)
-        ev = evaluate(role, cfg, today, baseline)
-        if ev.eligible:
-            age = role_age(role, today, baseline)[0]
-            ranked.append((role, ev, age if age is not None else 10 ** 6))
-    # Best score first; between equals: newer, then a fixed order.
-    ranked.sort(key=lambda item: (
-        -item[1].score, item[2],
-        item[0]["company"].lower(), item[0]["title"].lower(), item[0]["id"]))
-    ranked = [(role, ev) for role, ev, _ in ranked]
+    ranked = rank_roles(conn, cfg, now)
 
     top, held, taken = [], [], {}
     for role, ev in ranked:
@@ -553,7 +619,7 @@ def shortlist_entries(conn: sqlite3.Connection, shortlist_id: int,
     rows = conn.execute(
         "SELECT e.rank, e.score, e.reasons, r.id, r.title, r.department, r.location, "
         "r.workplace_type, r.url, r.date_posted, r.compensation_text, r.first_seen_at, r.closed_at, "
-        "c.id AS company_id, c.name AS company, c.tier, m.status AS mark, m.note AS mark_note "
+        "c.id AS company_id, c.name AS company, m.status AS mark, m.note AS mark_note "
         "FROM shortlist_entries e JOIN roles r ON r.id = e.role_id "
         "JOIN companies c ON c.id = r.company_id LEFT JOIN role_marks m ON m.role_id = r.id "
         "WHERE e.shortlist_id = ? ORDER BY e.rank", (shortlist_id,))
@@ -564,7 +630,7 @@ def shortlist_entries(conn: sqlite3.Connection, shortlist_id: int,
 def held_back(conn: sqlite3.Connection, shortlist_id: int) -> list[dict]:
     """Roles kept off this list by the per-company cap, best score first."""
     rows = conn.execute(
-        "SELECT h.score, r.id, r.title, r.location, r.url, c.name AS company, c.tier "
+        "SELECT h.score, r.id, r.title, r.location, r.url, c.name AS company "
         "FROM shortlist_held h JOIN roles r ON r.id = h.role_id "
         "JOIN companies c ON c.id = r.company_id WHERE h.shortlist_id = ? "
         "ORDER BY h.score DESC, c.name, r.title, r.id", (shortlist_id,))

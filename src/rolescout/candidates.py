@@ -25,7 +25,6 @@ from rolescout.resolve import registrable_domain
 
 CONFIG_NAME = "candidates.toml"
 CONFIG_ENV_VAR = "ROLESCOUT_CANDIDATES"
-ACTIVATION_TIER = 3
 STATUSES = ("eligible", "review", "rejected", "tracked", "dismissed")
 RULES = ("size", "stage", "sector", "roles")
 UNKNOWN_CHOICES = ("review", "reject", "pass")
@@ -58,7 +57,6 @@ class FilterConfig:
     require_open_role: bool = False
     role_locations: list[str] = field(default_factory=list)
     auto_activate: bool = False
-    auto_activate_tier: int = ACTIVATION_TIER
     source: str = ""
     digest: str = ""
 
@@ -117,9 +115,7 @@ def parse_config(text: str, source: str = "") -> FilterConfig:
     auto = raw.get("auto_activate", False)
     if not isinstance(auto, bool):
         raise ConfigError("auto_activate must be true or false, on its own line above the first section")
-    auto_tier = raw.get("auto_activate_tier", ACTIVATION_TIER)
-    if isinstance(auto_tier, bool) or not isinstance(auto_tier, int) or auto_tier < 1:
-        raise ConfigError(f"auto_activate_tier must be a whole number, 1 or more, got {auto_tier!r}")
+    # auto_activate_tier is still accepted so an older config loads; tiers are no longer used.
     size = _table(raw, "size", {"min_employees", "unknown"})
     stage = _table(raw, "stage", {"accept", "reject"})
     sector = _table(raw, "sector", {"keywords", "unknown"})
@@ -142,7 +138,6 @@ def parse_config(text: str, source: str = "") -> FilterConfig:
         stage_accept=[s.lower() for s in accept], stage_reject=[s.lower() for s in reject],
         sector_keywords=_words(sector, "keywords", "sector"), sector_unknown=_unknown(sector, "sector"),
         require_open_role=require, role_locations=locations, auto_activate=auto,
-        auto_activate_tier=auto_tier,
         source=source, digest=hashlib.sha256(text.encode()).hexdigest()[:12])
 
 
@@ -191,8 +186,6 @@ def starter_config(keywords: list[str] | None = None, seeded_from: str = "") -> 
 # finds the rest. Off unless set; to turn it on, uncomment the line below.
 # Both lines must stay here, above the first [section].
 # auto_activate = true
-# The tier given to companies activated this way.
-# auto_activate_tier = 3
 
 [size]
 # Smallest company worth tracking, by the board's employee count.
@@ -424,10 +417,9 @@ def _tag(board: dict) -> str:
     return f"portfolio:{label}"
 
 
-def activate(conn: sqlite3.Connection, candidate: dict, *, force: bool = False,
-             tier: int = ACTIVATION_TIER) -> dict:
-    """Start tracking a candidate: add it as a company (tier 3 unless another
-    is given) tagged with the boards that list it. Finding its own job board is left to
+def activate(conn: sqlite3.Connection, candidate: dict, *, force: bool = False) -> dict:
+    """Start tracking a candidate: add it as a company tagged with the
+    boards that list it. Finding its own job board is left to
     ``companies resolve``; nothing is fetched here."""
     state = candidate["state"]
     if state == "tracked":
@@ -438,14 +430,14 @@ def activate(conn: sqlite3.Connection, candidate: dict, *, force: bool = False,
     tags = [_tag(b) for b in candidate["boards"]]
     try:
         company_id = add_company(conn, candidate["name"], website=candidate["website"] or candidate["domain"],
-                                 tier=tier, tags=tags)
+                                 tags=tags)
     except CompanyError as exc:
         raise CandidateError(f"{candidate['name']}: {exc}") from None
     with transaction(conn):
         conn.execute("UPDATE candidates SET company_id = ?, activated_at = ?, dismissed_at = NULL WHERE id = ?",
                      (company_id, utc_now(), candidate["id"]))
         profiles.backfill(conn)
-    return {"name": candidate["name"], "domain": candidate["domain"], "tier": tier, "tags": tags}
+    return {"name": candidate["name"], "domain": candidate["domain"], "tags": tags}
 
 
 def auto_activate(conn: sqlite3.Connection, cfg: FilterConfig) -> tuple[list[dict], list[str]]:
@@ -460,7 +452,7 @@ def auto_activate(conn: sqlite3.Connection, cfg: FilterConfig) -> tuple[list[dic
         return done, failed
     for candidate in list_candidates(conn, "eligible"):
         try:
-            result = activate(conn, candidate, tier=cfg.auto_activate_tier)
+            result = activate(conn, candidate)
             result["company_id"] = conn.execute(
                 "SELECT company_id FROM candidates WHERE id = ?", (candidate["id"],)).fetchone()[0]
             done.append(result)

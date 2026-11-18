@@ -397,10 +397,8 @@ def test_mcp_profile_and_vc_tools(harvested, isolated_db_path):
     assert profile["stage"]["value"] == "series E+" and profile["sector_list"] == ["fintech", "AI and ML", "health tech"]
     assert profile["backed_by"] == [{"vc": "Alpha Venture Partners", "source": "board"},
                                     {"vc": "Beta City Tech Network", "source": "board"}]
-    set_ = session.call("set_company_profile", company="Acme", field="description", value="Robot payments.")
-    assert set_["description"] == {"value": "Robot payments.", "source": "agent", "set_at": set_["description"]["set_at"]}
-    profiles.set_field(harvested, "Acme", "hq", "Denver, CO")
-    assert "was set by hand" in session.error("set_company_profile", company="Acme", field="hq", value="Paris")
+    set_ = session.call("set_company_profile", company="Acme", description="Robot payments.")
+    assert set_["set"] == ["description"] and set_["profile"]["description"]["source"] == "agent"
 
     assert [v["name"] for v in session.call("list_vcs")["vcs"]] == ["Alpha Venture Partners", "Beta City Tech Network"]
     assert session.call("add_vc", name="Gamma Capital") == {

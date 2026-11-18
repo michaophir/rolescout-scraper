@@ -25,10 +25,11 @@ def test_import_csv_adds_then_updates(conn, tmp_path):
 
     listed = by_name(conn)
     assert set(listed) == {"Acme", "Bolt", "Cobalt"}
-    assert (listed["Acme"]["website"], listed["Acme"]["tier"]) == ("https://acme.io", 3)
+    assert listed["Acme"]["website"] == "https://acme.io" and "tier" not in listed["Acme"]
     assert [(b["source"], b["ref"]) for b in listed["Acme"]["boards"]] == [("greenhouse", "acme")]  # kept
     assert listed["Bolt"]["active"] is False  # not reactivated by a re-import
-    assert listed["Cobalt"]["tier"] is None
+    # The file's tier column is read by nothing and written nowhere.
+    assert [r["tier"] for r in conn.execute("SELECT tier FROM companies")] == [None, None, None]
 
 
 def test_import_the_repo_csv_format(conn):
@@ -39,7 +40,6 @@ def test_import_the_repo_csv_format(conn):
     # A name listed twice in the file is added once, then counted as an update.
     assert (added, updated) == (len(unique), len(names) - len(unique))
     assert len(by_name(conn)) == len(unique)
-    assert by_name(conn)["Anthropic"]["tier"] == 1
 
 
 def test_import_rejects_wrong_columns(conn, tmp_path):
@@ -50,9 +50,9 @@ def test_import_rejects_wrong_columns(conn, tmp_path):
 
 
 def test_add_deactivate_activate(conn):
-    companies.add_company(conn, " Acme ", website="https://acme.com", tier=2, tags=["ai", " b2b ", "ai"])
+    companies.add_company(conn, " Acme ", website="https://acme.com", tags=["ai", " b2b ", "ai"])
     acme = by_name(conn)["Acme"]
-    assert (acme["tier"], acme["tags"], acme["active"]) == (2, ["ai", "b2b"], True)
+    assert (acme["tags"], acme["active"]) == (["ai", "b2b"], True)
     with pytest.raises(CompanyError, match="already exists"):
         companies.add_company(conn, "ACME")
 

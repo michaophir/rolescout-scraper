@@ -97,7 +97,7 @@ def test_mcp_add_target_company_normalizes_and_rejects(conn, isolated_db_path):
     from rolescout import mcp_server
     from tests.test_mcp import Session
     session = Session(mcp_server.build_server(isolated_db_path))
-    session.call("add_target_company", name="Alation", website="alation.com", tier=2)
+    session.call("add_target_company", name="Alation", website="alation.com")
     assert website(conn, "Alation") == "https://alation.com"
     listed = session.call("list_target_companies")["companies"]
     assert listed[0]["website"] == "https://alation.com"
@@ -131,10 +131,9 @@ def test_stored_scheme_less_websites_are_repaired_on_upgrade(tmp_path, monkeypat
 
 # --- resolve -----------------------------------------------------------------
 
-def store_raw(conn, name, site, tier=None):
+def store_raw(conn, name, site):
     """Put a value in the database as an older version would have, bypassing normalization."""
-    conn.execute("INSERT INTO companies (name, website, tier, created_at) VALUES (?, ?, ?, 'x')",
-                 (name, site, tier))
+    conn.execute("INSERT INTO companies (name, website, created_at) VALUES (?, ?, 'x')", (name, site))
 
 
 def test_resolve_of_a_company_stored_without_a_scheme(conn):

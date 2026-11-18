@@ -19,6 +19,7 @@ def query_roles(
     include_inactive: bool = False,
     limit: int | None = None,
     offset: int = 0,
+    only=None,                     # a rolescout.filters.RoleFilter
 ) -> list[dict]:
     """Roles matching every given filter, ordered by company then title.
 
@@ -28,6 +29,9 @@ def query_roles(
     Open roles of deactivated companies are left out unless
     ``include_inactive`` is set: nothing refreshes them, so "open" is stale.
     Their closed roles are history and always included.
+
+    ``only`` narrows the result to companies with the wanted stage, sectors,
+    HQ, size or VC, and to roles in the wanted place.
     """
     where, params = [], []
     if not include_inactive:
@@ -58,6 +62,17 @@ def query_roles(
         + (" WHERE " + " AND ".join(where) if where else "")
         + " ORDER BY c.name COLLATE NOCASE, r.title COLLATE NOCASE, r.id"
     )
+    if only:
+        # The place filter reads each role's location text, so it is applied
+        # here and the page is cut afterwards.
+        companies = only.company_ids(conn)
+        rows = [dict(row) for row in conn.execute(sql.replace("SELECT r.id,", "SELECT r.company_id, r.id,", 1), params)]
+        rows = [r for r in rows if (companies is None or r.pop("company_id") in companies)
+                and only.role_matches(r["location"], r["workplace_type"])]
+        for r in rows:
+            r.pop("company_id", None)
+        start = max(0, offset)
+        return rows[start:] if limit is None else rows[start:start + limit]
     if limit is not None or offset:
         sql += " LIMIT ? OFFSET ?"
         params.extend([-1 if limit is None else limit, max(0, offset)])

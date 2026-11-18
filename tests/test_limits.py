@@ -137,8 +137,8 @@ def test_download_and_scan_caps(conn, monkeypatch):
 def test_cpu_budget_stops_a_runaway_pattern_and_the_run_continues(conn, monkeypatch):
     """Even a pattern with exponential backtracking cannot hold the run up."""
     monkeypatch.setattr(resolve, "FINGERPRINTS", FINGERPRINTS + [("evil", re.compile(r"(a+)+$"))])
-    companies.add_company(conn, "Evil", website="https://evil.com", tier=1)
-    companies.add_company(conn, "Fine", website="https://fine.com", tier=2)
+    companies.add_company(conn, "Evil", website="https://evil.com")
+    companies.add_company(conn, "Fine", website="https://fine.com")
     web = FakeWeb({
         "https://evil.com": "a" * 60 + "!",
         "https://fine.com": '<a href="https://jobs.lever.co/fine">Jobs</a>',
@@ -166,12 +166,12 @@ def test_wall_budget_stops_a_site_that_never_answers(conn):
             if "slow.com" in url:
                 time.sleep(30)
             return super().get(url, **kwargs)
-    companies.add_company(conn, "Slow", website="https://slow.com", tier=1)
-    companies.add_company(conn, "Fine", website="https://fine.com", tier=2)
+    companies.add_company(conn, "Slow", website="https://slow.com")
+    companies.add_company(conn, "Fine", website="https://fine.com")
     web = Stalling({"https://fine.com": '<a href="https://jobs.lever.co/fine">Jobs</a>',
                     LEVER.format("fine"): lever_jobs(2)})
     started = time.monotonic()
-    slow, fine = resolve_companies(conn, resolver=Resolver(session=web, wall_budget=0.4))
+    fine, slow = resolve_companies(conn, resolver=Resolver(session=web, wall_budget=0.4))   # by name
     assert time.monotonic() - started < 5.0
     assert slow.over_budget and "took longer than 0.4 seconds" in slow.notes[-1]
     assert fine.outcome == "mapped"

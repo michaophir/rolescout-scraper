@@ -506,7 +506,7 @@ def stored(conn):
 
 
 def test_scout_stores_every_role_and_only_the_wanted_descriptions(conn):
-    companies.add_company(conn, "Acme", tier=2)
+    companies.add_company(conn, "Acme")
     # Mapped by pasting a URL from the career site.
     companies.add_board(conn, "Acme", "workday", HOST + "/en-US/Careers/login")
     assert conn.execute("SELECT ref FROM boards").fetchone()["ref"] == BOARD

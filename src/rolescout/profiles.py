@@ -304,6 +304,52 @@ def set_field(conn: sqlite3.Connection, name: str, field: str, value: object, *,
     return get_profile(conn, name)
 
 
+def set_fields(conn: sqlite3.Connection, name: str, values: dict, *, source: str = "agent") -> dict:
+    """Set several fields at once, each on its own merits: a field a higher
+    source already set is kept, a value that cannot be used is refused, and
+    neither stops the others. Returns what happened to each and the profile."""
+    company = _company(conn, name)
+    mapping = load_mapping(conn)
+    done, kept, refused = [], {}, {}
+    for field, value in values.items():
+        if value is None or not str(value).strip():
+            continue
+        held = get_profile(conn, company["name"]).get(field, {}).get("source") if field in FIELDS else None
+        if held is not None and _RANK[held] > _RANK[source]:
+            kept[field] = "set by hand; not replaced" if held == "manual" else f"set by {held}; not replaced"
+            continue
+        try:
+            set_field(conn, company["name"], field, value, source=source, mapping=mapping)
+            done.append(field)
+        except ProfileError as exc:
+            refused[field] = str(exc)
+    return {"company": company["name"], "set": done, "kept": kept, "refused": refused,
+            "profile": get_profile(conn, company["name"])}
+
+
+def missing(conn: sqlite3.Connection, fields: list[str] | None = None) -> list[dict]:
+    """Active companies with at least one of ``fields`` (default: all) empty,
+    the ones with the most open roles first. A stage of "unknown" counts as empty."""
+    wanted = list(fields or FIELDS)
+    for field in wanted:
+        if field not in FIELDS:
+            raise ProfileError(f"{field!r} is not a profile field; use one of: {', '.join(FIELDS)}")
+    out = []
+    for row in conn.execute(
+            "SELECT c.name, c.website, p.description, p.sectors, p.stage, p.employees, p.hq, "
+            "(SELECT COUNT(*) FROM roles r WHERE r.company_id = c.id AND r.closed_at IS NULL) AS open_roles "
+            "FROM companies c LEFT JOIN company_profiles p ON p.company_id = c.id WHERE c.active = 1 "
+            "ORDER BY open_roles DESC, c.name COLLATE NOCASE"):
+        empty = {"description": not row["description"], "sectors": (row["sectors"] or "[]") == "[]",
+                 "stage": row["stage"] in (None, "unknown"), "employees": row["employees"] is None,
+                 "hq": not row["hq"]}
+        lacking = [f for f in wanted if empty[f]]
+        if lacking:
+            out.append({"company": row["name"], "website": row["website"] or None,
+                        "open_roles": row["open_roles"], "missing": lacking})
+    return out
+
+
 def clear_field(conn: sqlite3.Connection, name: str, field: str) -> bool:
     """Forget a field's value and source, so board data can fill it again at
     the next backfill. Returns whether there was anything to forget."""

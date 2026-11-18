@@ -255,7 +255,7 @@ def test_rippling_identity_missing_board_and_robots(load_fixture):
 
 
 def test_scout_stores_rippling_roles_and_only_the_wanted_descriptions(conn, load_fixture):
-    companies.add_company(conn, "Acme", tier=2)
+    companies.add_company(conn, "Acme")
     # Mapped by pasting a job's URL.
     companies.add_board(conn, "Acme", "rippling", RIPPLING_JOB.format("en-GB/acme", BIZOPS))
     assert conn.execute("SELECT ref FROM boards").fetchone()["ref"] == "acme"

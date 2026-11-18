@@ -66,7 +66,7 @@ def world(conn):
     """Two companies with boards; returns a function that records a fetch."""
     ids = {}
     for name, tier in (("Alpha", 1), ("Beta", 2), ("Gamma", None)):
-        company_id = companies.add_company(conn, name, tier=tier)
+        company_id = companies.add_company(conn, name)
         ids[name] = (company_id, companies.add_board(conn, name, "greenhouse", name.lower()))
 
     def fetch(company, roles, on_day):
@@ -113,7 +113,7 @@ def test_ranking_order_from_a_small_config(conn, world):
     assert top["reasons"] == [
         'Title matches "Product Manager" (+30)',
         'Seniority: "Senior" (+10)', 'Location matches "New York" (+10)', "First seen today (no posted date) (+10)"]
-    assert (top["company"], top["tier"], top["id"]) == ("Alpha", 1, role_id(conn, "a1"))
+    assert (top["company"], top["id"]) == ("Alpha", role_id(conn, "a1")) and "tier" not in top
 
 
 def test_phrases_match_whole_words_only():
@@ -162,7 +162,7 @@ def test_recency_counts_from_the_posted_date_when_there_is_one():
 
 
 def test_baseline_roles_are_not_new_but_later_ones_are(conn):
-    companies.add_company(conn, "Alpha", tier=1)
+    companies.add_company(conn, "Alpha")
     companies.add_board(conn, "Alpha", "greenhouse", "alpha")
     script = Scripted(alpha=[
         [mk("old", "Product Manager"), mk("dated", "Product Manager", posted="2025-12-31")],
@@ -206,8 +206,8 @@ def test_per_company_cap_holds_back_the_extra_roles(conn, world, capsys, isolate
     assert cli.main(["shortlist", "--by-company"]) == 0
     out = capsys.readouterr().out
     assert "2 held back by the per-company cap" in out.splitlines()[0]
-    assert "Alpha (tier 1): 2 roles, best rank 1; 2 more held back by the per-company cap" in out
-    assert "Beta (tier 2): 1 role, best rank 3\n" in out
+    assert "Alpha: 2 roles, best rank 1; 2 more held back by the per-company cap" in out
+    assert "Beta: 1 role, best rank 3\n" in out
 
     assert cli.main(["why", str(role_id(conn, "a3"))]) == 0
     out = capsys.readouterr().out
@@ -449,7 +449,7 @@ def scripted_scout(monkeypatch, script):
 
 
 def test_shortlist_is_rebuilt_at_the_end_of_every_scout(conn, monkeypatch, capsys, isolated_db_path):
-    companies.add_company(conn, "Alpha", tier=1)
+    companies.add_company(conn, "Alpha")
     companies.add_board(conn, "Alpha", "greenhouse", "alpha")
     scripted_scout(monkeypatch, Scripted(alpha=[
         [mk("a1", "Product Manager")],
@@ -476,7 +476,7 @@ def test_shortlist_is_rebuilt_at_the_end_of_every_scout(conn, monkeypatch, capsy
 
 
 def test_daily_job_rebuilds_too(conn, monkeypatch, capsys, isolated_db_path):
-    companies.add_company(conn, "Alpha", tier=1)
+    companies.add_company(conn, "Alpha")
     companies.add_board(conn, "Alpha", "greenhouse", "alpha")
     scripted_scout(monkeypatch, Scripted(alpha=[[mk("a1", "Product Manager")]]))
     (isolated_db_path.parent / "ranking.toml").write_text(SMALL_CONFIG)
@@ -539,8 +539,7 @@ def test_views_by_company_top_and_why(conn, world, capsys, isolated_db_path):
     out = capsys.readouterr().out
     headers = [line for line in out.splitlines() if "best rank" in line]
     # Companies in order of their best-ranked role.
-    assert headers == ["Alpha (tier 1): 2 roles, best rank 1", "Beta (tier 2): 2 roles, best rank 2",
-                       "Gamma (no tier): 1 role, best rank 5"]
+    assert headers == ["Alpha: 2 roles, best rank 1", "Beta: 2 roles, best rank 2", "Gamma: 1 role, best rank 5"]
 
     assert cli.main(["shortlist", "--new"]) == 0
     assert "there is no earlier list, so nothing can be new yet" in capsys.readouterr().out
@@ -548,7 +547,7 @@ def test_views_by_company_top_and_why(conn, world, capsys, isolated_db_path):
     top = role_id(conn, "a1")
     assert cli.main(["why", str(top)]) == 0
     out = capsys.readouterr().out
-    assert f"Senior Product Manager  (ID {top})" in out and "Alpha (tier 1) | New York" in out
+    assert f"Senior Product Manager  (ID {top})" in out and "Alpha | New York" in out and "tier" not in out.lower()
     assert "Rank 1 of 5 on the shortlist for" in out
     for line in ('Title matches "Product Manager" (+30)', 'Seniority: "Senior" (+10)',
                  'Location matches "New York" (+10)'):

@@ -17,7 +17,8 @@ from tests.test_scout import Clock, Scripted  # noqa: E402
 from tests.test_shortlist import SMALL_CONFIG, mk  # noqa: E402
 
 READ_TOOLS = {"get_shortlist", "get_role", "search_roles", "explain_rank", "list_marks",
-              "list_target_companies", "coverage_gaps", "connector_brief", "hiring_trends", "health", "digest", "get_company_profile", "list_vcs",
+              "list_target_companies", "coverage_gaps", "connector_brief", "hiring_trends", "health", "digest", "get_company_profile", "list_vcs", "company_overview",
+              "list_incomplete_profiles",
               "list_candidates", "explain_candidate"}
 WRITE_TOOLS = {"mark_role", "unmark_role", "add_target_company", "deactivate_company",
                "reactivate_company", "map_board", "record_job_system",
@@ -57,13 +58,13 @@ def world(conn, isolated_db_path, monkeypatch, tmp_path):
     """Three scout runs over three companies, a ranking config and a shortlist per day."""
     monkeypatch.setenv("HOME", str(tmp_path))  # no real launchd schedule is read
     for name, tier, ref in (("Alpha", 1, "alpha"), ("Beta", 2, "beta"), ("Gamma", 3, "gamma")):
-        companies.add_company(conn, name, website=f"https://{name.lower()}.com", tier=tier)
+        companies.add_company(conn, name, website=f"https://{name.lower()}.com")
         companies.add_board(conn, name, "greenhouse", ref)
-    companies.add_company(conn, "Wday", website="https://wday.com", tier=1)
+    companies.add_company(conn, "Wday", website="https://wday.com")
     resolve.save_resolution(conn, resolve.Resolution(
         company="Wday", outcome="unsupported", job_system="icims",
         job_system_url="https://wday.icims.com/x", careers_url="https://wday.com/careers"))
-    companies.add_company(conn, "Mystery", tier=2)
+    companies.add_company(conn, "Mystery")
 
     def eng(job):
         role = mk(job, "Software Engineer")
@@ -122,7 +123,7 @@ def test_get_shortlist_flat_by_company_and_new(world):
     assert (flat["list_date"], flat["roles_on_list"], flat["compared_with"], flat["new_count"]) == (
         "2026-01-03", 5, "2026-01-02", 0)
     first = flat["entries"][0]
-    assert set(first) == {"rank", "role_id", "score", "company", "tier", "backed_by", "title", "location", "mark",
+    assert set(first) == {"rank", "role_id", "score", "company", "backed_by", "title", "location", "mark",
                           "new", "url"}
     # Scores: a4 55, b2 55, a1 50, a2 30, b1 30 (run-1 roles are baseline, so they get no recency points).
     assert [e["role_id"] for e in flat["entries"]] == [ids[j] for j in ("a4", "b2", "a1", "a2", "b1")]
@@ -149,8 +150,8 @@ def test_get_shortlist_flat_by_company_and_new(world):
 def test_get_role_returns_the_description_only_when_asked(world):
     session, ids, _ = world
     role = session.call("get_role", role_id=ids["a1"])
-    assert (role["company"], role["title"], role["status"], role["tier"]) == (
-        "Alpha", "Senior Product Manager", "open", 1)
+    assert (role["company"], role["title"], role["status"]) == ("Alpha", "Senior Product Manager", "open")
+    assert "tier" not in role
     assert role["description_available"] is True and "description" not in role
     full = session.call("get_role", role_id=ids["a1"], include_description=True)
     assert full["description"] == "About a1" and full["description_truncated"] is False
@@ -221,7 +222,7 @@ def test_list_companies_with_mapping_state(world):
 
 def test_add_deactivate_reactivate_and_map(world):
     session, _, conn = world
-    added = session.call("add_target_company", name="Delta", website="https://delta.com", tier=2, tags=["ai"])
+    added = session.call("add_target_company", name="Delta", website="https://delta.com", tags=["ai"])
     assert added["active"] is True and added["boards"] == []
     assert "already exists" in session.error("add_target_company", name="delta")
 
@@ -261,7 +262,7 @@ def test_record_job_system_gaps_and_brief(world):
 
     brief = session.call("connector_brief", system="icims")
     assert brief["brief_markdown"].startswith("# Connector brief: icims")
-    assert "### Wday (tier 1)" in brief["brief_markdown"]
+    assert "### Wday\n" in brief["brief_markdown"] and "tier" not in brief["brief_markdown"]
     assert "Systems with gaps" in session.error("connector_brief", system="taleo")
 
 
@@ -452,7 +453,7 @@ def test_candidate_tools(world, isolated_db_path):
     assert "no candidate named" in session.error("explain_candidate", candidate="Nope")
 
     done = session.call("activate_candidate", candidate="Acme")
-    assert (done["name"], done["tier"], done["tags"]) == ("Acme", 3, ["portfolio:alpha-fund"])
+    assert (done["name"], done["tags"]) == ("Acme", ["portfolio:alpha-fund"]) and "tier" not in done
     assert session.call("explain_candidate", candidate="acme.example")["status"] == "tracked"
     assert "pass --force" in session.error("activate_candidate", candidate="Tiny")
     assert "already tracked" in session.error("activate_candidate", candidate="Acme")

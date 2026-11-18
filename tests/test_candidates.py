@@ -316,7 +316,7 @@ def test_config_change_is_re_applied_without_the_network(conn, cfg, capsys, isol
 # --- linking to tracked companies --------------------------------------------
 
 def test_candidate_matching_a_tracked_company_is_linked_never_duplicated(conn, cfg, capsys):
-    companies.add_company(conn, "Acme Corporation", website="https://www.acme.example/home", tier=1)
+    companies.add_company(conn, "Acme Corporation", website="https://www.acme.example/home")
     portfolio.add_board(conn, A)
     pages = board_pages(A, "Alpha", "1", [co("acme", "acme.example", id=1), co("other", "other.example", id=2)])
     _, web = run(conn, cfg, pages)
@@ -358,7 +358,7 @@ def harvested(conn, cfg, isolated_db_path):
     return conn, pages
 
 
-def test_activation_adds_tier_3_companies_tagged_with_their_boards(harvested, capsys):
+def test_activation_adds_companies_tagged_with_their_boards(harvested, capsys):
     conn, _ = harvested
     assert [c["name"] for c in cands.list_candidates(conn, "eligible")] == ["Acme", "Bolt", "Cobalt"]
     assert cli.main(["candidates", "activate"]) == 1                                   # must say which
@@ -366,11 +366,11 @@ def test_activation_adds_tier_3_companies_tagged_with_their_boards(harvested, ca
 
     assert cli.main(["candidates", "activate", "--first", "1"]) == 0
     out = capsys.readouterr().out
-    assert "Activated Acme (acme.example) as a tier 3 company, tagged portfolio:alpha-fund, portfolio:beta-capital." in out
+    assert "Activated Acme (acme.example), tagged portfolio:alpha-fund, portfolio:beta-capital." in out
     assert "find them with: rolescout companies resolve" in out
     acme = next(c for c in companies.list_companies(conn) if c["name"] == "Acme")
-    assert (acme["tier"], acme["tags"], acme["active"], acme["website"], acme["boards"]) == (
-        3, ["portfolio:alpha-fund", "portfolio:beta-capital"], True, "http://acme.example", [])   # no board mapped
+    assert (acme["tags"], acme["active"], acme["website"], acme["boards"]) == (
+        ["portfolio:alpha-fund", "portfolio:beta-capital"], True, "http://acme.example", [])   # no board mapped
     assert cands.get_candidate(conn, "acme.example")["state"] == "tracked"
 
     assert cli.main(["candidates", "activate", "bolt.example"]) == 0                   # by domain
@@ -715,11 +715,11 @@ def test_harvest_activates_only_the_eligible_when_auto_activate_is_on(conn, monk
     assert harvest_cli(monkeypatch, mixed_board()) == 0
     out = capsys.readouterr().out
     assert "Activated automatically (auto_activate is on): 1" in out
-    assert "  Acme (acme.example), tier 3, tagged portfolio:alpha-fund" in out
+    assert "  Acme (acme.example), tagged portfolio:alpha-fund" in out
     assert "candidates --status tracked" in out
     tracked = companies.list_companies(conn)
-    assert [(c["name"], c["tier"], c["tags"], c["boards"]) for c in tracked] == [
-        ("Acme", 3, ["portfolio:alpha-fund"], [])]                   # review, rejected, dismissed left alone
+    assert [(c["name"], c["tags"], c["boards"]) for c in tracked] == [
+        ("Acme", ["portfolio:alpha-fund"], [])]                   # review, rejected, dismissed left alone
     states = {c["name"]: c["state"] for c in cands.list_candidates(conn)}
     assert states == {"Acme": "tracked", "Vague": "review", "Tiny": "rejected", "Bolt": "dismissed"}
     assert conn.execute("SELECT COUNT(*) FROM roles").fetchone()[0] == 0
@@ -831,25 +831,16 @@ def test_a_failing_resolve_does_not_fail_the_harvest(conn, monkeypatch, capsys, 
     assert sorted(mapped(conn)) == ["Acme", "Bolt"]
 
 
-def test_tier_of_auto_activated_companies_is_a_setting(conn, monkeypatch, capsys, isolated_db_path):
-    assert cands.parse_config(AUTO).auto_activate_tier == 3          # the default
-    for bad in ("0", "2.5", '"two"', "true"):
-        with pytest.raises(cands.ConfigError, match="auto_activate_tier must be a whole number, 1 or more"):
-            cands.parse_config(f"auto_activate_tier = {bad}\n" + AUTO)
-    starter = cands.starter_config()
-    assert cands.parse_config(starter.replace("# auto_activate_tier = 3", "auto_activate_tier = 1")).auto_activate_tier == 1
-
+def test_activation_sets_no_tier_and_an_old_tier_setting_is_ignored(conn, monkeypatch, capsys, isolated_db_path):
+    assert "tier" not in cands.starter_config()
+    # A config written when the setting existed still loads.
+    assert cands.parse_config("auto_activate_tier = 2\n" + AUTO).auto_activate is True
     (isolated_db_path.parent / "candidates.toml").write_text("auto_activate_tier = 2\n" + AUTO)
     portfolio.add_board(conn, A)
     assert harvest_cli(monkeypatch, {**board_pages(A, "Alpha", "1", [co("acme", "acme.example", id=1)])}) == 0
-    assert "  Acme (acme.example), tier 2, tagged portfolio:alpha" in capsys.readouterr().out
-    assert [(c["name"], c["tier"]) for c in companies.list_companies(conn)] == [("Acme", 2)]
-
-    # Activating by hand is not affected by the setting.
-    harvest_cli(monkeypatch, {**board_pages(A, "Alpha", "1", [co("acme", "acme.example", id=1),
-                                                             co("vague", "vague.example", id=2, stage="other")])})
-    assert cli.main(["candidates", "activate", "Vague"]) == 0
-    assert {c["name"]: c["tier"] for c in companies.list_companies(conn)} == {"Acme": 2, "Vague": 3}
+    out = capsys.readouterr().out
+    assert "  Acme (acme.example), tagged portfolio:alpha" in out and ", tier " not in out
+    assert conn.execute("SELECT tier FROM companies WHERE name = 'Acme'").fetchone()["tier"] is None
 
 
 def test_status_has_one_line_for_the_last_harvest(conn, monkeypatch, capsys, tmp_path, isolated_db_path):
