@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from rolescout import jobs
+from rolescout.adapters.base import COMPLETE_SHARE
 from rolescout.portfolio import last_harvest
 from rolescout.scout import database_file, scout_is_running
 
@@ -109,6 +110,25 @@ def failing_boards(conn: sqlite3.Connection, min_runs: int = FAILING_AFTER_RUNS)
     return found
 
 
+def partial_reads(conn: sqlite3.Connection) -> list[dict]:
+    """Boards of active companies whose latest successful fetch saw less of
+    the board than counts as complete (see ``COMPLETE_SHARE``). Roles on such
+    a board are not closed until a fetch sees enough of it."""
+    found = []
+    for row in conn.execute(
+            "SELECT c.name AS company, b.source, b.ref, rb.roles_seen, rb.roles_reported, r.started_at "
+            "FROM boards b JOIN companies c ON c.id = b.company_id "
+            "JOIN run_boards rb ON rb.source = b.source AND rb.ref = b.ref AND rb.run_id = ("
+            "  SELECT MAX(x.run_id) FROM run_boards x WHERE x.source = b.source AND x.ref = b.ref "
+            "  AND x.status = 'ok') "
+            "JOIN runs r ON r.id = rb.run_id "
+            "WHERE c.active = 1 AND rb.roles_reported > 0 "
+            "ORDER BY c.name COLLATE NOCASE, b.id"):
+        if row["roles_seen"] < COMPLETE_SHARE * row["roles_reported"]:
+            found.append({**dict(row), "percent": round(100 * row["roles_seen"] / row["roles_reported"], 1)})
+    return found
+
+
 def _parse_utc(stamp: str) -> datetime:
     return datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
 
@@ -160,6 +180,7 @@ def collect_status(conn: sqlite3.Connection, *, schedule: dict | None = None,
         }
 
     status["failing_boards"] = failing_boards(conn)
+    status["partial_reads"] = partial_reads(conn)
     status["last_harvest"] = last_harvest(conn)
     status["now"] = jobs.current(conn, now)
 

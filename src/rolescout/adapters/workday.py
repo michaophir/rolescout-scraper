@@ -483,6 +483,7 @@ class WorkdayAdapter(SourceAdapter):
         self._deadline = self._clock() + self.board_seconds
         parsed = self._ref(ref)
         postings: dict[str, dict] = {}       # externalPath -> item, in listing order
+        first = None
         try:
             self._check_robots(parsed)
             parsed, first = self._first_page(parsed)
@@ -492,6 +493,10 @@ class WorkdayAdapter(SourceAdapter):
                 raise SourceError(f"{self.name}: {str(parsed)!r} {exc} before any role was read") from None
             stats.complete = False
             stats.notes.append(f"stopped early: it {exc}; roles not reached are left as they were")
+        listed = int((first or {}).get("total") or 0)
+        if 0 < listed < self.result_cap:
+            # At the cap the number is the cap, not how many roles there are.
+            stats.count(len(postings), listed)
 
         today = self._today()
         roles: list[Role] = []

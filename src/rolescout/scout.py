@@ -40,8 +40,10 @@ class BoardResult:
     baseline: bool = False       # this board's first successful fetch
     duration_ms: int = 0
     requests: int | None = None  # HTTP requests the fetch made, when the adapter counts them
-    complete: bool = True        # False: the fetch stopped early, so nothing was closed
+    complete: bool = True        # False: the fetch did not see the whole board, so nothing was closed
     note: str = ""
+    roles_seen: int | None = None      # of the roles the site reports, when it reports a number
+    roles_reported: int | None = None
 
 
 @dataclass
@@ -303,6 +305,9 @@ def _run_scout(
                     result.requests = stats.requests
                     result.complete = stats.complete or result.status != "ok"
                     result.note = "; ".join(stats.notes) if result.status == "ok" else ""
+                    if result.status == "ok":
+                        result.roles_seen = getattr(stats, "seen", None)
+                        result.roles_reported = getattr(stats, "reported", None)
                 result.duration_ms = int((time.monotonic() - started) * 1000)
                 fetched.append((board, result, roles))
 
@@ -329,11 +334,12 @@ def _run_scout(
                             (result.error, now, board["board_id"]))
                     conn.execute(
                         "INSERT INTO run_boards (run_id, company_id, source, ref, status, error, "
-                        "roles_fetched, baseline, duration_ms, requests, note) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        "roles_fetched, baseline, duration_ms, requests, note, roles_seen, "
+                        "roles_reported, complete) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         (run_id, company_id, result.source, result.ref, result.status,
                          result.error, result.roles_fetched, int(result.baseline),
-                         result.duration_ms, result.requests, result.note))
+                         result.duration_ms, result.requests, result.note, result.roles_seen,
+                         result.roles_reported, int(result.complete)))
                 snapshot.open_by_department = _open_by_department(conn, company_id)
                 snapshot.open_roles = sum(snapshot.open_by_department.values())
                 conn.execute(

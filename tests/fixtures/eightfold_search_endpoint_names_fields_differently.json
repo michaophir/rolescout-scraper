@@ -1,0 +1,104 @@
+{
+ "status": 200,
+ "error": {
+  "message": "",
+  "body": ""
+ },
+ "data": {
+  "positions": [
+   {
+    "id": 1900000000000001,
+    "displayJobId": "200000001",
+    "name": "Senior Applied Scientist",
+    "locations": [
+     "United States, Washington, Redmond",
+     "United States, New York, New York",
+     "United States, California, Mountain View"
+    ],
+    "standardizedLocations": [
+     "Redmond, WA, US",
+     "New York, NY, US",
+     "Mountain View, CA, US"
+    ],
+    "postedTs": 1795031901,
+    "solrScore": null,
+    "stars": 0,
+    "department": "Applied Sciences",
+    "creationTs": 1794575219,
+    "isHot": 0,
+    "workLocationOption": "onsite",
+    "locationFlexibility": null,
+    "atsJobId": "200000001",
+    "positionUrl": "/careers/job/1900000000000001"
+   },
+   {
+    "id": 1900000000000002,
+    "displayJobId": "200000002",
+    "name": "Principal Product Manager",
+    "locations": [
+     "United States, Washington, Redmond"
+    ],
+    "standardizedLocations": [
+     "Redmond, WA, US"
+    ],
+    "postedTs": 1795031387,
+    "solrScore": null,
+    "stars": 0,
+    "department": "Product Management",
+    "creationTs": 1791920806,
+    "isHot": 0,
+    "workLocationOption": "onsite",
+    "locationFlexibility": null,
+    "atsJobId": "200000002",
+    "positionUrl": "/careers/job/1900000000000002"
+   },
+   {
+    "id": 1900000000000003,
+    "displayJobId": "200000003",
+    "name": "Principal Product Manager",
+    "locations": [
+     "United States, Multiple Locations, Multiple Locations"
+    ],
+    "standardizedLocations": [
+     "US"
+    ],
+    "postedTs": 1795007796,
+    "solrScore": null,
+    "stars": 0,
+    "department": "Product Management",
+    "creationTs": 1786386041,
+    "isHot": 0,
+    "workLocationOption": "onsite",
+    "locationFlexibility": null,
+    "atsJobId": "200000003",
+    "positionUrl": "/careers/job/1900000000000003"
+   },
+   {
+    "id": 1900000000000004,
+    "displayJobId": "200000004",
+    "name": "Digital Account Manager Swedish Speaking",
+    "locations": [
+     "Ireland, Multiple Locations, Multiple Locations",
+     "Spain, Barcelona, Barcelona"
+    ],
+    "standardizedLocations": [
+     "Ireland, Multiple Locations, Multiple Locations",
+     "Barcelona, CT, ES"
+    ],
+    "postedTs": 1794995334,
+    "solrScore": null,
+    "stars": 0,
+    "department": "Digital Account Management",
+    "creationTs": 1794207315,
+    "isHot": 0,
+    "workLocationOption": "onsite",
+    "locationFlexibility": null,
+    "atsJobId": "200000004",
+    "positionUrl": "/careers/job/1900000000000004"
+   }
+  ],
+  "count": 4,
+  "sortBy": "timestamp",
+  "appliedFilters": {}
+ }
+}

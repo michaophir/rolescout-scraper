@@ -421,6 +421,14 @@ MIGRATIONS: list[list] = [
         GROUP BY s.company_id, week_start
         """,
     ],
+    [
+        # For sources that report how many roles they list: how many of them
+        # a fetch saw and that number, and whether the fetch counted as
+        # complete (only a complete fetch can count a role as missing).
+        "ALTER TABLE run_boards ADD COLUMN roles_seen INTEGER",
+        "ALTER TABLE run_boards ADD COLUMN roles_reported INTEGER",
+        "ALTER TABLE run_boards ADD COLUMN complete INTEGER NOT NULL DEFAULT 1",
+    ],
 ]
 
 SCHEMA_VERSION = len(MIGRATIONS)

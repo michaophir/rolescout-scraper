@@ -120,7 +120,7 @@ Write (absent in read-only mode):
 | `add_vc`, `edit_vc`, `remove_vc` | Maintain the VC list; `edit_vc` can mark a group as an ecosystem |
 | `attach_board_to_vc` | Say which VC a portfolio board belongs to |
 | `link_company_to_vc`, `unlink_company_from_vc` | Link a company to a VC by hand, or undo it |
-| `map_board` | Map a company to a Greenhouse, Lever, Ashby, Workday, Rippling, Gem or Workable board |
+| `map_board` | Map a company to a Greenhouse, Lever, Ashby, Workday, Rippling, Gem, Workable or Eightfold board, or to the Google career site |
 | `record_job_system` | Record by hand which unsupported job system a company uses |
 | `activate_candidate` | Start tracking a candidate |
 | `dismiss_candidate` | Mark a candidate as never wanted |

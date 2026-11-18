@@ -54,7 +54,7 @@ Key ideas:
   flagged), applied (never show again; description kept after the role closes).
 - A company is identified by its name. A company is fetched only
   if it is mapped to a job board on a supported source (greenhouse, lever, ashby, workday,
-  rippling, gem, workable).
+  rippling, gem, workable, eightfold, or the one single-company source, google).
 - Coverage gaps are companies that cannot be fetched yet: on an unsupported job system, on a
   supported one with no board mapped, or unidentified.
 
@@ -555,7 +555,8 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
         daily job) with when it started, how far it is and when it should finish; or "Idle"; and
         any job that died without finishing. jobs_running has the same as data. Also: when the
         last scout ran and how it went, companies and boards that failed, boards failing more than two
-        runs in a row, open role count, database size, coverage gap summary, and when the next
+        runs in a row, boards last read below 99% of the roles they list (partial_reads: no role
+        closes there until a fuller read), open role count, database size, coverage gap summary, and when the next
         scheduled run is due.
 
         Check it first when data looks stale or the owner asks "is it working" or "is anything
@@ -579,6 +580,9 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
                 "scout_running_now": status["scout_running"],
                 "failing_boards": [f"{b['company']} ({b['source']}/{b['ref']}): failed "
                                    f"{b['failed_runs_in_a_row']} runs in a row" for b in status["failing_boards"]],
+                "partial_reads": [f"{p['company']} ({p['source']}/{p['ref']}): saw {p['roles_seen']} of "
+                                  f"{p['roles_reported']} roles listed ({p['percent']}%)"
+                                  for p in status["partial_reads"]],
                 "open_roles": status["open_roles"], "companies_active": status["companies_active"],
                 "companies_mapped": status["companies_mapped"],
                 "database_megabytes": round(status["database_bytes"] / 1_000_000, 1),
@@ -981,14 +985,16 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
     @server.tool(title="Map a company to a job board", annotations=writes)
     def map_board(
         company: CompanyName,
-        source: Annotated[Literal["greenhouse", "lever", "ashby", "workday", "rippling", "gem", "workable"], Field(description="The job system hosting the board.")],
+        source: Annotated[Literal["greenhouse", "lever", "ashby", "workday", "rippling", "gem", "workable", "eightfold", "google"], Field(description="The job system hosting the board.")],
         board_ref: Annotated[str, Field(description=(
             "The board's identifier on that system: the name in its URL, e.g. 'acme' in "
             "job-boards.greenhouse.io/acme, jobs.lever.co/acme, jobs.ashbyhq.com/acme, "
             "ats.rippling.com/acme/jobs, jobs.gem.com/acme or apply.workable.com/acme. For "
             "rippling, gem and workable any URL of the board or of one of its jobs also works. "
             "For workday: TENANT/wdN/SITE (e.g. acme/wd5/Careers) or any URL on the company's "
-            "Workday career site."))],
+            "Workday career site. For eightfold: SITE-HOST/COMPANY-DOMAIN (e.g. "
+            "acme.eightfold.ai/acme.com) or a URL of the career site. For google, the one "
+            "single-company source: careers."))],
     ) -> dict[str, Any]:
         """Tell rolescout which job board belongs to a company, so the next scout fetches it.
 
@@ -1012,7 +1018,7 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
         system: Annotated[str, Field(description=(
             "The job system's name in lowercase, e.g. icims, paycom, smartrecruiters; "
             "or custom for a careers site the company built itself. Not a supported source "
-            "(greenhouse, lever, ashby, workday, rippling, gem, workable): for those use map_board."))],
+            "(greenhouse, lever, ashby, workday, rippling, gem, workable, eightfold): for those use map_board."))],
         url: Annotated[str, Field(description="The URL where the company's jobs are listed on that system.")],
         note: Annotated[str, Field(description="Optional: how it was identified.")] = "",
     ) -> dict[str, Any]:

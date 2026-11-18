@@ -68,7 +68,8 @@ Pass `--preserve` to keep existing files and merge new results.
 | Lever      | jobs.lever.co     | Returns descriptions inline  |
 | Ashby      | jobs.ashbyhq.com  | GraphQL, detail fetch post-filter |
 
-Google and Meta are unsupported (JS-rendered job boards).
+In `scraper.py`, Google and Meta are unsupported (JS-rendered job boards).
+The `rolescout` package reads Google through its own adapter (see Conventions).
 
 ---
 
@@ -88,6 +89,11 @@ Google and Meta are unsupported (JS-rendered job boards).
   allowed only when that company runs its own career site with no shared job
   system behind it, and it is named as an exception in CLAUDE.md with the
   reason. Company-specific branches inside a shared adapter are not allowed.
+- Exception: `src/rolescout/adapters/google.py` reads Google's career site.
+  Reason: Google runs its own site with no shared job system behind it, and
+  publishes every open role in one public feed that robots.txt allows. The
+  company's name appears in that adapter, its tests, its fixture and the
+  docs that describe it, and nowhere else.
 - No real company names in code, comments, docstrings, error messages, tool
   descriptions, CLI help, docs or tests. Use a neutral example such as
   `acme/wd5/Careers`.

@@ -306,6 +306,63 @@ against then. `rolescout digest --since 2026-01-31` compares with the last
 scout completed before that day began. The daily job ends its log with the
 digest. Over MCP the same two are the `health` and `digest` tools.
 
+## Eightfold career sites
+
+An Eightfold site is named by its address and the company's domain:
+`acme.eightfold.ai/acme.com`, or `careers.acme.com/acme.com` when the site is
+on the company's own hostname. `rolescout companies resolve` maps one when a
+company's site links to it, and companies recorded earlier as being on
+Eightfold are mapped from the URL recorded then. To map one by hand, paste
+the site's URL; a URL without `?domain=` works too, and the domain is then
+read from the careers page:
+
+```sh
+rolescout companies map "Acme" eightfold "https://acme.eightfold.ai/careers?domain=acme.com"
+```
+
+These sites list ten roles per request and answer "try again later" when
+asked too often, so a board is read at one request every 1.5 seconds. A long
+list moves while it is read, so each page starts two roles before the end of
+the last one: a board with 2,000 roles takes about 250 requests and six
+minutes. The pages rarely add up exactly to the number the site reports, so
+the 99% rule below decides whether the read counts as complete. A page that is refused is
+retried after 30 and then 90 seconds, and the rest of the board is read at
+half the pace. If it is refused a third time the fetch fails, and as with any
+failed fetch no role is closed. Only titles, locations, departments, dates and
+links are stored; these sites have no description in their lists.
+
+## Complete and partial reads
+
+Some sources say how many roles they list (Eightfold, Workday, Rippling). A
+read of such a board counts as complete when it saw at least 99% of that
+number. Only a complete read can count a role as missing, and a role still
+closes on its second miss in a row. A read below 99% stores and updates what
+it saw and closes nothing.
+
+Every fetch records how many roles it saw and how many the site reported.
+`rolescout status` has a "Partial reads" line and lists each board whose last
+successful read was below 99%, with both numbers; the MCP `health` tool has
+the same list as `partial_reads`. A board that stays on that list is not
+closing roles and is worth a look.
+
+## The Google career site
+
+Google runs its own career site with no job system behind it, so it has an
+adapter of its own, the one exception to "one adapter per job system" (see
+CLAUDE.md). Map it once:
+
+```sh
+rolescout companies add "Google" --website google.com
+rolescout companies map "Google" google careers
+```
+
+Every open role comes from one public feed in a single request. Roles the
+feed lists for another employer in the group belong to the same company, and
+the employer leads the role's department (`rolescout query --json` shows it).
+The feed carries every description; they are stored for roles whose title
+your ranking config wants and for roles you saved or applied to, as with
+Workday and Rippling, and cost no extra request.
+
 ## Rippling, Gem and Workable boards
 
 These three are named by the board name in their URL: `ats.rippling.com/NAME/jobs`,

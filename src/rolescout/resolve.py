@@ -8,7 +8,9 @@ Two kinds of evidence, in order:
    Workday's: its tenant, data center and site cannot be guessed from a name,
    and a page that merely mentions "myworkdayjobs.com" is not evidence.
    Rippling, Gem and Workable boards are found the same way, from a URL on
-   the job system's own hostname.
+   the job system's own hostname. An Eightfold site is found from a URL on
+   that system's hostname, or from a careers URL on the company's own
+   hostname that names the company's domain the way those sites do.
 2. **Guess** (weak). A board exists at a slug derived from the company name
    or domain. Saved only when something ties the board to the company's own
    domain; a matching name alone is never enough, because namesakes exist.
@@ -39,7 +41,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from rolescout.adapters import ADAPTERS, BoardNotFound, SourceError, get_adapter
-from rolescout.adapters import gem, rippling, workable
+from rolescout.adapters import eightfold, gem, rippling, workable
 from rolescout.adapters.workday import WORKDAY_URL, find_refs
 from rolescout import jobs
 from rolescout.companies import CompanyError, add_board
@@ -95,7 +97,6 @@ BOARD_TOKEN_VAR = re.compile(
 # host (and sometimes the first path segment); the rest of the URL is kept.
 UNSUPPORTED_SYSTEMS: list[tuple[str, str]] = [
     ("smartrecruiters", r"(?:jobs|careers|api)\.smartrecruiters\.com/[\w-]+"),
-    ("eightfold", r"(?!www\.)[\w-]+\.eightfold\.ai"),
     ("icims", r"(?!www\.)[\w.-]+\.icims\.com"),
     ("jobvite", r"jobs\.jobvite\.com/[\w-]+"),
     ("bamboohr", r"(?!www\.)[\w-]+\.bamboohr\.com"),
@@ -120,7 +121,8 @@ UNSUPPORTED_LINKS = [
 ]
 # Sources whose board is named by a URL on the job system's own hostname.
 # Each module finds the references in a page's text itself.
-URL_SOURCES = (("rippling", rippling.find_refs), ("gem", gem.find_refs), ("workable", workable.find_refs))
+URL_SOURCES = (("rippling", rippling.find_refs), ("gem", gem.find_refs), ("workable", workable.find_refs),
+               ("eightfold", eightfold.find_refs))
 CUSTOM = "custom"  # a hand-recorded "they built their own"; never assigned automatically
 
 # Marks a job system leaves in a page even when it gives no board link:

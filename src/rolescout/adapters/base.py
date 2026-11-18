@@ -54,6 +54,12 @@ class FetchContext:
     known: Mapping[str, KnownRole] = field(default_factory=dict)   # by source_job_id
 
 
+# A read that saw at least this share of the roles the site says it lists
+# counts as complete. Long lists move while they are read, and some sites
+# report a few more roles than they return.
+COMPLETE_SHARE = 0.99
+
+
 @dataclass
 class FetchStats:
     """What one ``fetch`` cost and whether it saw the whole board."""
@@ -65,6 +71,19 @@ class FetchStats:
     descriptions_fetched: int = 0
     descriptions_waiting: int = 0    # wanted, left for a later fetch
     notes: list[str] = field(default_factory=list)
+    # For a source that reports how many roles it lists: how many of them
+    # the fetch saw, and that reported number. None when it reports none.
+    seen: int | None = None
+    reported: int | None = None
+
+    def count(self, seen: int, reported: int) -> None:
+        """Record what was seen against what the site reports. A read under
+        ``COMPLETE_SHARE`` of the reported number is not complete."""
+        self.seen, self.reported = seen, reported
+        if reported > 0 and seen < COMPLETE_SHARE * reported:
+            self.complete = False
+            self.notes.append(f"saw {seen} of the {reported} roles listed "
+                              f"({100 * seen / reported:.1f}%, under {COMPLETE_SHARE:.0%})")
 
 
 class SourceAdapter(ABC):

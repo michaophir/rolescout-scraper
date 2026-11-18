@@ -419,6 +419,8 @@ def _cost(requests: int | None, seconds: float) -> str:
 def _print_progress(result: BoardResult) -> None:
     if result.status == "ok":
         detail = f"{result.roles_fetched} roles" + (" (baseline)" if result.baseline else "")
+        if result.roles_reported and result.roles_seen != result.roles_reported:
+            detail += f" ({result.roles_seen} of {result.roles_reported} listed)"
         if not result.complete:
             detail += ", partial"
     else:
@@ -1559,6 +1561,10 @@ def _cmd_status(args) -> int:
     failing = status["failing_boards"]
     lines.append(("Failing boards", f"{len(failing)} failing more than two runs in a row"
                   if failing else "none failing more than two runs in a row"))
+    partial = status["partial_reads"]
+    lines.append(("Partial reads", f"{len(partial)} board{'' if len(partial) == 1 else 's'} last read below 99% "
+                                   "of the roles listed; nothing closes there until a fuller read"
+                  if partial else "none (every board was last read to 99% or more of what it lists)"))
     lines.append(("Open roles", f"{status['open_roles']:,} across {status['companies_mapped']} mapped "
                                 f"companies ({status['companies_active']} active)"))
     lines.append(("Database", f"{status['database']} ({_human_bytes(status['database_bytes'])})"))
@@ -1586,6 +1592,11 @@ def _cmd_status(args) -> int:
         lines.append(("Next run", "not scheduled (rolescout schedule install --at HH:MM)"))
     for label, value in lines:
         print(f"{label + ':':<16}{value}")
+    if partial:
+        print("\nRead below 99% of the roles listed:")
+        print(format_table(["Company", "Board", "Seen", "Listed", "Share", "Scout"],
+                           [[p["company"], f"{p['source']}/{p['ref']}", p["roles_seen"], p["roles_reported"],
+                             f"{p['percent']}%", p["started_at"][:16].replace("T", " ")] for p in partial]))
     if last and last["failed"]:
         print("\nFailed in the last run:")
         print(format_table(["Company", "Board", "Error"],
@@ -1678,7 +1689,9 @@ def build_parser() -> argparse.ArgumentParser:
     fetch.add_argument("source", choices=sorted(ADAPTERS))
     fetch.add_argument("slug", help="board slug, e.g. the last part of jobs.lever.co/<slug>; "
                                     "for workday, TENANT/wdN/SITE or the career site's URL; "
-                                    "for rippling, gem and workable, any URL of the board also works")
+                                    "for rippling, gem and workable, any URL of the board also works; "
+                                    "for eightfold, SITE-HOST/COMPANY-DOMAIN or a URL of the site; "
+                                    "for google, careers")
     fetch.add_argument("--sample", type=int, default=1, metavar="N",
                        help="which role to print, 1-based (default: 1)")
     fetch.add_argument("--full", action="store_true", help="print the whole description")
@@ -1731,7 +1744,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("source", choices=sorted(ADAPTERS))
     p.add_argument("ref", help="board reference: the slug; for workday, TENANT/wdN/SITE "
                                "or any URL on the career site; for rippling, gem and workable, "
-                               "any URL of the board or of one of its jobs also works")
+                               "any URL of the board or of one of its jobs also works; for eightfold, "
+                               "SITE-HOST/COMPANY-DOMAIN (e.g. acme.eightfold.ai/acme.com) or a URL "
+                               "of the career site; for google, careers")
     p.set_defaults(func=_cmd_companies_map)
 
     p = sub.add_parser("unmap", parents=[db],

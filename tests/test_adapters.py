@@ -179,7 +179,7 @@ def test_empty_board_is_not_an_error(fake_session):
 
 
 def test_get_adapter():
-    assert set(ADAPTERS) == {"greenhouse", "lever", "ashby", "workday", "rippling", "gem", "workable"}
+    assert set(ADAPTERS) == {"greenhouse", "lever", "ashby", "workday", "rippling", "gem", "workable", "eightfold", "google"}
     assert isinstance(get_adapter("lever"), LeverAdapter)
     with pytest.raises(ValueError):
         get_adapter("icims")

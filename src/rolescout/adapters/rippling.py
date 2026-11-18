@@ -195,6 +195,12 @@ class RipplingAdapter(SourceAdapter):
             if not isinstance(more, dict) or not isinstance(more.get("items"), list):
                 raise SourceError(f"{self.name}: unexpected response shape for {ref!r} (page {page})")
             payload["items"] += more["items"]
+        try:
+            listed = int(payload.get("totalItems"))
+        except (TypeError, ValueError):
+            listed = None
+        if listed is not None:
+            stats.count(len(payload["items"]), listed)
         if pages > MAX_PAGES:
             stats.complete = False
             stats.notes.append(f"the board has {pages} pages; only the first {MAX_PAGES} were read")
