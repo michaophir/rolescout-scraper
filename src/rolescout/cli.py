@@ -1638,8 +1638,8 @@ def _cmd_query(args) -> int:
     if args.json:
         print(json.dumps(roles, indent=2, ensure_ascii=False))
         return 0
-    headers = ["Company", "Title", "Location", "Posted", "First seen", "Status", "URL"]
-    rows = [[r["company"], r["title"], r["location"], r["date_posted"], r["first_seen_at"][:10],
+    headers = ["ID", "Company", "Title", "Location", "Posted", "First seen", "Status", "URL"]
+    rows = [[r["id"], r["company"], r["title"], r["location"], r["date_posted"], r["first_seen_at"][:10],
              r["status"] if r["status"] == "open" else f"closed {r['closed_at'][:10]}", r["url"]]
             for r in roles]
     print(format_table(headers, rows, {"Company": 20, "Title": 55, "Location": 30}))

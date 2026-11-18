@@ -102,6 +102,10 @@ def test_scout_and_query_commands(monkeypatch, capsys):
     assert code == 0
     assert "Product Manager" in out and "Engineer" not in out
     assert "https://example.com/A1" in out and out.endswith("\n1 role.\n")
+    # The role ID leads each row, as on the shortlist, so it can be passed to `rolescout why`.
+    header, _rule, row = out.splitlines()[:3]
+    role_id = json.loads(run(capsys, "query", "--title", "product manager", "--json")[1])[0]["id"]
+    assert header.split()[:2] == ["ID", "Company"] and row.split()[0] == str(role_id)
 
     code, out, _ = run(capsys, "query", "--company", "acme", "--json")
     assert [r["title"] for r in json.loads(out)] == ["Engineer", "Product Manager"]
