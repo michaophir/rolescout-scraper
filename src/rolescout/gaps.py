@@ -11,9 +11,8 @@ from rolescout.adapters import ADAPTERS
 from rolescout.db import get_meta, set_meta, utc_now
 from rolescout.ops import failing_boards
 
-# A job system becomes a build candidate at this many companies, or with one tier-1 company.
+# A job system becomes a build candidate at this many companies.
 CANDIDATE_MIN_COMPANIES = 3
-CANDIDATE_TIER = 1
 CUSTOM = "custom"
 
 RECHECK_META_KEY = "last_recheck_at"
@@ -94,9 +93,6 @@ def gaps_report(conn: sqlite3.Connection) -> dict:
         # Custom sites share no connector, so their count alone means nothing.
         if system != CUSTOM and len(members) >= CANDIDATE_MIN_COMPANIES:
             reasons.append(f"{len(members)} companies")
-        tier_one = [m["company"] for m in members if m["tier"] == CANDIDATE_TIER]
-        if tier_one:
-            reasons.append(f"tier {CANDIDATE_TIER}: {', '.join(tier_one)}")
         groups.append({"system": system, "companies": members,
                        "build_candidate": bool(reasons), "why": "; ".join(reasons)})
     groups.sort(key=lambda g: (not g["build_candidate"], -len(g["companies"]), g["system"]))
@@ -141,7 +137,7 @@ def connector_brief(conn: sqlite3.Connection, system: str) -> str:
         "",
         f"rolescout cannot fetch {len(members)} target compan{'y' if len(members) == 1 else 'ies'} "
         f"because they post jobs on {wanted}, which has no adapter yet.",
-        f"Build candidate: {'yes (' + group['why'] + ')' if group['build_candidate'] else 'no (below the thresholds)'}.",
+        f"Build candidate: {'yes (' + group['why'] + ')' if group['build_candidate'] else 'no (fewer than {CANDIDATE_MIN_COMPANIES} companies)'}.",
         f"Generated {utc_now()} from the local database.",
         "",
         "## Affected companies",

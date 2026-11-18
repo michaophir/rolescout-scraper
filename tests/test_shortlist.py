@@ -92,26 +92,26 @@ def role_id(conn, job_id):
 
 def test_ranking_order_from_a_small_config(conn, world):
     world("Alpha", [
-        mk("a1", "Senior Product Manager, Growth", "New York, NY"),   # 30 tier + 30 title + 10 senior + 10 NY + 10 new
-        mk("a2", "Product Manager"),                                  # 30 + 30 + 10 new
+        mk("a1", "Senior Product Manager, Growth", "New York, NY"),   # 30 title + 10 senior + 10 NY + 10 new
+        mk("a2", "Product Manager"),                                  # 30 + 10 new
         mk("a3", "Staff Software Engineer", "New York"),              # no wanted title: never listed
     ], on_day=10)
     world("Beta", [
-        mk("b1", "Group Product Manager", "Remote - US"),             # 20 + 40 (best phrase) + 5 remote + 10 new
-        mk("b2", "Product Manager", workplace="remote"),              # 20 + 30 + 5 + 10
+        mk("b1", "Group Product Manager", "Remote - US"),             # 40 (best phrase) + 5 remote + 10 new
+        mk("b2", "Product Manager", workplace="remote"),              # 30 + 5 + 10
     ], on_day=10)
-    world("Gamma", [mk("g1", "Staff Product Manager")], on_day=10)   # no tier: 0 + 30 + 15 + 10
+    world("Gamma", [mk("g1", "Staff Product Manager")], on_day=10)   # 30 + 15 + 10
 
     result = ranking.build_shortlist(conn, cfg(), now=day(10))
     assert (result["listed"], result["eligible"], result["new"]) == (3, 5, None)
     assert listed(conn) == [
-        (1, "Senior Product Manager, Growth", 90.0),
-        (2, "Group Product Manager", 75.0),
-        (3, "Product Manager", 70.0),              # Alpha's: size = 3 cuts the rest
+        (1, "Senior Product Manager, Growth", 60.0),
+        (2, "Group Product Manager", 55.0),
+        (3, "Staff Product Manager", 55.0),        # a company's tier earns nothing; size = 3 cuts the rest
     ]
     (top,) = [e for e in ranking.shortlist_entries(conn, result["shortlist_id"]) if e["rank"] == 1]
     assert top["reasons"] == [
-        "Tier 1 company (+30)", 'Title matches "Product Manager" (+30)',
+        'Title matches "Product Manager" (+30)',
         'Seniority: "Senior" (+10)', 'Location matches "New York" (+10)', "First seen today (no posted date) (+10)"]
     assert (top["company"], top["tier"], top["id"]) == ("Alpha", 1, role_id(conn, "a1"))
 
@@ -175,9 +175,9 @@ def test_baseline_roles_are_not_new_but_later_ones_are(conn):
     ranking.build_shortlist(conn, cfg(), now=datetime(2026, 1, 2, 12, tzinfo=timezone.utc))
     entries = {e["id"]: e for e in ranking.shortlist_entries(conn, ranking.latest_shortlist(conn)["id"])}
     by_job = {job: entries[role_id(conn, job)] for job in ("old", "dated", "fresh")}
-    assert by_job["fresh"]["score"] == 70 and by_job["fresh"]["rank"] == 1       # +10: seen after the baseline
-    assert by_job["old"]["score"] == 60                                          # baseline, no date: no recency
-    assert by_job["dated"]["score"] == 69                                        # posted 2 days ago: 9 of 10
+    assert by_job["fresh"]["score"] == 40 and by_job["fresh"]["rank"] == 1       # +10: seen after the baseline
+    assert by_job["old"]["score"] == 30                                          # baseline, no date: no recency
+    assert by_job["dated"]["score"] == 39                                        # posted 2 days ago: 9 of 10
     assert not any("First seen" in reason for reason in by_job["old"]["reasons"])
 
 
@@ -212,7 +212,7 @@ def test_per_company_cap_holds_back_the_extra_roles(conn, world, capsys, isolate
     assert cli.main(["why", str(role_id(conn, "a3"))]) == 0
     out = capsys.readouterr().out
     assert ("Not on the shortlist: held back by the cap of 2 roles per company: Alpha already has "
-            "that many higher-ranked roles on the list. It scores 70, enough to be listed otherwise.") in out
+            "that many higher-ranked roles on the list. It scores 40, enough to be listed otherwise.") in out
     info = ranking.explain(conn, role_id(conn, "a3"), ranking.load_config(config))
     assert info["held_back_by_cap"] is True and info["rank"] is None
     assert ranking.explain(conn, role_id(conn, "a1"), ranking.load_config(config))["held_back_by_cap"] is False
@@ -402,16 +402,16 @@ def test_config_change_reorders_the_list_without_a_fetch(conn, world, capsys, is
     assert cli.main(["shortlist", "rebuild"]) == 0
     assert "Shortlist rebuilt: 2 roles (of 2 that qualify)" in capsys.readouterr().out
     # Recency is 0 here (the CLI ranks as of today, long after these roles were first seen).
-    assert [(t, s) for _, t, s in listed(conn)] == [("Senior Product Manager", 70.0), ("Product Manager", 60.0)]
+    assert [(t, s) for _, t, s in listed(conn)] == [("Senior Product Manager", 50.0), ("Product Manager", 30.0)]
     runs_before = conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
 
-    # Make tier 1 worth far more: Alpha's plain PM role now leads.
-    config.write_text(SMALL_CONFIG.replace("1 = 30", "1 = 100"))
+    # Make Austin a preferred location worth far more: Alpha's plain PM role now leads.
+    config.write_text(SMALL_CONFIG.replace('"New York" = 10', '"New York" = 10\n"Austin" = 100'))
     assert cli.main(["shortlist"]) == 0
     assert "The ranking config has changed since this list was built" in capsys.readouterr().out
     assert cli.main(["shortlist", "rebuild"]) == 0     # the socket block in conftest proves no network
     capsys.readouterr()
-    assert [(t, s) for _, t, s in listed(conn)] == [("Product Manager", 130.0), ("Senior Product Manager", 70.0)]
+    assert [(t, s) for _, t, s in listed(conn)] == [("Product Manager", 130.0), ("Senior Product Manager", 50.0)]
     assert conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0] == runs_before          # no scout ran
     assert cli.main(["shortlist"]) == 0
     assert "has changed since" not in capsys.readouterr().out
@@ -435,8 +435,7 @@ def test_bad_configs_are_refused_with_a_clear_message(conn, capsys, isolated_db_
             ("[titel.wanted]\n", "unknown setting titel"),
             ('[title.wanted]\n"PM" = "lots"\n', "must have a number of points"),
             ("size = 0\n", "size must be a whole number of 1 or more"),
-            ("[recency]\nfull_days = 5\nzero_days = 5\n", "zero_days must be larger"),
-            ('[tier_points]\ngold = 5\n', "is not a tier number")):
+            ("[recency]\nfull_days = 5\nzero_days = 5\n", "zero_days must be larger")):
         config.write_text(text)
         assert cli.main(["shortlist", "rebuild"]) == 1
         assert message in capsys.readouterr().err
@@ -495,7 +494,9 @@ def test_init_seeds_from_the_repo_filters_and_never_overwrites(conn, capsys, iso
     assert f"Wrote {path}: 21 title phrases and 7 seniority words from role_filters.csv." in out
     assert path.stat().st_mode & 0o777 == 0o600
     loaded = ranking.load_config(path)
-    assert loaded.size == 100 and loaded.tier_points == {1: 30.0, 2: 20.0, 3: 10.0}
+    assert loaded.size == 100 and "tier_points" not in path.read_text()
+    # A config written before tiers stopped earning points still loads.
+    assert ranking.parse_config(path.read_text() + "\n[tier_points]\n1 = 30\n").size == 100
     assert list(loaded.wanted)[:3] == ["Chief Product Officer", "CPO", "Vice President of Product"]
     assert set(loaded.seniority) == {"Principal", "Director", "VP", "Head", "Staff", "Senior", "Founding"}
     assert loaded.exclude == [] and loaded.preferred_locations == {}
@@ -549,13 +550,13 @@ def test_views_by_company_top_and_why(conn, world, capsys, isolated_db_path):
     out = capsys.readouterr().out
     assert f"Senior Product Manager  (ID {top})" in out and "Alpha (tier 1) | New York" in out
     assert "Rank 1 of 5 on the shortlist for" in out
-    for line in ("Tier 1 company (+30)", 'Title matches "Product Manager" (+30)', 'Seniority: "Senior" (+10)',
+    for line in ('Title matches "Product Manager" (+30)', 'Seniority: "Senior" (+10)',
                  'Location matches "New York" (+10)'):
         assert line in out
     gamma = role_id(conn, "g1")
     assert cli.main(["why", str(gamma), "--json"]) == 0
     info = json.loads(capsys.readouterr().out)
-    assert info["rank"] == 5 and "Company has no tier (+0)" in info["detail"]
+    assert info["rank"] == 5 and not any("ier" in line for line in info["detail"])
     assert "Not remote and not in a preferred location (+0)" in info["detail"]
 
 
@@ -565,7 +566,7 @@ def test_why_explains_a_role_below_the_cut(conn, world):
     ranking.build_shortlist(conn, cfg(), now=day(10))          # size = 3
     info = ranking.explain(conn, role_id(conn, "low"), cfg(), now=day(10))
     assert info["rank"] is None
-    assert info["why_not"] == "3 roles rank above it: it scores 70 and the last role on the list scores 80"
+    assert info["why_not"] == "3 roles rank above it: it scores 40 and the last role on the list scores 50"
 
 
 # --- upgrade -----------------------------------------------------------------
@@ -585,6 +586,6 @@ def test_version_2_database_upgrades_in_place(tmp_path, monkeypatch):
     conn = db.connect(path)
     assert db.schema_version(conn) == db.SCHEMA_VERSION >= 3
     ranking.build_shortlist(conn, cfg(), now=day(10))
-    assert listed(conn) == [(1, "Product Manager", 70.0)]
+    assert listed(conn) == [(1, "Product Manager", 40.0)]
     ranking.mark_role(conn, 1, "saved", "from the old database")
     assert ranking.list_marks(conn)[0]["note"] == "from the old database"

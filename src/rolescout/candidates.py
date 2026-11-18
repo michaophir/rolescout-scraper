@@ -18,6 +18,7 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from rolescout import profiles
 from rolescout.companies import CompanyError, add_company
 from rolescout.db import transaction, utc_now
 from rolescout.resolve import registrable_domain
@@ -329,6 +330,7 @@ def apply_filter(conn: sqlite3.Connection, cfg: FilterConfig) -> list[int]:
     pending = []
     with transaction(conn):
         link_tracked(conn)
+        profiles.backfill(conn)      # what the boards know goes into the tracked companies' profiles
         for cand in conn.execute("SELECT * FROM candidates ORDER BY id").fetchall():
             verdict = evaluate({**dict(cand), "sectors": json.loads(cand["sectors"])}, cfg)
             conn.execute("UPDATE candidates SET status = ?, reason = ?, checks = ? WHERE id = ?",
@@ -442,6 +444,7 @@ def activate(conn: sqlite3.Connection, candidate: dict, *, force: bool = False,
     with transaction(conn):
         conn.execute("UPDATE candidates SET company_id = ?, activated_at = ?, dismissed_at = NULL WHERE id = ?",
                      (company_id, utc_now(), candidate["id"]))
+        profiles.backfill(conn)
     return {"name": candidate["name"], "domain": candidate["domain"], "tier": tier, "tags": tags}
 
 

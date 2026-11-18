@@ -8,14 +8,14 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from rolescout import __version__, digest, jobs
+from rolescout import __version__, digest, jobs, profiles, vcs
 from rolescout.adapters import ADAPTERS, SourceError, get_adapter
 from rolescout.companies import (
     CompanyError, add_board, add_company, board_ref, get_company, import_csv, list_companies,
     remove_board,
     set_active, set_website,
 )
-from rolescout.db import DB_ENV_VAR, DEFAULT_DB_PATH, SchemaError, connect, resolve_db_path
+from rolescout.db import DB_ENV_VAR, DEFAULT_DB_PATH, SchemaError, connect, resolve_db_path, transaction
 from rolescout import schedule as launchd
 from rolescout.gaps import (
     GapsError, connector_brief, gaps_report, mark_rechecked, recheck_due, summary_line,
@@ -338,7 +338,7 @@ def _print_gaps(report: dict) -> None:
     headers = ["Job system", "Count", "Why", "Company", "Tier", "URL"]
     candidates = [g for g in report["systems"] if g["build_candidate"]]
     others = [g for g in report["systems"] if not g["build_candidate"]]
-    print("\nBuild candidates (3 or more companies, or a tier-1 company) "
+    print("\nBuild candidates (3 or more companies) "
           "- details: rolescout brief SYSTEM")
     print(format_table(headers, system_rows(candidates), {"URL": 80}) if candidates else "  (none)")
     print("\nOther unsupported job systems:")
@@ -869,8 +869,11 @@ def _candidates_config(args) -> Path:
 
 
 def _cmd_portfolio_add(args) -> int:
-    board = portfolio.add_board(connect(args.db), args.url, args.name or "")
-    print(f"Registered {board['url']}. Read its companies with: rolescout portfolio harvest")
+    conn = connect(args.db)
+    board = portfolio.add_board(conn, args.url, args.name or "", args.vc or "")
+    owner = conn.execute("SELECT name FROM vcs WHERE id = ?", (board["vc_id"],)).fetchone()
+    print(f"Registered {board['url']}" + (f" under {owner['name']}" if owner else "")
+          + ". Read its companies with: rolescout portfolio harvest")
     return 0
 
 
@@ -1211,6 +1214,219 @@ def _daily_steps(conn, args, job) -> int | None:
     return code
 
 
+# --- company profiles, sectors, VCs -----------------------------------------
+
+def _sectors_path(args) -> Path:
+    return profiles.mapping_path(resolve_db_path(args.db), getattr(args, "sectors_file", None))
+
+
+def _mapping(conn, args) -> profiles.SectorMapping:
+    return profiles.load_mapping(conn, _sectors_path(args))
+
+
+def _print_profile(conn, profile: dict) -> None:
+    def shown(field: str) -> str:
+        value = profile[field]["value"]
+        if field == "sectors":
+            return ", ".join(value)
+        if field == "employees" and value is not None:
+            return f"{value:,}"
+        return "" if value is None else str(value)
+    rows = []
+    for field in profiles.FIELDS:
+        entry = profile[field]
+        text = shown(field)
+        if field == "stage" and entry["raw"] and entry["raw"] != entry["value"]:
+            text += f"  (given as {entry['raw']})"
+        rows.append([field, text or "-", entry["source"] or "", (entry["set_at"] or "")[:10]])
+    print(profile["company"])
+    print(format_table(["Field", "Value", "Source", "Set"], rows, {"Value": 90}))
+    tags = profile["sectors"]["raw_tags"]
+    if tags:
+        print(f"\nBoard tags ({len(tags)}): {', '.join(tags)}")
+    company_id = get_company(conn, profile["company"])["id"]
+    links = vcs.company_links(conn, company_id)
+    for kind, label in (("vc", "Backed by"), ("ecosystem", "Ecosystem groups")):
+        names = [f"{l['name']} ({l['source']})" for l in links if l["type"] == kind]
+        if names:
+            print(f"{label}: {', '.join(names)}")
+
+
+def _cmd_profile_show(args) -> int:
+    conn = connect(args.db)
+    profile = profiles.get_profile(conn, args.name)
+    if args.json:
+        print(json.dumps(profile, indent=2, ensure_ascii=False))
+        return 0
+    _print_profile(conn, profile)
+    return 0
+
+
+def _cmd_profile_set(args) -> int:
+    conn = connect(args.db)
+    profile = profiles.set_field(conn, args.name, args.field, " ".join(args.value), mapping=_mapping(conn, args))
+    entry = profile[args.field]
+    value = ", ".join(entry["value"]) if args.field == "sectors" else entry["value"]
+    print(f"{profile['company']}: {args.field} set to {value}. Board and agent data will not replace it.")
+    return 0
+
+
+def _cmd_profile_clear(args) -> int:
+    conn = connect(args.db)
+    had = profiles.clear_field(conn, args.name, args.field)
+    now = profiles.get_profile(conn, args.name)[args.field]
+    name = get_company(conn, args.name)["name"]
+    if not had:
+        print(f"{name}: {args.field} had no value.")
+    elif now["source"]:
+        value = ", ".join(now["value"]) if args.field == "sectors" else now["value"]
+        print(f"{name}: {args.field} cleared; the board's value applies again: {value}")
+    else:
+        print(f"{name}: {args.field} cleared.")
+    return 0
+
+
+def _coverage_lines(conn) -> list[str]:
+    c = profiles.coverage(conn)
+    total = c["companies"]
+    lines = [f"Profiles of {total} active companies:"]
+    for key, label in (("stage", "stage (not unknown)"), ("sectors", "at least one sector"),
+                       ("description", "description"), ("employees", "employee count"), ("hq", "HQ location")):
+        share = f"{100 * c[key] / total:.0f}%" if total else "-"
+        lines.append(f"  {label + ':':<22}{c[key]:>6}  {share}")
+    return lines
+
+
+def _cmd_profile_coverage(args) -> int:
+    conn = connect(args.db)
+    if args.json:
+        print(json.dumps(profiles.coverage(conn), indent=2))
+        return 0
+    print("\n".join(_coverage_lines(conn)))
+    return 0
+
+
+def _cmd_sectors_init(args) -> int:
+    conn = connect(args.db)
+    path = _sectors_path(args)
+    if path.exists() and not args.force:
+        print(f"error: {path} already exists; edit it, or pass --force to replace it", file=sys.stderr)
+        return 1
+    text = profiles.starter_mapping(conn)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(text)
+    mapping = profiles.load_mapping(conn, path)
+    counts = profiles.tag_counts(conn)
+    loose = profiles.unmapped_tags(conn, mapping)
+    print(f"Wrote {path}: {len(counts) - len(loose)} of the {len(counts)} tags in your data placed in "
+          f"{len(mapping.sectors)} sectors, {len(loose)} left unmapped.")
+    print("Edit it, then run: rolescout sectors apply")
+    return 0
+
+
+def _cmd_sectors_unmapped(args) -> int:
+    conn = connect(args.db)
+    mapping = _mapping(conn, args)
+    loose = profiles.unmapped_tags(conn, mapping)
+    if args.json:
+        print(json.dumps([{"tag": t, "companies": n} for t, n in loose], indent=2, ensure_ascii=False))
+        return 0
+    source = mapping.source or "the built-in rules (no sectors.toml yet: rolescout sectors init)"
+    if not loose:
+        print(f"Every tag is mapped by {source}.")
+        return 0
+    shown = loose[:args.limit] if args.limit else loose
+    print(format_table(["Tag", "Companies"], [[t, n] for t, n in shown]))
+    print(f"\n{len(loose)} unmapped tags" + (f", {len(shown)} shown" if len(shown) < len(loose) else "")
+          + f". Mapping: {source}")
+    return 0
+
+
+def _cmd_sectors_list(args) -> int:
+    conn = connect(args.db)
+    mapping = _mapping(conn, args)
+    counts = {r["sector"]: r["n"] for r in conn.execute(
+        "SELECT sector, COUNT(*) AS n FROM v_company_sectors GROUP BY sector")}
+    print(format_table(["Sector", "Companies"], [[s, counts.get(s, 0)] for s in mapping.sectors]))
+    print(f"\nMapping: {mapping.source or 'built-in rules (create a file with: rolescout sectors init)'}")
+    return 0
+
+
+def _cmd_sectors_apply(args) -> int:
+    conn = connect(args.db)
+    mapping = _mapping(conn, args)
+    with transaction(conn):
+        changed = profiles.backfill(conn, mapping)
+    print(f"Sector mapping applied (no network): {changed} profile fields updated.")
+    print("\n".join(_coverage_lines(conn)))
+    return 0
+
+
+def _cmd_vcs_list(args) -> int:
+    rows = vcs.list_vcs(connect(args.db))
+    if args.json:
+        print(json.dumps(rows, indent=2, ensure_ascii=False))
+        return 0
+    if not rows:
+        print("No VCs yet. Add one with: rolescout vcs add NAME, or register a board: rolescout portfolio add URL")
+        return 0
+    print(format_table(
+        ["ID", "Name", "Short name", "Type", "Website", "Companies", "By hand", "Boards"],
+        [[r["id"], r["name"], r["short_name"], r["type"], r["website"], r["companies"], r["linked_by_hand"],
+          ", ".join(r["boards"])] for r in rows], {"Boards": 70}))
+    return 0
+
+
+def _cmd_vcs_add(args) -> int:
+    vc = vcs.add_vc(connect(args.db), args.name, short=args.short or "", kind=args.type, website=args.website or "")
+    print(f"Added {vc['name']} (shown as {vc['short_name']}, type {vc['type']}).")
+    return 0
+
+
+def _cmd_vcs_edit(args) -> int:
+    if args.name is None and args.short is None and args.type is None and args.website is None:
+        print("error: say what to change: --name, --short, --type or --website.", file=sys.stderr)
+        return 1
+    vc = vcs.edit_vc(connect(args.db), args.vc, name=args.name, short=args.short, kind=args.type,
+                     website=args.website)
+    print(f"{vc['name']}: shown as {vc['short_name']}, type {vc['type']}, website {vc['website'] or 'none'}.")
+    return 0
+
+
+def _cmd_vcs_remove(args) -> int:
+    name, links, boards = vcs.remove_vc(connect(args.db), args.vc)
+    print(f"Removed {name}: {links} company link{'' if links == 1 else 's'} removed, "
+          f"{boards} board{'' if boards == 1 else 's'} left registered with no VC.")
+    return 0
+
+
+def _cmd_vcs_attach(args) -> int:
+    url, name = vcs.attach_board(connect(args.db), args.board, args.vc)
+    print(f"{url} now belongs to {name}.")
+    return 0
+
+
+def _cmd_vcs_link(args) -> int:
+    company, name, new = vcs.link_company(connect(args.db), args.company, args.vc)
+    print(f"{company} linked to {name} by hand." if new else f"{company} was already linked to {name} by hand.")
+    return 0
+
+
+def _cmd_vcs_unlink(args) -> int:
+    conn = connect(args.db)
+    company, name, removed = vcs.unlink_company(conn, args.company, args.vc)
+    still = any(l["name"] == name for l in vcs.company_links(conn, get_company(conn, company)["id"]))
+    if not removed:
+        print(f"{company} was not linked to {name}.")
+    elif still:
+        print(f"{company}: the link made by hand is removed, but a board of {name} lists it, so it stays linked.")
+    else:
+        print(f"{company} is no longer linked to {name}.")
+    return 0
+
+
 def _cmd_digest(args) -> int:
     data = digest.build_digest(connect(args.db), since=args.since)
     print(json.dumps(data, indent=2, ensure_ascii=False) if args.json else digest.digest_text(data))
@@ -1545,6 +1761,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = pfsub.add_parser("add", parents=[db], help="register a board by its URL")
     p.add_argument("url", help="the board's address, e.g. https://jobs.example.vc")
     p.add_argument("--name", help="what to call it (default: the name the board gives itself)")
+    p.add_argument("--vc", metavar="VC", help="the VC it belongs to (default: a VC is made from the board)")
     p.set_defaults(func=_cmd_portfolio_add)
     p = pfsub.add_parser("list", parents=[db], help="list registered boards")
     p.add_argument("--json", action="store_true")
@@ -1619,6 +1836,82 @@ def build_parser() -> argparse.ArgumentParser:
         help="health at a glance, no network: what is running now, last run, failures, open roles, next run")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=_cmd_status)
+
+    pr = commands.add_parser("profile", help="company profiles: description, sectors, stage, employees, HQ")
+    prsub = pr.add_subparsers(dest="subcommand", required=True, metavar="SUBCOMMAND")
+    mapping_flag = argparse.ArgumentParser(add_help=False)
+    mapping_flag.add_argument("--sectors-file", metavar="PATH", default=argparse.SUPPRESS,
+                              help="sector mapping file (default: sectors.toml next to the database)")
+    p = prsub.add_parser("show", parents=[db], help="a company's profile, with where each value came from")
+    p.add_argument("name")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=_cmd_profile_show)
+    p = prsub.add_parser("set", parents=[db, mapping_flag],
+                         help="set a field by hand; board and agent data never replace it")
+    p.add_argument("name")
+    p.add_argument("field", choices=profiles.FIELDS)
+    p.add_argument("value", nargs="+", help="the value; for sectors, a comma-separated list; for stage, one of: "
+                                            + ", ".join(profiles.STAGES))
+    p.set_defaults(func=_cmd_profile_set)
+    p = prsub.add_parser("clear", parents=[db], help="forget a field's value, so board data applies again")
+    p.add_argument("name")
+    p.add_argument("field", choices=profiles.FIELDS)
+    p.set_defaults(func=_cmd_profile_clear)
+    p = prsub.add_parser("coverage", parents=[db], help="how many companies have each field filled")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=_cmd_profile_coverage)
+
+    sc = commands.add_parser("sectors", help="the sector list and the mapping from raw board tags to it")
+    scsub = sc.add_subparsers(dest="subcommand", required=True, metavar="SUBCOMMAND")
+    p = scsub.add_parser("init", parents=[db, mapping_flag],
+                         help="write a starter sectors.toml from the tags in your data")
+    p.add_argument("--force", action="store_true", help="replace an existing file")
+    p.set_defaults(func=_cmd_sectors_init)
+    p = scsub.add_parser("list", parents=[db, mapping_flag], help="the sectors, with how many companies are in each")
+    p.set_defaults(func=_cmd_sectors_list)
+    p = scsub.add_parser("unmapped", parents=[db, mapping_flag],
+                         help="raw tags no sector claims, most common first")
+    p.add_argument("--limit", type=int, default=40, metavar="N", help="rows to show (default: 40; 0 for all)")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=_cmd_sectors_unmapped)
+    p = scsub.add_parser("apply", parents=[db, mapping_flag],
+                         help="map every company's tags again after editing the file (no network)")
+    p.set_defaults(func=_cmd_sectors_apply)
+
+    vc = commands.add_parser("vcs", help="the VC list: investors, ecosystem groups, their boards and links")
+    vcsub = vc.add_subparsers(dest="subcommand", required=True, metavar="SUBCOMMAND")
+    p = vcsub.add_parser("list", parents=[db], help="every VC with its boards and linked companies")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=_cmd_vcs_list)
+    p = vcsub.add_parser("add", parents=[db], help="add a VC or an ecosystem group")
+    p.add_argument("name")
+    p.add_argument("--short", help="the name Backed by shows (default: the name without Ventures, Capital, ...)")
+    p.add_argument("--type", choices=vcs.TYPES, default="vc",
+                   help="ecosystem: a group that lists companies it did not back; left out of Backed by")
+    p.add_argument("--website")
+    p.set_defaults(func=_cmd_vcs_add)
+    p = vcsub.add_parser("edit", parents=[db], help="change a VC's name, short name, type or website")
+    p.add_argument("vc", help="the VC's name, short name or ID")
+    p.add_argument("--name")
+    p.add_argument("--short")
+    p.add_argument("--type", choices=vcs.TYPES)
+    p.add_argument("--website")
+    p.set_defaults(func=_cmd_vcs_edit)
+    p = vcsub.add_parser("remove", parents=[db], help="remove a VC and its links; its boards stay registered")
+    p.add_argument("vc")
+    p.set_defaults(func=_cmd_vcs_remove)
+    p = vcsub.add_parser("attach", parents=[db], help="say which VC a portfolio board belongs to")
+    p.add_argument("board", help="the board's ID, URL or name (rolescout portfolio list)")
+    p.add_argument("vc")
+    p.set_defaults(func=_cmd_vcs_attach)
+    p = vcsub.add_parser("link", parents=[db], help="link a company to a VC by hand")
+    p.add_argument("company")
+    p.add_argument("vc")
+    p.set_defaults(func=_cmd_vcs_link)
+    p = vcsub.add_parser("unlink", parents=[db], help="remove a link made by hand")
+    p.add_argument("company")
+    p.add_argument("vc")
+    p.set_defaults(func=_cmd_vcs_unlink)
 
     p = commands.add_parser(
         "digest", parents=[db],
@@ -1699,7 +1992,8 @@ def main(argv: list[str] | None = None) -> int:
         return args.func(args)
     except (CompanyError, SchemaError, FileNotFoundError, TransferError, BackupError,
             launchd.ScheduleError, GapsError, ConfigError, MarkError, cands.ConfigError,
-            cands.CandidateError, portfolio.PortfolioError, digest.DigestError) as exc:
+            cands.CandidateError, portfolio.PortfolioError, digest.DigestError,
+            profiles.ProfileError, profiles.MappingError, vcs.VcError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:

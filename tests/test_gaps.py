@@ -191,9 +191,9 @@ def add(conn, name, tier, system=None, url=None, manual=False):
 def gappy(conn):
     # icims: three tier-2/3 companies -> candidate by count
     add(conn, "Wa", 2, "icims"); add(conn, "Wb", 3, "icims"); add(conn, "Wc", None, "icims")
-    # jobvite: one tier-1 company -> candidate by tier
+    # jobvite: one company, tier 1 -> not a candidate: tier no longer counts
     add(conn, "Rip", 1, "jobvite", manual=True)
-    # recruitee: two tier-2 companies -> below both thresholds
+    # recruitee: two companies -> below the threshold
     add(conn, "Ka", 2, "recruitee"); add(conn, "Kb", 2, "recruitee")
     # custom: three hand-recorded home-built sites, none tier 1 -> never a candidate by count
     add(conn, "Ca", 2, "custom", manual=True); add(conn, "Cb", 2, "custom", manual=True)
@@ -215,42 +215,42 @@ def gappy(conn):
 def test_build_candidate_thresholds(gappy):
     report = gaps.gaps_report(gappy)
     groups = {g["system"]: g for g in report["systems"]}
-    assert [g["system"] for g in report["systems"]] == ["icims", "jobvite", "custom", "recruitee"]
+    assert [g["system"] for g in report["systems"]] == ["icims", "custom", "recruitee", "jobvite"]
     assert (groups["icims"]["build_candidate"], groups["icims"]["why"]) == (True, "3 companies")
-    assert (groups["jobvite"]["build_candidate"], groups["jobvite"]["why"]) == (True, "tier 1: Rip")
-    assert groups["recruitee"]["build_candidate"] is False        # two companies, none tier 1
+    assert (groups["jobvite"]["build_candidate"], groups["jobvite"]["why"]) == (False, "")   # tier 1, but one company
+    assert groups["recruitee"]["build_candidate"] is False        # two companies
     assert groups["custom"]["build_candidate"] is False          # three, but they share no connector
     assert [(m["company"], m["tier"]) for m in groups["icims"]["companies"]] == [
         ("Wa", 2), ("Wb", 3), ("Wc", None)]
-    assert report["build_candidates"] == 2
+    assert report["build_candidates"] == 1
     assert [e["company"] for e in report["needs_mapping"]] == ["Never"]
     assert [(e["company"], e["reason"]) for e in report["unidentified"]] == [
         ("Old", "careers page names no job system we recognize"), ("Blank", "not resolved yet")]
     assert (report["active_companies"], report["covered"]) == (13, 1)
-    assert gaps.summary_line(report) == "2 build candidates, 2 unidentified, 1 awaiting mapping"
+    assert gaps.summary_line(report) == "1 build candidate, 2 unidentified, 1 awaiting mapping"
 
-    # A third recruitee company tips it over; a tier-1 custom site is flagged on its own.
+    # A third recruitee company tips it over; a tier-1 custom site changes nothing.
     add(gappy, "Kc", 3, "recruitee")
     add(gappy, "Cd", 1, "custom", manual=True)
     groups = {g["system"]: g for g in gaps.gaps_report(gappy)["systems"]}
     assert groups["recruitee"]["why"] == "3 companies"
-    assert groups["custom"]["why"] == "tier 1: Cd"
+    assert (groups["custom"]["build_candidate"], groups["custom"]["why"]) == (False, "")
 
 
 def test_gaps_command_and_status_line(gappy, capsys, monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
     assert cli.main(["gaps"]) == 0
     out = capsys.readouterr().out
-    assert out.startswith("Coverage gaps: 2 build candidates, 2 unidentified, 1 awaiting mapping "
+    assert out.startswith("Coverage gaps: 1 build candidate, 2 unidentified, 1 awaiting mapping "
                           "(12 of 13 active companies not covered)\n")
     candidates, rest = out.split("Other unsupported job systems:")
-    assert "icims" in candidates and "jobvite" in candidates and "(by hand)" in candidates
+    assert "icims" in candidates and "jobvite" not in candidates and "(by hand)" in rest
     assert "recruitee" not in candidates and "recruitee" in rest
     assert "Needs identification - rolescout companies set-system NAME SYSTEM URL" in out
     assert "On a supported system, not mapped yet" in out
 
     assert cli.main(["gaps", "--json"]) == 0
-    assert json.loads(capsys.readouterr().out)["build_candidates"] == 2
+    assert json.loads(capsys.readouterr().out)["build_candidates"] == 1
 
     # status shows one line, and gaps never change its exit code.
     scripted = Scripted(mapped=[[role("M1", source="lever")]])
@@ -258,7 +258,7 @@ def test_gaps_command_and_status_line(gappy, capsys, monkeypatch, tmp_path):
     assert cli.main(["status"]) == 0
     out = capsys.readouterr().out
     assert out.startswith("HEALTHY\n")
-    assert "Coverage gaps:  2 build candidates, 2 unidentified, 1 awaiting mapping  (rolescout gaps)" in out
+    assert "Coverage gaps:  1 build candidate, 2 unidentified, 1 awaiting mapping  (rolescout gaps)" in out
 
 
 def test_connector_brief(gappy, capsys):
@@ -274,10 +274,10 @@ def test_connector_brief(gappy, capsys):
 
     assert cli.main(["brief", "jobvite"]) == 0
     out = capsys.readouterr().out
-    assert "Build candidate: yes (tier 1: Rip)." in out and "- Identified: by hand" in out
+    assert "Build candidate: no" in out and "- Identified: by hand" in out
 
     assert cli.main(["brief", "taleo"]) == 1
-    assert "Systems with gaps: icims, jobvite, custom, recruitee" in capsys.readouterr().err
+    assert "Systems with gaps: icims, custom, recruitee, jobvite" in capsys.readouterr().err
 
 
 # --- the weekly re-check -----------------------------------------------------
@@ -383,7 +383,7 @@ def test_failing_board_is_re_resolved_and_the_move_is_recorded(conn, monkeypatch
     assert resolution(conn, "Mover")["job_system"] == "icims"
     report = gaps.gaps_report(conn)
     (group,) = report["systems"]
-    assert (group["system"], group["build_candidate"], group["why"]) == ("icims", True, "tier 1: Mover")
+    assert (group["system"], group["build_candidate"], group["why"]) == ("icims", False, "")
     assert group["companies"][0]["failing_boards"] == ["greenhouse/mover"]
 
     # Hopper: the new board is saved; the old one is left for a person to remove.

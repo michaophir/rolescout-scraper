@@ -40,6 +40,21 @@ def _drop_false_workday_findings(conn: sqlite3.Connection) -> None:
 
 
 # Each step is an SQL statement or a function taking the connection.
+def _vcs_and_profiles_from_what_is_stored(conn: sqlite3.Connection) -> None:
+    """Make a VC from every registered portfolio board, then copy profile data
+    and VC links from linked candidates into the companies they stand for.
+    Reads only the database."""
+    from rolescout import profiles, vcs
+    for board in conn.execute("SELECT id FROM portfolio_boards ORDER BY id").fetchall():
+        vcs.ensure_for_board(conn, board["id"])
+    profiles.backfill(conn)
+
+
+# "Backed by" as one text value: the short names of a company's VCs, ecosystem groups left out.
+_BACKED_BY = ("(SELECT group_concat(short_name, ', ') FROM (SELECT v.short_name FROM company_vcs l "
+              "JOIN vcs v ON v.id = l.vc_id WHERE l.company_id = c.id AND v.type = 'vc' ORDER BY v.id))")
+_ECOSYSTEMS = _BACKED_BY.replace("'vc'", "'ecosystem'")
+
 MIGRATIONS: list[list] = [
     [
         """
@@ -304,6 +319,106 @@ MIGRATIONS: list[list] = [
             ended_at    TEXT,                      -- set only when it stopped on an error
             error       TEXT
         )
+        """,
+    ],
+    [
+        """
+        -- Investors and ecosystem groups. An ecosystem group (a city's tech
+        -- association) lists companies it did not invest in, so it is kept
+        -- out of "Backed by".
+        CREATE TABLE vcs (
+            id          INTEGER PRIMARY KEY,
+            name        TEXT NOT NULL UNIQUE COLLATE NOCASE,
+            short_name  TEXT NOT NULL,             -- what "Backed by" shows
+            type        TEXT NOT NULL DEFAULT 'vc' CHECK (type IN ('vc', 'ecosystem')),
+            website     TEXT NOT NULL DEFAULT '',
+            created_at  TEXT NOT NULL
+        )
+        """,
+        # A VC has zero or more portfolio boards; a board belongs to at most one VC.
+        "ALTER TABLE portfolio_boards ADD COLUMN vc_id INTEGER REFERENCES vcs(id) ON DELETE SET NULL",
+        # What a board's company page says about the company, kept for its profile.
+        "ALTER TABLE candidates ADD COLUMN description TEXT NOT NULL DEFAULT ''",
+        """
+        -- Which VC is linked to which tracked company, and how we know.
+        CREATE TABLE company_vcs (
+            company_id  INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            vc_id       INTEGER NOT NULL REFERENCES vcs(id) ON DELETE CASCADE,
+            source      TEXT NOT NULL CHECK (source IN ('board', 'manual')),
+            linked_at   TEXT NOT NULL,
+            PRIMARY KEY (company_id, vc_id)
+        )
+        """,
+        "CREATE INDEX company_vcs_vc ON company_vcs (vc_id)",
+        """
+        -- One profile per tracked company. Each field has the source that set
+        -- it (board | agent | manual) and when; a manual value is never
+        -- replaced by board or agent data.
+        CREATE TABLE company_profiles (
+            company_id          INTEGER PRIMARY KEY REFERENCES companies(id) ON DELETE CASCADE,
+            description         TEXT,
+            description_source  TEXT,
+            description_set_at  TEXT,
+            sectors             TEXT NOT NULL DEFAULT '[]',   -- JSON array, from the controlled list
+            sectors_source      TEXT,
+            sectors_set_at      TEXT,
+            sector_tags         TEXT NOT NULL DEFAULT '[]',   -- JSON array: the board's raw tags, all kept
+            stage               TEXT,                         -- one of the fixed list (rolescout.profiles.STAGES)
+            stage_raw           TEXT,                         -- the value as the board or the person gave it
+            stage_source        TEXT,
+            stage_set_at        TEXT,
+            employees           INTEGER,
+            employees_source    TEXT,
+            employees_set_at    TEXT,
+            hq                  TEXT,
+            hq_source           TEXT,
+            hq_set_at           TEXT
+        )
+        """,
+        _vcs_and_profiles_from_what_is_stored,
+        # --- read-only views for browsing ---------------------------------
+        f"""
+        CREATE VIEW v_company_overview AS
+        SELECT c.id AS company_id, c.name AS company, c.website, c.active,
+               p.stage, p.sectors, p.employees, p.hq, p.description,
+               {_BACKED_BY} AS backed_by,
+               {_ECOSYSTEMS} AS ecosystems,
+               (SELECT COUNT(*) FROM roles r WHERE r.company_id = c.id AND r.closed_at IS NULL) AS open_roles,
+               (SELECT COALESCE(SUM(s.opened), 0) FROM company_snapshots s WHERE s.company_id = c.id
+                AND s.taken_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-30 days')) AS opened_30d,
+               (SELECT COALESCE(SUM(s.closed), 0) FROM company_snapshots s WHERE s.company_id = c.id
+                AND s.taken_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-30 days')) AS closed_30d,
+               (SELECT group_concat(b.source || '/' || b.ref, ', ') FROM boards b WHERE b.company_id = c.id) AS job_boards,
+               p.stage_raw, p.sector_tags
+        FROM companies c LEFT JOIN company_profiles p ON p.company_id = c.id
+        """,
+        f"""
+        CREATE VIEW v_open_roles AS
+        SELECT r.id AS role_id, c.name AS company, r.title, r.department, r.location, r.workplace_type,
+               r.date_posted, r.first_seen_at, r.compensation_text, r.url,
+               p.stage, p.sectors, p.employees, p.hq,
+               {_BACKED_BY} AS backed_by,
+               c.id AS company_id
+        FROM roles r JOIN companies c ON c.id = r.company_id
+        LEFT JOIN company_profiles p ON p.company_id = c.id
+        WHERE r.closed_at IS NULL AND c.active = 1
+        """,
+        """
+        -- One row per company and sector, for cuts by sector.
+        CREATE VIEW v_company_sectors AS
+        SELECT p.company_id, c.name AS company, j.value AS sector, p.stage
+        FROM company_profiles p JOIN companies c ON c.id = p.company_id, json_each(p.sectors) j
+        """,
+        """
+        -- Hiring per company per week (weeks start on Monday). Roles of a
+        -- company's first fetch are not counted as opened.
+        CREATE VIEW v_hiring_weekly AS
+        SELECT c.name AS company, date(substr(s.taken_at, 1, 10), 'weekday 0', '-6 days') AS week_start,
+               SUM(s.opened) AS opened, SUM(s.closed) AS closed, SUM(s.opened) - SUM(s.closed) AS net,
+               s.open_roles AS open_roles_at_week_end, MAX(s.run_id) AS last_run_id, COUNT(*) AS scouts,
+               c.id AS company_id
+        FROM company_snapshots s JOIN companies c ON c.id = s.company_id
+        GROUP BY s.company_id, week_start
         """,
     ],
 ]

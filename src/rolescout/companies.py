@@ -168,20 +168,16 @@ def remove_board(conn, name: str, source: str, ref: str) -> int:
 
 
 def backed_by(conn) -> dict[int, list[str]]:
-    """The portfolio boards that list each company, by company id, as the board
-    names in the order the boards were registered. Read from the listings a
-    harvest stored; a company no board lists is absent. A board with no name
-    is shown by its host."""
+    """The VCs linked to each company, by company id, as their short names in
+    the order the VCs were added. Read from ``company_vcs``; ecosystem groups
+    are left out, and a company with no VC is absent."""
     out: dict[int, list[str]] = {}
     for row in conn.execute(
-            "SELECT c.company_id, b.name, b.url FROM candidates c "
-            "JOIN candidate_listings l ON l.candidate_id = c.id "
-            "JOIN portfolio_boards b ON b.id = l.board_id "
-            "WHERE c.company_id IS NOT NULL ORDER BY b.id"):
-        label = row["name"].strip() or row["url"].split("//")[-1]
+            "SELECT l.company_id, v.short_name FROM company_vcs l JOIN vcs v ON v.id = l.vc_id "
+            "WHERE v.type = 'vc' ORDER BY v.id"):
         names = out.setdefault(row["company_id"], [])
-        if label not in names:
-            names.append(label)
+        if row["short_name"] not in names:
+            names.append(row["short_name"])
     return out
 
 

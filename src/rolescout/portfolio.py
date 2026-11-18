@@ -23,7 +23,7 @@ from urllib.robotparser import RobotFileParser
 
 import requests
 
-from rolescout import jobs
+from rolescout import jobs, vcs
 from rolescout.db import get_meta, set_meta, transaction, utc_now
 from rolescout.http import USER_AGENT, make_session
 from rolescout.resolve import read_body, registrable_domain
@@ -61,13 +61,23 @@ def board_base(url: str) -> str:
     return f"{parts.scheme}://{parts.netloc}"
 
 
-def add_board(conn: sqlite3.Connection, url: str, name: str = "") -> sqlite3.Row:
+def add_board(conn: sqlite3.Connection, url: str, name: str = "", vc: str = "") -> sqlite3.Row:
+    """Register a board. It is attached to the VC named by ``vc``; without
+    one, a VC is made from the board itself (its name, or its host until the
+    first harvest learns the name)."""
+    from rolescout import vcs    # vcs looks boards up through this module
+
     base = board_base(url)
     if conn.execute("SELECT 1 FROM portfolio_boards WHERE url = ?", (base,)).fetchone():
         raise PortfolioError(f"{base} is already registered")
+    try:
+        owner = vcs.get_vc(conn, vc)["id"] if vc.strip() else None
+    except vcs.VcError as exc:
+        raise PortfolioError(str(exc)) from None
     with transaction(conn):
-        conn.execute("INSERT INTO portfolio_boards (url, name, added_at) VALUES (?, ?, ?)",
-                     (base, name.strip(), utc_now()))
+        board_id = conn.execute("INSERT INTO portfolio_boards (url, name, added_at, vc_id) VALUES (?, ?, ?, ?)",
+                                (base, name.strip(), utc_now(), owner)).lastrowid
+        vcs.ensure_for_board(conn, board_id)
     return get_board(conn, base)
 
 
@@ -101,8 +111,10 @@ def remove_board(conn: sqlite3.Connection, ref: str) -> tuple[str, int]:
     boards, activated or dismissed); only the listing is forgotten.
     Returns (url, candidates left with no board)."""
     board = get_board(conn, ref)
+    from rolescout import vcs
     with transaction(conn):
         conn.execute("DELETE FROM portfolio_boards WHERE id = ?", (board["id"],))
+        vcs.sync_board_links(conn)      # its listings went with it, and so do the links they made
     orphans = conn.execute(
         "SELECT COUNT(*) FROM candidates c WHERE NOT EXISTS "
         "(SELECT 1 FROM candidate_listings l WHERE l.candidate_id = c.id)").fetchone()[0]
@@ -231,6 +243,7 @@ def parse_company_page(page: str) -> dict | None:
         "employees": employees if isinstance(employees, int) and not isinstance(employees, bool) else None,
         "sectors": sectors,
         "locations": _labels(company.get("locations")),
+        "description": " ".join(str(company.get("description") or "").split()),
     }
 
 
@@ -286,17 +299,17 @@ def _upsert_candidate(conn, board_id: int, slug: str, info: dict, now: str) -> i
     row = conn.execute("SELECT id FROM candidates WHERE domain = ?", (info["domain"],)).fetchone()
     values = (info["name"], info["website"], info["stage"], info["employees"],
               json.dumps(info["sectors"], ensure_ascii=False),
-              json.dumps(info["locations"], ensure_ascii=False), now)
+              json.dumps(info["locations"], ensure_ascii=False), info.get("description") or "", now)
     if row is None:
         candidate_id = conn.execute(
-            "INSERT INTO candidates (name, website, stage, employees, sectors, locations, "
-            "last_checked_at, domain, first_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO candidates (name, website, stage, employees, sectors, locations, description, "
+            "last_checked_at, domain, first_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (*values, info["domain"], now)).lastrowid
     else:
         candidate_id = row["id"]
         conn.execute(
             "UPDATE candidates SET name = ?, website = ?, stage = ?, employees = ?, sectors = ?, "
-            "locations = ?, last_checked_at = ? WHERE id = ?", (*values, candidate_id))
+            "locations = ?, description = ?, last_checked_at = ? WHERE id = ?", (*values, candidate_id))
     conn.execute(
         "INSERT INTO candidate_listings (candidate_id, board_id, slug, platform_id, listed_at, last_listed_at) "
         "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (candidate_id, board_id) DO UPDATE SET "
@@ -347,6 +360,7 @@ def _harvest_board(conn, board, fetcher: Fetcher, out: BoardHarvest, deadline: f
     with transaction(conn):
         conn.execute("UPDATE portfolio_boards SET name = ?, platform = ?, companies_listed = ?, "
                      "last_error = NULL WHERE id = ?", (out.name, PLATFORM, out.listed, board["id"]))
+        vcs.ensure_for_board(conn, board["id"])      # the board's own name is known now
         # Still listed: note it without a request. No longer listed: forget the listing.
         conn.executemany("UPDATE candidate_listings SET last_listed_at = ? WHERE board_id = ? AND slug = ?",
                          [(now, board["id"], s) for s in slugs if s in known])

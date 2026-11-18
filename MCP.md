@@ -99,6 +99,8 @@ Read (always available):
 | `hiring_trends` | Open counts and roles opened and closed over a date range, overall and by department |
 | `health` | What `rolescout status` shows, including what is running right now |
 | `digest` | What changed since the previous completed scout, or since a date |
+| `get_company_profile` | A company's description, sectors, stage, employees and HQ, each with its source; and its VCs |
+| `list_vcs` | The VC list: investors and ecosystem groups, their boards and linked companies |
 | `list_candidates` | Companies found on portfolio boards, with status and reason, and the funnel |
 | `explain_candidate` | Each filter rule's result for one candidate |
 
@@ -112,6 +114,10 @@ Write (absent in read-only mode):
 | `deactivate_company` | Stop tracking a company, keeping its history |
 | `reactivate_company` | Resume tracking it |
 | `set_company_website` | Correct the website stored for a company |
+| `set_company_profile` | Fill in one profile field (recorded as set by an agent; never replaces a value set by hand) |
+| `add_vc`, `edit_vc`, `remove_vc` | Maintain the VC list; `edit_vc` can mark a group as an ecosystem |
+| `attach_board_to_vc` | Say which VC a portfolio board belongs to |
+| `link_company_to_vc`, `unlink_company_from_vc` | Link a company to a VC by hand, or undo it |
 | `map_board` | Map a company to a Greenhouse, Lever, Ashby, Workday, Rippling, Gem or Workable board |
 | `record_job_system` | Record by hand which unsupported job system a company uses |
 | `activate_candidate` | Start tracking a candidate as a tier 3 company |

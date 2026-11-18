@@ -17,11 +17,13 @@ from tests.test_scout import Clock, Scripted  # noqa: E402
 from tests.test_shortlist import SMALL_CONFIG, mk  # noqa: E402
 
 READ_TOOLS = {"get_shortlist", "get_role", "search_roles", "explain_rank", "list_marks",
-              "list_target_companies", "coverage_gaps", "connector_brief", "hiring_trends", "health", "digest",
+              "list_target_companies", "coverage_gaps", "connector_brief", "hiring_trends", "health", "digest", "get_company_profile", "list_vcs",
               "list_candidates", "explain_candidate"}
 WRITE_TOOLS = {"mark_role", "unmark_role", "add_target_company", "deactivate_company",
                "reactivate_company", "map_board", "record_job_system",
-               "activate_candidate", "dismiss_candidate", "set_company_website"}
+               "activate_candidate", "dismiss_candidate", "set_company_website",
+               "set_company_profile", "add_vc", "edit_vc", "remove_vc", "attach_board_to_vc",
+               "link_company_to_vc", "unlink_company_from_vc"}
 
 
 class Session:
@@ -122,8 +124,8 @@ def test_get_shortlist_flat_by_company_and_new(world):
     first = flat["entries"][0]
     assert set(first) == {"rank", "role_id", "score", "company", "tier", "backed_by", "title", "location", "mark",
                           "new", "url"}
-    # Scores: a4 85, a1 80, b2 75, a2 60, b1 50 (run-1 roles are baseline, so they get no recency points).
-    assert [e["role_id"] for e in flat["entries"]] == [ids[j] for j in ("a4", "a1", "b2", "a2", "b1")]
+    # Scores: a4 55, b2 55, a1 50, a2 30, b1 30 (run-1 roles are baseline, so they get no recency points).
+    assert [e["role_id"] for e in flat["entries"]] == [ids[j] for j in ("a4", "b2", "a1", "a2", "b1")]
     assert [e["rank"] for e in flat["entries"]] == [1, 2, 3, 4, 5] and flat["next_offset"] is None
     assert "reasons" not in first                                  # compact unless asked for
     assert session.call("get_shortlist", include_reasons=True)["entries"][0]["reasons"]
@@ -134,7 +136,7 @@ def test_get_shortlist_flat_by_company_and_new(world):
 
     grouped = session.call("get_shortlist", view="by_company")
     assert [(c["company"], c["roles_on_list"], c["best_rank"]) for c in grouped["companies"]] == [
-        ("Alpha", 3, 1), ("Beta", 2, 3)]
+        ("Alpha", 3, 1), ("Beta", 2, 2)]
     assert "company" not in grouped["companies"][0]["roles"][0]    # not repeated inside the group
 
     # Compared with the first day's list, two roles are new (a4 and b2 appeared in run 2).
@@ -175,7 +177,7 @@ def test_explain_rank(world):
     session, ids, _ = world
     top = session.call("explain_rank", role_id=ids["a4"])
     assert top["on_shortlist"] is True and top["rank"] == 1
-    assert "Tier 1 company (+30)" in top["score_breakdown"]
+    assert 'Title matches "Group Product Manager" (+40)' in top["score_breakdown"]
     intern = session.call("explain_rank", role_id=ids["g1"])
     assert intern["on_shortlist"] is False
     assert intern["why_not_listed"] == 'its title contains "Intern", a phrase you never want'
@@ -241,9 +243,9 @@ def test_add_deactivate_reactivate_and_map(world):
 def test_record_job_system_gaps_and_brief(world):
     session, _, conn = world
     before = session.call("coverage_gaps")
-    assert before["summary"] == "1 build candidate, 1 unidentified"
+    assert before["summary"] == "0 build candidates, 1 unidentified"
     assert [(g["system"], g["build_candidate"], g["why"]) for g in before["job_systems"]] == [
-        ("icims", True, "tier 1: Wday")]
+        ("icims", False, None)]
     assert [u["company"] for u in before["unidentified"]] == ["Mystery"]
 
     recorded = session.call("record_job_system", company="mystery", system="Jobvite",

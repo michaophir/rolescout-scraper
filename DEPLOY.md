@@ -211,6 +211,53 @@ paste any URL from the career site, a job page included:
 rolescout companies map "Acme" workday "https://acme.wd5.myworkdayjobs.com/en-US/Careers/login"
 ```
 
+## Company profiles, sectors and VCs
+
+Every tracked company has a profile: description, sectors, stage, employee
+count and HQ. Each value records where it came from (a portfolio board, an
+agent over MCP, or you) and when. A value you set is never replaced.
+
+```sh
+rolescout profile show "Acme"
+rolescout profile set "Acme" stage "series B"       # one of the fixed stages
+rolescout profile set "Acme" sectors "fintech, AI and ML"
+rolescout profile clear "Acme" stage                # the board's value applies again
+rolescout profile coverage
+```
+
+Stage is one of: bootstrapped, pre-seed, seed, series A, series B, series C,
+series D, series E+, late-stage private, public, acquired, unknown. The
+board's own word is kept beside it.
+
+Sectors are a short list of your own. `rolescout sectors init` writes
+`~/.rolescout/sectors.toml` from the tags in your data; edit it, then run
+`rolescout sectors apply` (no network). `rolescout sectors unmapped` lists
+the tags no sector claims, most common first. Until the file exists, built-in
+rules are used.
+
+The VC list holds investors and ecosystem groups. A portfolio board belongs
+to one VC, and a VC is made from each board when it is registered. An
+ecosystem group lists companies it did not back, so it is left out of
+"Backed by":
+
+```sh
+rolescout vcs list
+rolescout vcs edit "Example Tech Alliance" --type ecosystem
+rolescout vcs edit "Acme Venture Partners" --short Acme
+rolescout vcs add "Bolt Capital"
+rolescout vcs link "Some Company" "Bolt Capital"    # by hand; stays whatever the boards say
+rolescout vcs attach https://jobs.example.vc "Acme Venture Partners"
+```
+
+Profiles and VC links are filled from the boards on upgrade, after every
+harvest and on activation, from the database alone.
+
+For browsing (in Datasette, for example) the database has read-only views:
+`v_company_overview` (profile, VCs, open roles, opened and closed in the last
+30 days), `v_open_roles` (open roles with the company's profile and VCs),
+`v_company_sectors` (one row per company and sector) and `v_hiring_weekly`
+(opened and closed per company per week).
+
 ## What is running, and what changed
 
 `rolescout status` has a "Right now" line: the job in progress (scout,

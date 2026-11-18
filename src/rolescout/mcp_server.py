@@ -17,6 +17,7 @@ from typing import Annotated, Any, Literal
 
 from rolescout import candidates as cands
 from rolescout import digest as changes
+from rolescout import portfolio, profiles, vcs
 from rolescout import shortlist as ranking
 from rolescout.adapters import ADAPTERS
 from rolescout.companies import CompanyError, add_board, add_company, backed_by, get_company, list_companies, set_active, set_website
@@ -51,7 +52,7 @@ Key ideas:
   rebuilt after each scout from the owner's ranking rules. Start there for "what should I look at".
 - Marks record the owner's decision on a role: dismissed (never show again), saved (keep,
   flagged), applied (never show again; description kept after the role closes).
-- A company is identified by its name. Tier 1 is highest priority. A company is fetched only
+- A company is identified by its name. A company is fetched only
   if it is mapped to a job board on a supported source (greenhouse, lever, ashby, workday,
   rippling, gem, workable).
 - Coverage gaps are companies that cannot be fetched yet: on an unsupported job system, on a
@@ -138,7 +139,8 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
                 conn.execute("PRAGMA query_only = ON")
             yield conn
         except (CompanyError, MarkError, ConfigError, GapsError, ValueError, cands.CandidateError,
-                cands.ConfigError) as exc:
+                cands.ConfigError, profiles.ProfileError, profiles.MappingError, vcs.VcError,
+                portfolio.PortfolioError) as exc:
             raise ToolError(str(exc)) from None
         finally:
             conn.close()
@@ -414,8 +416,7 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
         """Which target companies rolescout cannot fetch, and which connector is worth building next.
 
         Unsupported companies are grouped by the job system they use (icims, workable, ...).
-        A system is a build candidate when three or more companies use it or a tier-1 company
-        does. Also lists companies on a supported system that still need a board mapped
+        A system is a build candidate when three or more companies use it. Also lists companies on a supported system that still need a board mapped
         (fix with map_board) and companies whose job system is unknown (fix with
         record_job_system once someone has looked). Use connector_brief for the detail on one
         system.
@@ -589,8 +590,146 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
                     "rules": [{"rule": rule, **c["checks"][rule]} for rule in cands.RULES if rule in c["checks"]],
                     "first_seen": c["first_seen_at"][:10], "last_checked": (c["last_checked_at"] or "")[:10] or None}
 
+    VcRef = Annotated[str, Field(description="The VC's name or short name, as list_vcs shows them.")]
+    ProfileField = Literal["description", "sectors", "stage", "employees", "hq"]
+
+    def vc_row(v) -> dict:
+        return {"name": v["name"], "short_name": v["short_name"], "type": v["type"], "website": v["website"] or None}
+
+    @server.tool(title="Get a company's profile", annotations=reads)
+    def get_company_profile(company: CompanyName) -> dict[str, Any]:
+        """A tracked company's profile: description, sectors, stage, employee count and HQ
+        location. Each field comes with its source (board: a portfolio board's page; agent: set
+        through set_company_profile; manual: set by the owner) and the date it was set. Also
+        the board's raw sector tags, the stage as the board worded it, and the VCs and
+        ecosystem groups linked to the company.
+
+        Use it before answering questions about what a company does or who backs it, and
+        before set_company_profile, to see which fields are empty or owner-set.
+        """
+        with database() as conn:
+            profile = profiles.get_profile(conn, company)
+            links = vcs.company_links(conn, get_company(conn, company)["id"])
+            return {**profile,
+                    "backed_by": [{"vc": l["name"], "source": l["source"]} for l in links if l["type"] == "vc"],
+                    "ecosystem_groups": [l["name"] for l in links if l["type"] == "ecosystem"],
+                    "stages": list(profiles.STAGES), "sector_list": list(profiles.load_mapping(conn).sectors)}
+
+    @server.tool(title="List VCs", annotations=reads)
+    def list_vcs() -> dict[str, Any]:
+        """The VC list: every investor and ecosystem group with its short name, type (vc or
+        ecosystem), website, portfolio boards, and how many tracked companies it is linked to.
+
+        An ecosystem group (for example a city's tech association) lists companies it did not
+        invest in, so it is left out of every backed_by. Use it to answer "which VCs do I
+        follow" or to find the exact name another VC tool needs.
+        """
+        with database() as conn:
+            return {"vcs": [{**vc_row(v), "companies_linked": v["companies"],
+                             "linked_by_hand": v["linked_by_hand"], "portfolio_boards": v["boards"]}
+                            for v in vcs.list_vcs(conn)]}
+
     if read_only:
         return server
+
+    @server.tool(title="Set a company profile field", annotations=writes)
+    def set_company_profile(
+        company: CompanyName,
+        field: Annotated[ProfileField, Field(description="Which field to set.")],
+        value: Annotated[str, Field(description=(
+            "The value. description: one or two plain sentences. stage: one of the stages "
+            "get_company_profile lists. sectors: a comma-separated list from sector_list. "
+            "employees: a whole number. hq: a place, e.g. \"Austin, TX\"."))],
+    ) -> dict[str, Any]:
+        """Fill in one profile field for a tracked company, recorded with source "agent".
+
+        Use it for a field that is empty or came from a board and that you have a reliable
+        value for. A value the owner set by hand is never replaced: the call fails and says so.
+        Returns the profile after the change.
+        """
+        with database() as conn:
+            return profiles.set_field(conn, company, field, value, source="agent")
+
+    @server.tool(title="Add a VC", annotations=writes)
+    def add_vc(
+        name: Annotated[str, Field(description="The VC's full name.")],
+        short_name: Annotated[str | None, Field(description="What backed_by shows. Omit to derive it from the name.")] = None,
+        type: Annotated[Literal["vc", "ecosystem"], Field(description=(
+            "vc for an investor; ecosystem for a group that lists companies it did not back."))] = "vc",
+        website: Annotated[str | None, Field(description="The VC's own website.")] = None,
+    ) -> dict[str, Any]:
+        """Add an investor or an ecosystem group to the VC list.
+
+        Use it for an investor the owner wants to see in backed_by that has no portfolio board
+        registered. It starts with no board and no companies; attach_board_to_vc and
+        link_company_to_vc add them. A VC made from a registered board already exists: check
+        list_vcs first."""
+        with database() as conn:
+            return vc_row(vcs.add_vc(conn, name, short=short_name or "", kind=type, website=website or ""))
+
+    @server.tool(title="Edit a VC", annotations=writes)
+    def edit_vc(
+        vc: VcRef,
+        name: Annotated[str | None, Field(description="A new full name.")] = None,
+        short_name: Annotated[str | None, Field(description="A new short name for backed_by.")] = None,
+        type: Annotated[Literal["vc", "ecosystem"] | None, Field(description="vc or ecosystem.")] = None,
+        website: Annotated[str | None, Field(description="A new website.")] = None,
+    ) -> dict[str, Any]:
+        """Change a VC's name, short name, type or website. Only the fields given change.
+
+        Use it to shorten the name backed_by shows, to correct a website guessed from a board's
+        address, or to mark a group as an ecosystem: setting type to ecosystem takes it out of
+        every backed_by at once, and setting it back to vc returns it."""
+        with database() as conn:
+            return vc_row(vcs.edit_vc(conn, vc, name=name, short=short_name, kind=type, website=website))
+
+    @server.tool(title="Remove a VC", annotations=ToolAnnotations(
+        read_only_hint=False, destructive_hint=True, open_world_hint=False))
+    def remove_vc(vc: VcRef) -> dict[str, Any]:
+        """Remove a VC from the list together with its links to companies, including links made
+        by hand. Its portfolio boards stay registered, attached to no VC. Companies and roles
+        are not touched. Confirm with the owner first: the hand-made links cannot be restored."""
+        with database() as conn:
+            name, links, boards = vcs.remove_vc(conn, vc)
+            return {"removed": name, "company_links_removed": links, "boards_left_without_a_vc": boards}
+
+    @server.tool(title="Attach a portfolio board to a VC", annotations=writes)
+    def attach_board_to_vc(
+        board: Annotated[str, Field(description="The board's URL or name, as list_vcs shows boards.")],
+        vc: VcRef,
+    ) -> dict[str, Any]:
+        """Say which VC a registered portfolio board belongs to.
+
+        Use it when one firm has several boards, or when a board was given a VC of its own that
+        should have been an existing one. Companies the board lists become linked to that VC and
+        stop being linked, through this board, to the VC it belonged to before."""
+        with database() as conn:
+            url, name = vcs.attach_board(conn, board, vc)
+            return {"board": url, "vc": name}
+
+    @server.tool(title="Link a company to a VC", annotations=writes)
+    def link_company_to_vc(company: CompanyName, vc: VcRef) -> dict[str, Any]:
+        """Record by hand that a VC backs a tracked company.
+
+        Use it for an investor whose portfolio board does not list the company, or that has no
+        board at all. The link is marked as made by hand and stays whatever the boards say,
+        until unlink_company_from_vc removes it."""
+        with database() as conn:
+            company_name, vc_name, new = vcs.link_company(conn, company, vc)
+            return {"company": company_name, "vc": vc_name, "newly_linked": new}
+
+    @server.tool(title="Unlink a company from a VC", annotations=writes)
+    def unlink_company_from_vc(company: CompanyName, vc: VcRef) -> dict[str, Any]:
+        """Remove a link between a company and a VC.
+
+        Use it to undo link_company_to_vc. A link that a portfolio board makes cannot be removed
+        this way: it returns for as long as that board lists the company, and still_linked says
+        whether that happened. To hide a whole group from backed_by, edit its type instead."""
+        with database() as conn:
+            company_name, vc_name, removed = vcs.unlink_company(conn, company, vc)
+            still = any(l["name"] == vc_name for l in vcs.company_links(
+                conn, get_company(conn, company_name)["id"]))
+            return {"company": company_name, "vc": vc_name, "removed": removed, "still_linked": still}
 
     @server.tool(title="Activate a candidate", annotations=writes)
     def activate_candidate(

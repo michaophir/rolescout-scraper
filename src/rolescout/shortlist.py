@@ -54,7 +54,6 @@ def _phrase(phrase: str) -> re.Pattern:
 class RankingConfig:
     size: int = 100
     max_per_company: int = 5       # slots one company may take; 0 = no cap
-    tier_points: dict[int, float] = field(default_factory=dict)
     wanted: dict[str, float] = field(default_factory=dict)       # title phrase -> points
     exclude: list[str] = field(default_factory=list)             # title phrases never wanted
     seniority: dict[str, float] = field(default_factory=dict)    # word -> points
@@ -141,17 +140,14 @@ def parse_config(text: str, source: str = "") -> RankingConfig:
     exclude = title.get("exclude", [])
     if not isinstance(exclude, list) or not all(isinstance(x, str) and x.strip() for x in exclude):
         raise ConfigError("title.exclude must be a list of phrases")
-    tiers = {}
-    for key, value in _points_table(raw.get("tier_points"), "[tier_points]").items():
-        if not key.isdigit():
-            raise ConfigError(f"[tier_points]: {key!r} is not a tier number")
-        tiers[int(key)] = value
+    # [tier_points] is still accepted so an older config loads, but a
+    # company's tier no longer earns points.
     full, zero = (int(_number(recency, "full_days", 0, "recency")),
                   int(_number(recency, "zero_days", 30, "recency")))
     if zero <= full:
         raise ConfigError("recency.zero_days must be larger than recency.full_days")
     return RankingConfig(
-        size=size, max_per_company=cap, tier_points=tiers,
+        size=size, max_per_company=cap,
         wanted=_points_table(title.get("wanted"), "[title.wanted]"),
         exclude=[x.strip() for x in exclude],
         seniority=_points_table(_only(raw.get("seniority"), {"words"}, "seniority").get("words"),
@@ -215,12 +211,6 @@ size = 100
 # others are held back. Roles you marked saved are never held back.
 # 0 means no cap.
 max_per_company = 5
-
-# Points for the company's tier. A company with no tier gets none.
-[tier_points]
-1 = 30
-2 = 20
-3 = 10
 
 [title]
 # A role whose title contains any of these phrases is never listed.
@@ -387,9 +377,6 @@ def evaluate(role, cfg: RankingConfig, today: date, baseline: bool = False) -> E
     elif wanted is None:
         ev.eligible, ev.why_not = False, "its title matches none of the title phrases you want"
 
-    tier = role["tier"]
-    add(cfg.tier_points.get(tier, 0.0) if tier is not None else 0.0,
-        f"Tier {tier} company", "Company has no tier" if tier is None else f"Tier {tier} company")
     if wanted:
         ev.score += wanted[1]
         line = f'Title matches "{wanted[0]}" ({_pts(wanted[1])})'
@@ -491,10 +478,9 @@ def build_shortlist(conn: sqlite3.Connection, cfg: RankingConfig, *, run_id: int
         if ev.eligible:
             age = role_age(role, today, baseline)[0]
             ranked.append((role, ev, age if age is not None else 10 ** 6))
-    # Best score first; between equals: newer, better tier, then a fixed order.
+    # Best score first; between equals: newer, then a fixed order.
     ranked.sort(key=lambda item: (
         -item[1].score, item[2],
-        item[0]["tier"] if item[0]["tier"] is not None else 99,
         item[0]["company"].lower(), item[0]["title"].lower(), item[0]["id"]))
     ranked = [(role, ev) for role, ev, _ in ranked]
 

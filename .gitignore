@@ -21,3 +21,6 @@ ranking.toml
 
 # Candidates filter config (personal: the companies you want). It belongs next to the database.
 candidates.toml
+
+# Sector mapping (built from the tags in your own data). It belongs next to the database.
+sectors.toml
