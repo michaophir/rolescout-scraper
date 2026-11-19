@@ -19,13 +19,13 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote, urlsplit
-from urllib.robotparser import RobotFileParser
 
 import requests
 
 from rolescout import jobs, vcs
 from rolescout.db import get_meta, set_meta, transaction, utc_now
 from rolescout.http import USER_AGENT, make_session
+from rolescout.robots import ALLOW_ALL, DISALLOW_ALL, MAX_CHARS as ROBOTS_MAX_CHARS, Robots
 from rolescout.resolve import read_body, registrable_domain
 from rolescout.urls import InvalidWebsite, normalize_website
 
@@ -130,28 +130,25 @@ class Fetcher:
     def __init__(self, session: requests.Session | None = None, delay: float = 1.0) -> None:
         self.session = session or make_session(min_interval=delay)
         self.requests = 0
-        self._robots: dict[str, RobotFileParser | None] = {}
+        self._robots: dict[str, Robots] = {}
 
     def _allowed(self, url: str) -> bool:
         parts = urlsplit(url)
         origin = f"{parts.scheme}://{parts.netloc}"
         if origin not in self._robots:
-            rules: RobotFileParser | None = RobotFileParser()
+            rules = ALLOW_ALL
             self.requests += 1
             try:
                 resp = self.session.get(origin + "/robots.txt", timeout=PAGE_TIMEOUT, stream=True,
                                         headers={"Accept": "text/plain,*/*"})
                 if resp.status_code == 200:
-                    rules.parse(read_body(resp, 500_000).splitlines())
+                    rules = Robots.parse(read_body(resp, ROBOTS_MAX_CHARS))
                 elif resp.status_code >= 500:
-                    rules.parse(["User-agent: *", "Disallow: /"])
-                else:
-                    rules = None
+                    rules = DISALLOW_ALL
             except requests.RequestException:
-                rules = None
+                pass
             self._robots[origin] = rules
-        rules = self._robots[origin]
-        return rules is None or rules.can_fetch(USER_AGENT, url)
+        return self._robots[origin].allows(USER_AGENT, url)
 
     def get(self, base: str, path: str, accept: str = "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5"):
         """(status, text). Status is "robots" when robots.txt disallows the URL,

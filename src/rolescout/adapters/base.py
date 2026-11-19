@@ -5,12 +5,12 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, ClassVar
 from urllib.parse import urlsplit
-from urllib.robotparser import RobotFileParser
 
 import requests
 
 from rolescout.http import DEFAULT_TIMEOUT, USER_AGENT, make_session
 from rolescout.models import Role
+from rolescout.robots import ALLOW_ALL, Robots, Verdict
 
 
 class SourceError(Exception):
@@ -108,7 +108,7 @@ class SourceAdapter(ABC):
     def __init__(self, session: requests.Session | None = None) -> None:
         self.session = session or make_session()
         self.last_stats: FetchStats | None = None   # set by every ``fetch``
-        self._robots: dict[str, RobotFileParser | None] = {}   # by host; None allows everything
+        self._robots: dict[str, Robots] = {}   # by host
 
     def fetch(self, ref: str, *, company: str | None = None,
               context: FetchContext | None = None) -> list[Role]:
@@ -160,10 +160,20 @@ class SourceAdapter(ABC):
     def _check_robots(self, url: str, ref: str) -> None:
         """Raise ``SourceError`` when the host's robots.txt disallows ``url``.
 
-        The file is read once per host for the life of the adapter. A missing
-        or refused file (any 4xx) allows everything; a server error disallows
-        everything, as RFC 9309 asks.
+        The file is read once per host for the life of the adapter and
+        evaluated as RFC 9309 says (see ``rolescout.robots``). A missing or
+        refused file (any 4xx) allows everything; a server error disallows
+        everything.
         """
+        verdict = self._robots_verdict(url)
+        if not verdict:
+            parts = urlsplit(url)
+            raise SourceError(f"{self.name}: robots.txt on {parts.netloc} disallows {parts.path} "
+                              f"(board {ref!r}; {verdict.reason()})")
+
+    def _robots_verdict(self, url: str) -> Verdict:
+        """What the host's robots.txt says about ``url``. Raises ``SourceError``
+        when the file cannot be read."""
         parts = urlsplit(url)
         host = parts.netloc
         if host not in self._robots:
@@ -176,14 +186,8 @@ class SourceAdapter(ABC):
                 raise SourceError(f"{self.name}: robots.txt for {host} could not be read: {exc}") from exc
             if resp.status_code >= 500:
                 raise SourceError(f"{self.name}: robots.txt for {host} answered HTTP {resp.status_code}")
-            rules = None
-            if resp.status_code == 200:
-                rules = RobotFileParser()
-                rules.parse((resp.text or "").splitlines())
-            self._robots[host] = rules
-        rules = self._robots[host]
-        if rules is not None and not rules.can_fetch(USER_AGENT, url):
-            raise SourceError(f"{self.name}: robots.txt on {host} disallows {parts.path} (board {ref!r})")
+            self._robots[host] = Robots.parse(resp.text or "") if resp.status_code == 200 else ALLOW_ALL
+        return self._robots[host].check(USER_AGENT, url)
 
     def _get_text(self, url: str, ref: str) -> str:
         try:

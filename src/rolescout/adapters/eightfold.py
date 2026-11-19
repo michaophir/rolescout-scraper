@@ -9,7 +9,11 @@ hold recorded responses.
   its domain: ``?domain=acme.com``. The careers page carries that domain in
   its links, which is how a reference given without one is completed.
 - Two list endpoints exist, and a site answers only one of them (the other
-  answers 403):
+  answers 403). Which one is not known beforehand, so the second is tried
+  whenever the first cannot be read: refused by robots.txt, answered with
+  an error, or answered with something else than a list. A site that says
+  it is asked too often, or drops the connection, is not asked again on
+  the other endpoint: that answer is about the client, not the endpoint.
 
   - ``GET /api/apply/v2/jobs?domain=&start=&num=10&sort_by=timestamp`` gives
     ``{"count": n, "positions": [...]}``;
@@ -26,8 +30,9 @@ hold recorded responses.
 - The list carries title, locations, department, posted time and the job's
   URL, and no description.
 - A site that is asked too often answers 429 "Please try again later".
-- robots.txt allows ``/careers``, ``/api/apply`` and ``/api/pcsx`` and
-  disallows the rest.
+- robots.txt reads ``Disallow: /`` followed by ``Allow: /careers``,
+  ``Allow: /api/apply`` and ``Allow: /api/pcsx``: the longer rules win, so
+  the pages read here are allowed and the rest of the site is not.
 """
 
 import re
@@ -42,6 +47,7 @@ import requests
 from rolescout.adapters.base import BoardIdentity, BoardNotFound, FetchContext, FetchStats, SourceAdapter, SourceError
 from rolescout.http import DEFAULT_TIMEOUT
 from rolescout.models import Role
+from rolescout.robots import Verdict
 from rolescout.text import collapse_whitespace
 
 PAGE_SIZE = 10                 # what both endpoints return per page
@@ -200,12 +206,12 @@ class EightfoldAdapter(SourceAdapter):
             if wait > 0:
                 self._sleep(wait)
 
-    def _check_robots(self, url: str, ref: str) -> None:
+    def _robots_verdict(self, url: str) -> Verdict:
         unread = urlsplit(url).netloc not in self._robots
         if unread:
             self._pace()
         try:
-            super()._check_robots(url, ref)
+            return super()._robots_verdict(url)
         finally:
             if unread:
                 self._last_request = self._clock()
@@ -269,23 +275,31 @@ class EightfoldAdapter(SourceAdapter):
         self._interval = self.min_interval
         if not domain:
             domain = self._domain(host, ref)
-        refused = None
+        failed: list[str] = []          # why each endpoint could not be read
+        statuses: list[int] = []
         for variant in VARIANTS:
             url = variant.url(host, domain, 0)
-            self._check_robots(url, ref)
-            resp = self._send(url, ref)
-            if resp.status_code in (401, 403, 404):
-                refused = resp.status_code
-                continue                  # a site answers one endpoint and refuses the other
+            verdict = self._robots_verdict(url)
+            if not verdict:
+                failed.append(f"robots.txt on {host} disallows {variant.path} ({verdict.reason()})")
+                continue
+            resp = self._send(url, ref)     # raises when the site finds us too busy: the other is not tried
             if resp.status_code != 200:
-                raise SourceError(f"{self.name}: HTTP {resp.status_code} for {ref!r}")
-            body = variant.body(self._json(resp, ref))
+                statuses.append(resp.status_code)
+                failed.append(f"HTTP {resp.status_code} for {variant.path}")
+                continue
+            try:
+                body = variant.body(resp.json())
+            except ValueError:
+                failed.append(f"non-JSON response for {variant.path}")
+                continue
             if body is None:
-                raise SourceError(f"{self.name}: unexpected response shape for {ref!r}")
+                failed.append(f"unexpected response shape for {variant.path}")
+                continue
             return host, domain, variant, body
-        if refused == 404:
+        if statuses == [404] * len(VARIANTS):
             raise BoardNotFound(f"{self.name}: no board found for {ref!r}")
-        raise SourceError(f"{self.name}: HTTP {refused} for {ref!r} on both list endpoints")
+        raise SourceError(f"{self.name}: neither list endpoint could be read for {ref!r}: " + "; ".join(failed))
 
     # -- the adapter interface
 

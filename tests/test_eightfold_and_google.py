@@ -160,12 +160,69 @@ def test_a_missing_or_disallowed_site_fails_cleanly(load_fixture):
     with pytest.raises(BoardNotFound):
         quiet(FakeWeb({}))[0].fetch("gone.eightfold.ai/gone.example")
     both_refused = FakeWeb({JOBS.format(SITE, "acme.com", 0): 403, SEARCH.format(SITE, "acme.com", 0): 403})
-    with pytest.raises(SourceError, match="HTTP 403 .* on both list endpoints"):
+    with pytest.raises(SourceError, match="neither list endpoint could be read .*: HTTP 403 for /api/apply/v2/jobs; HTTP 403 for /api/pcsx/search"):
         quiet(both_refused)[0].fetch("acme.eightfold.ai/acme.com")
     closed = FakeWeb({**jobs_board(load_fixture), "https://acme.eightfold.ai/robots.txt": "User-agent: *\nDisallow: /"})
     with pytest.raises(SourceError, match="robots.txt on acme.eightfold.ai disallows"):
         quiet(closed)[0].fetch("acme.eightfold.ai/acme.com")
     assert closed.urls == ["https://acme.eightfold.ai/robots.txt"]
+
+
+ROBOTS_AS_PUBLISHED = (Path(__file__).parent / "fixtures" / "robots_disallow_all_before_longer_allows.txt").read_text()
+
+
+def test_the_robots_txt_these_sites_publish_allows_both_list_endpoints(load_fixture):
+    # "Disallow: /" comes first in it; the longer "Allow: /api/apply" decides.
+    web = FakeWeb({**jobs_board(load_fixture), f"https://{SITE}/robots.txt": ROBOTS_AS_PUBLISHED})
+    assert len(quiet(web)[0].fetch(f"{SITE}/acme.com")) == 13
+    own = FakeWeb({**search_board(load_fixture), f"https://{OWN_HOST}/robots.txt": ROBOTS_AS_PUBLISHED})
+    assert len(quiet(own)[0].fetch(f"{OWN_HOST}/globex.example")) == 4
+
+
+@pytest.mark.parametrize("first_endpoint, reason", [
+    (500, "HTTP 500"), (403, "HTTP 403"), ("<html>Sign in</html>", "non-JSON response"),
+    ({"error": "unknown"}, "unexpected response shape"),
+])
+def test_the_other_endpoint_is_tried_when_the_first_fails(load_fixture, first_endpoint, reason):
+    search = load_fixture("eightfold_search_endpoint_names_fields_differently.json")
+    first, second = JOBS.format(OWN_HOST, "globex.example", 0), SEARCH.format(OWN_HOST, "globex.example", 0)
+    web = FakeWeb({first: first_endpoint, second: search})
+    adapter, _ = quiet(web)
+    assert len(adapter.fetch(f"{OWN_HOST}/globex.example")) == 4
+    assert web.urls == [f"https://{OWN_HOST}/robots.txt", first, second]
+    # When the other fails as well, the fetch fails and says what each one answered.
+    with pytest.raises(SourceError, match=f"neither list endpoint could be read .*: {reason} for /api/apply/v2/jobs; "
+                                          "HTTP 502 for /api/pcsx/search"):
+        quiet(FakeWeb({first: first_endpoint, second: 502}))[0].fetch(f"{OWN_HOST}/globex.example")
+    with pytest.raises(BoardNotFound):                                  # both missing: no board there
+        quiet(FakeWeb({}))[0].fetch(f"{OWN_HOST}/globex.example")
+    with pytest.raises(SourceError, match="neither list endpoint"):     # one missing, one broken: not "gone"
+        quiet(FakeWeb({second: 500}))[0].fetch(f"{OWN_HOST}/globex.example")
+
+
+def test_an_endpoint_robots_txt_refuses_is_skipped_for_the_other(load_fixture):
+    search = load_fixture("eightfold_search_endpoint_names_fields_differently.json")
+    first, second = JOBS.format(OWN_HOST, "globex.example", 0), SEARCH.format(OWN_HOST, "globex.example", 0)
+    robots = "User-agent: *\nDisallow: /\nAllow: /api/pcsx\n"
+    web = FakeWeb({first: {"count": 0, "positions": []}, second: search, f"https://{OWN_HOST}/robots.txt": robots})
+    assert len(quiet(web)[0].fetch(f"{OWN_HOST}/globex.example")) == 4
+    assert web.urls == [f"https://{OWN_HOST}/robots.txt", second]       # the refused endpoint is never requested
+    # The second refused, the first failing: the message names both reasons, and nothing refused was read.
+    other = FakeWeb({first: 500, second: search,
+                     f"https://{OWN_HOST}/robots.txt": "User-agent: *\nDisallow: /api/pcsx\n"})
+    with pytest.raises(SourceError, match=r"HTTP 500 for /api/apply/v2/jobs; robots.txt on careers.globex.example "
+                                          r"disallows /api/pcsx/search \(line 2: Disallow: /api/pcsx\)"):
+        quiet(other)[0].fetch(f"{OWN_HOST}/globex.example")
+    assert second not in other.urls
+
+
+def test_a_site_that_finds_us_too_busy_is_not_asked_on_the_other_endpoint(load_fixture):
+    search = load_fixture("eightfold_search_endpoint_names_fields_differently.json")
+    first, second = JOBS.format(OWN_HOST, "globex.example", 0), SEARCH.format(OWN_HOST, "globex.example", 0)
+    web = Flaky({first: [429], second: search})
+    with pytest.raises(SourceError, match="keeps answering HTTP 429"):
+        quiet(web)[0].fetch(f"{OWN_HOST}/globex.example")
+    assert second not in web.urls
 
 
 def test_requests_are_spaced_whatever_session_is_used(load_fixture):

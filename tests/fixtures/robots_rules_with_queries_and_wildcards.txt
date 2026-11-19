@@ -1,0 +1,29 @@
+User-agent: *
+User-agent: Otherbot
+Disallow: /search
+Allow: /search/about
+Disallow: /index.html?
+Disallow: /?
+Allow: /?hl=
+Disallow: /?hl=*&
+Allow: /?hl=*&gws_rd=ssl$
+Allow: /shopping?udm=28$
+Disallow: /shopping/search
+Disallow: /about/careers/applications/candidate-prep
+Disallow: /about/careers/applications/jobs/results?page=
+Disallow: /about/careers/applications/jobs/results/?page=
+Disallow: /about/careers/applications/jobs/results?*&page=
+Disallow: /about/careers/applications/jobs/results/?*&page=
+Disallow: /maps/reserve/api/
+Allow: /maps/reserve
+
+# A group of its own
+User-agent: Adbot
+Disallow: /maps/api/js/
+Allow: /maps/api/js
+
+# A second group for an agent of the first: both apply to it
+User-agent: Otherbot
+Disallow: /about/careers/applications/jobs/results
+
+Sitemap: https://www.example.com/sitemap.xml

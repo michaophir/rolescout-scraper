@@ -35,7 +35,6 @@ from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from urllib.parse import unquote, urljoin, urlparse
-from urllib.robotparser import RobotFileParser
 
 import requests
 from bs4 import BeautifulSoup
@@ -47,6 +46,7 @@ from rolescout import jobs
 from rolescout.companies import CompanyError, add_board
 from rolescout.db import transaction, utc_now
 from rolescout.http import USER_AGENT, make_session
+from rolescout.robots import ALLOW_ALL, DISALLOW_ALL, MAX_CHARS as ROBOTS_MAX_CHARS, Robots
 from rolescout.urls import InvalidWebsite, normalize_website
 
 PAGE_TIMEOUT = 20
@@ -430,7 +430,7 @@ class Resolver:
         self.wall_budget = wall_budget
         self.cpu_budget = cpu_budget
         self._adapters: dict[str, object] = {}
-        self._robots: dict[str, RobotFileParser | None] = {}
+        self._robots: dict[str, Robots] = {}
         self._deadline = self._cpu_deadline = float("inf")
         self._scanned = 0
 
@@ -460,23 +460,20 @@ class Resolver:
         origin = f"{parsed.scheme}://{parsed.netloc}"
         if origin not in self._robots:
             self._tick()
-            rules: RobotFileParser | None = RobotFileParser()
+            rules = ALLOW_ALL
             res.requests += 1
             try:
                 resp = self.session.get(
                     origin + "/robots.txt", timeout=PAGE_TIMEOUT, stream=True,
                     headers={"Accept": "text/plain,*/*"})
                 if resp.status_code == 200:
-                    rules.parse(read_body(resp, 500_000).splitlines())
+                    rules = Robots.parse(read_body(resp, ROBOTS_MAX_CHARS))
                 elif resp.status_code >= 500:
-                    rules.parse(["User-agent: *", "Disallow: /"])
-                else:
-                    rules = None
+                    rules = DISALLOW_ALL
             except requests.RequestException:
-                rules = None  # unreachable: the page request will report that itself
+                pass  # unreachable: the page request will report that itself
             self._robots[origin] = rules
-        rules = self._robots[origin]
-        return rules is None or rules.can_fetch(USER_AGENT, url)
+        return self._robots[origin].allows(USER_AGENT, url)
 
     def _page(self, url: str, res: Resolution, *,
               accept: str = "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5") -> tuple[str, str] | None:

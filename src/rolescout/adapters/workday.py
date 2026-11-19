@@ -29,7 +29,6 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, timezone
 from urllib.parse import urlsplit
-from urllib.robotparser import RobotFileParser
 
 import requests
 
@@ -38,6 +37,7 @@ from rolescout.adapters.base import (
 )
 from rolescout.http import DEFAULT_TIMEOUT, USER_AGENT
 from rolescout.models import Role
+from rolescout.robots import Robots
 from rolescout.text import collapse_whitespace, strip_html
 
 PAGE_SIZE = 20                 # the most the endpoint accepts
@@ -359,19 +359,19 @@ class WorkdayAdapter(SourceAdapter):
     def _check_robots(self, ref: WorkdayRef) -> None:
         """Refuse the board when its robots.txt disallows the endpoint we read.
 
-        One request per fetch. A missing file allows everything; a server
-        error disallows everything, as RFC 9309 asks.
+        One request per fetch, evaluated as RFC 9309 says. A missing file
+        allows everything; a server error disallows everything.
         """
         resp = self._send("GET", f"https://{ref.host}/robots.txt", ref, headers={"Accept": "*/*"})
         if resp.status_code >= 500:
             raise SourceError(f"{self.name}: robots.txt for {ref.host} answered HTTP {resp.status_code}")
         if resp.status_code != 200:
             return
-        rules = RobotFileParser()
-        rules.parse((resp.text or "").splitlines())
         path = f"{ref.api}/jobs"
-        if not rules.can_fetch(USER_AGENT, path):
-            raise SourceError(f"{self.name}: robots.txt on {ref.host} disallows {urlsplit(path).path}")
+        verdict = Robots.parse(resp.text or "").check(USER_AGENT, path)
+        if not verdict:
+            raise SourceError(f"{self.name}: robots.txt on {ref.host} disallows {urlsplit(path).path} "
+                              f"({verdict.reason()})")
 
     def _json(self, resp: requests.Response, ref: WorkdayRef) -> dict:
         try:

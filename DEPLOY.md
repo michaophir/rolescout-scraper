@@ -331,6 +331,36 @@ half the pace. If it is refused a third time the fetch fails, and as with any
 failed fetch no role is closed. Only titles, locations, departments, dates and
 links are stored; these sites have no description in their lists.
 
+A site answers one of two list addresses and refuses the other. When the
+first cannot be read (robots.txt refuses it, or it answers an error or
+something that is not a list) the second is tried before the fetch fails, and
+a failure names what each one answered. A site that says it is asked too
+often is not asked again at the other address.
+
+## robots.txt
+
+Every site's robots.txt is read before anything else on it, and a page it
+disallows is not requested. The file is evaluated as RFC 9309 says: of the
+rules that match a page, the longest wins, `Allow` wins a tie, `*` stands for
+any run of characters and `$` for the end of the address. So a file that
+reads `Disallow: /` and then `Allow: /careers` lets `/careers` through and
+nothing else. The answer no longer depends on the Python version: before 3.14
+Python's own reader obeyed the first matching rule and refused such sites.
+A refusal names the line of the file that decided:
+
+```
+robots.txt on jobs.acme.com disallows /api/list (board 'acme'; line 2: Disallow: /api/)
+```
+
+Companies that `rolescout companies resolve` looked at before this change may
+have had pages skipped that were in fact allowed. To count them and look at
+them again:
+
+```sh
+sqlite3 ~/.rolescout/rolescout.db "SELECT r.outcome, COUNT(*) FROM company_resolutions r WHERE r.evidence LIKE '%robots.txt disallows%' GROUP BY 1"
+rolescout companies resolve NAME
+```
+
 ## Complete and partial reads
 
 Some sources say how many roles they list (Eightfold, Workday, Rippling). A
