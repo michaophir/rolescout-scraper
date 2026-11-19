@@ -97,7 +97,7 @@ Read (always available):
 | `coverage_gaps` | Companies that cannot be fetched, grouped by job system, with build candidates |
 | `connector_brief` | A Markdown brief for building an adapter for one job system |
 | `hiring_trends` | Open counts and roles opened and closed over a date range, overall and by department |
-| `health` | What `rolescout status` shows, including what is running right now |
+| `health` | What `rolescout status` shows, including what is running right now and boards whose last read saw less than 99% of the roles listed |
 | `digest` | What changed since the previous completed scout, or since a date |
 | `get_company_profile` | A company's description, sectors, stage, employees and HQ, each with its source; and its VCs |
 | `list_vcs` | The VC list: investors and ecosystem groups, their boards and linked companies |

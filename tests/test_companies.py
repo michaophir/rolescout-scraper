@@ -6,7 +6,7 @@ import pytest
 from rolescout import companies
 from rolescout.companies import CompanyError
 
-REPO_CSV = Path(__file__).parent.parent / "target_company_list.csv"
+LIST_CSV = Path(__file__).parent / "fixtures" / "company_list_csv_with_a_name_listed_twice.csv"
 
 
 def by_name(conn):
@@ -32,14 +32,14 @@ def test_import_csv_adds_then_updates(conn, tmp_path):
     assert [r["tier"] for r in conn.execute("SELECT tier FROM companies")] == [None, None, None]
 
 
-def test_import_the_repo_csv_format(conn):
-    with open(REPO_CSV, newline="", encoding="utf-8") as f:
+def test_import_a_company_list_csv_with_a_tier_column_and_a_repeated_name(conn):
+    with open(LIST_CSV, newline="", encoding="utf-8") as f:
         names = [row["company_name"].strip() for row in csv.DictReader(f)]
     unique = {name.lower() for name in names}
-    added, updated = companies.import_csv(conn, REPO_CSV)
+    added, updated = companies.import_csv(conn, LIST_CSV)
     # A name listed twice in the file is added once, then counted as an update.
     assert (added, updated) == (len(unique), len(names) - len(unique))
-    assert len(by_name(conn)) == len(unique)
+    assert len(by_name(conn)) == len(unique) == 5
 
 
 def test_import_rejects_wrong_columns(conn, tmp_path):

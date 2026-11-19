@@ -1,4 +1,4 @@
-"""Text normalization helpers shared by the adapters (ported from scraper.py)."""
+"""Text normalization helpers shared by the adapters."""
 
 import html
 import re

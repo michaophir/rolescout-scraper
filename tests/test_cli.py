@@ -14,12 +14,12 @@ def test_user_agent_names_project_and_repo():
 
 
 def test_fetch_prints_count_and_sample(monkeypatch, capsys, load_fixture, fake_session):
-    session = fake_session(load_fixture("ashby_ramp.json"))
+    session = fake_session(load_fixture("ashby_board_with_compensation.json"))
     monkeypatch.setattr(cli, "get_adapter", lambda source: AshbyAdapter(session))
 
-    assert cli.main(["fetch", "ashby", "ramp", "--sample", "2"]) == 0
+    assert cli.main(["fetch", "ashby", "acme", "--sample", "2"]) == 0
     out = capsys.readouterr().out
-    assert "ashby/ramp: 3 open roles" in out
+    assert "ashby/acme: 3 open roles" in out
     assert "Sample role (2 of 3)" in out
     assert "Software Engineer, Android" in out
     assert "--full to show all" in out  # description is previewed, not dumped

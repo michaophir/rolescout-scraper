@@ -215,7 +215,7 @@ def registrable_domain(url_or_host: str) -> str:
 
 def domain_pattern(domain: str) -> re.Pattern:
     """Matches the domain or any subdomain of it, but not look-alikes
-    (ramp.com does not match xramp.com, ramp.com.au or ramp.community)."""
+    (acme.com does not match xacme.com, acme.com.au or acme.community)."""
     return re.compile(r"(?<![\w.-])(?:[\w-]+\.)*" + re.escape(domain) + r"(?![\w-]|\.[a-z])", re.I)
 
 

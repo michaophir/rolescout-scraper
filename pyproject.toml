@@ -30,6 +30,4 @@ path = "src/rolescout/__init__.py"
 packages = ["src/rolescout"]
 
 [tool.pytest.ini_options]
-# Only collect the package tests. test_ats_fields.py at the repo root is a
-# manual script that hits live APIs and must not be picked up by pytest.
 testpaths = ["tests"]

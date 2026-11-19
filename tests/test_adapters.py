@@ -37,49 +37,49 @@ def check_common(roles, source):
 
 
 def test_greenhouse(load_fixture, fake_session):
-    session = fake_session(load_fixture("greenhouse_anthropic.json"))
-    roles = GreenhouseAdapter(session).fetch("anthropic")
+    session = fake_session(load_fixture("greenhouse_board_with_content_and_pay.json"))
+    roles = GreenhouseAdapter(session).fetch("acme")
 
     assert session.urls == [
-        "https://boards-api.greenhouse.io/v1/boards/anthropic/jobs?content=true"]
+        "https://boards-api.greenhouse.io/v1/boards/acme/jobs?content=true"]
     check_common(roles, "greenhouse")
     first = roles[0]
     assert first.source_job_id == "5456619008"
-    assert first.company == "Anthropic"  # from the source's company_name
+    assert first.company == "Acme"  # from the source's company_name
     assert first.title == "3P Revenue Accounting & Reporting"
     assert first.department == "Finance"
     assert first.location == "San Francisco, CA | Seattle, WA"
     assert first.workplace_type == ""
-    assert first.url == "https://job-boards.greenhouse.io/anthropic/jobs/5456619008"
+    assert first.url == "https://job-boards.greenhouse.io/acme/jobs/5456619008"
     assert first.date_posted == "2026-10-19"
     # first_published, not updated_at (2026-08-21 for this role)
     assert roles[1].date_posted == "2024-12-20"
     assert first.compensation_text == "$190,000 — $230,000 USD"
-    assert first.description.startswith("About Anthropic Anthropic’s mission is")
-    assert len(first.description) == 8864  # not truncated
+    assert first.description.startswith("About Acme Acme’s mission is")
+    assert len(first.description) == 8812  # not truncated
     assert roles[2].title == "Account Executive, Nonprofit"  # trailing space stripped
 
 
 def test_lever(load_fixture, fake_session):
-    session = fake_session(load_fixture("lever_spotify.json"))
-    roles = LeverAdapter(session).fetch("spotify")
+    session = fake_session(load_fixture("lever_postings_with_list_sections.json"))
+    roles = LeverAdapter(session).fetch("acme")
 
-    assert session.urls == ["https://api.lever.co/v0/postings/spotify?mode=json"]
+    assert session.urls == ["https://api.lever.co/v0/postings/acme?mode=json"]
     check_common(roles, "lever")
     first = roles[0]
     assert first.source_job_id == "2a55d6c9-c564-443a-be3e-a3851db5a93b"
-    assert first.company == "spotify"  # Lever reports no company name
-    assert first.title == "Account Executive - Commercial, Spotify Technology"
+    assert first.company == "acme"  # Lever reports no company name
+    assert first.title == "Account Executive - Commercial, Acme Technology"
     assert first.department == "Operations and Business Support"
     assert first.location == "New York, NY"
     assert first.workplace_type == "hybrid"
-    assert first.url == "https://jobs.lever.co/spotify/2a55d6c9-c564-443a-be3e-a3851db5a93b"
+    assert first.url == "https://jobs.lever.co/acme/2a55d6c9-c564-443a-be3e-a3851db5a93b"
     assert first.date_posted == "2026-10-23"
     assert first.compensation_text.startswith(
         "The United States base range for this position is $87,069-$124,385 plus equity.")
     # Opening text, then the list sections under their headings, then `additional`.
     description = first.description
-    assert description.startswith("Spotify Technology is our business-to-business")
+    assert description.startswith("Acme Technology is our business-to-business")
     opening = description.index("clear business value will be key to your success.")
     do = description.index("What You'll Do\n• Identify and pursue new business opportunities")
     are = description.index("Who You Are\n• You have 4+ years of experience")
@@ -91,30 +91,30 @@ def test_lever(load_fixture, fake_session):
 
 
 def test_ashby(load_fixture, fake_session):
-    session = fake_session(load_fixture("ashby_ramp.json"))
-    roles = AshbyAdapter(session).fetch("ramp")
+    session = fake_session(load_fixture("ashby_board_with_compensation.json"))
+    roles = AshbyAdapter(session).fetch("acme")
 
     assert session.urls == [
-        "https://api.ashbyhq.com/posting-api/job-board/ramp?includeCompensation=true"]
+        "https://api.ashbyhq.com/posting-api/job-board/acme?includeCompensation=true"]
     check_common(roles, "ashby")
     first = roles[0]
     assert first.source_job_id == "34413f8d-26bf-4bbc-8ade-eb309a0e2245"
-    assert first.company == "ramp"  # Ashby reports no company name
+    assert first.company == "acme"  # Ashby reports no company name
     assert first.title == "Security Engineer, Cloud"  # leading space stripped
     assert first.department == "Engineering"
     assert first.location == "New York, NY (HQ)"
     assert first.workplace_type == "hybrid"
-    assert first.url == "https://jobs.ashbyhq.com/ramp/34413f8d-26bf-4bbc-8ade-eb309a0e2245"
+    assert first.url == "https://jobs.ashbyhq.com/acme/34413f8d-26bf-4bbc-8ade-eb309a0e2245"
     assert first.date_posted == "2026-04-07"
     assert first.compensation_text == "$211.4K – $290.6K • Offers Equity"
-    assert first.description.startswith("About Ramp Ramp is building")
+    assert first.description.startswith("About Acme Acme is building")
     assert roles[2].department == "Sales"
 
 
 @pytest.mark.parametrize("adapter_cls", ONE_CALL)
 def test_company_override(adapter_cls, load_fixture, fake_session):
-    name = {"greenhouse": "greenhouse_anthropic.json", "lever": "lever_spotify.json",
-            "ashby": "ashby_ramp.json"}[adapter_cls.name]
+    name = {"greenhouse": "greenhouse_board_with_content_and_pay.json", "lever": "lever_postings_with_list_sections.json",
+            "ashby": "ashby_board_with_compensation.json"}[adapter_cls.name]
     roles = adapter_cls(fake_session(load_fixture(name))).fetch("slug", company="Acme Inc")
     assert {r.company for r in roles} == {"Acme Inc"}
 

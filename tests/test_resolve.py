@@ -343,11 +343,11 @@ def test_domain_helpers():
     assert registrable_domain("https://www.jobs.Example.com/x?y") == "example.com"
     assert registrable_domain("careers.example.co.uk") == "example.co.uk"
     assert registrable_domain("") == "" and registrable_domain("localhost") == ""
-    ramp = domain_pattern("ramp.com")
-    for hit in ("https://ramp.com/careers", "mailto:jobs@ramp.com", "see app.ramp.com.", '"//ramp.com"'):
-        assert ramp.search(hit), hit
-    for miss in ("xramp.com", "ramp.community", "ramp.com.au", "ramp-com", "tramp.com/x"):
-        assert not ramp.search(miss), miss
+    acme = domain_pattern("acme.com")
+    for hit in ("https://acme.com/careers", "mailto:jobs@acme.com", "see app.acme.com.", '"//acme.com"'):
+        assert acme.search(hit), hit
+    for miss in ("xacme.com", "acme.community", "acme.com.au", "acme-com", "tacme.com/x"):
+        assert not acme.search(miss), miss
 
 
 def test_name_and_slug_helpers():

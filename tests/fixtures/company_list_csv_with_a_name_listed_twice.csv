@@ -1,0 +1,7 @@
+company_name,website,tier
+Acme,https://acme.example,1
+Bolt,https://bolt.example,1
+Cobalt,https://cobalt.example,2
+Dynamo,,2
+ Globex ,https://globex.example,3
+acme,https://acme.example,3

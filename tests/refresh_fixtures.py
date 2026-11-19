@@ -1,10 +1,14 @@
-"""Re-record the adapter fixtures from live boards, trimmed to a few roles.
+"""Re-record adapter fixtures from live boards, trimmed to a few roles and anonymized.
 
-    python tests/refresh_fixtures.py
+    python tests/refresh_fixtures.py board greenhouse SLUG --name COMPANY
+    python tests/refresh_fixtures.py board lever SLUG --name COMPANY
+    python tests/refresh_fixtures.py board ashby SLUG --name COMPANY
 
 Saves the raw source responses (not normalized output), so the tests exercise
-the real parsing. After refreshing, update the expected values in
-tests/test_adapters.py and tests/test_workday.py to match the newly recorded roles.
+the real parsing. The board's slug and the company's names are replaced with
+acme and Acme before anything is written. After refreshing, update the
+expected values in tests/test_adapters.py and tests/test_workday.py to match
+the newly recorded roles.
 
 Workday takes many requests per board, so its fixtures are recordings of every
 request the adapter made, one per second. Each is recorded from a board you
@@ -36,33 +40,39 @@ from rolescout.http import DEFAULT_TIMEOUT, make_session
 FIXTURES = Path(__file__).parent / "fixtures"
 KEEP = 3
 
-# fixture file -> (url, key holding the list of roles, or None if top-level)
+# source -> (fixture file, URL of a board by slug, key holding the list of roles or None if top-level)
 BOARDS = {
-    "greenhouse_anthropic.json": (
-        "https://boards-api.greenhouse.io/v1/boards/anthropic/jobs?content=true", "jobs"),
-    "lever_spotify.json": (
-        "https://api.lever.co/v0/postings/spotify?mode=json", None),
-    "ashby_ramp.json": (
-        "https://api.ashbyhq.com/posting-api/job-board/ramp?includeCompensation=true", "jobs"),
+    "greenhouse": ("greenhouse_board_with_content_and_pay.json",
+                   "https://boards-api.greenhouse.io/v1/boards/{}/jobs?content=true", "jobs"),
+    "lever": ("lever_postings_with_list_sections.json",
+              "https://api.lever.co/v0/postings/{}?mode=json", None),
+    "ashby": ("ashby_board_with_compensation.json",
+              "https://api.ashbyhq.com/posting-api/job-board/{}?includeCompensation=true", "jobs"),
 }
 
 
-def main() -> None:
-    session = make_session()
-    for filename, (url, key) in BOARDS.items():
-        resp = session.get(url, timeout=DEFAULT_TIMEOUT)
-        resp.raise_for_status()
-        data = resp.json()
-        total = len(data[key] if key else data)
-        if key:
-            data[key] = data[key][:KEEP]
-            if isinstance(data.get("meta"), dict):
-                data["meta"]["total"] = KEEP
-        else:
-            data = data[:KEEP]
-        (FIXTURES / filename).write_text(
-            json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-        print(f"{filename}: kept {KEEP} of {total} roles")
+def record_board(source: str, slug: str, names: list[str]) -> None:
+    """One whole-board response, trimmed, with the slug and the company's names replaced."""
+    filename, url, key = BOARDS[source]
+    resp = make_session().get(url.format(slug), timeout=DEFAULT_TIMEOUT)
+    resp.raise_for_status()
+    data = resp.json()
+    total = len(data[key] if key else data)
+    if key:
+        data[key] = data[key][:KEEP]
+        if isinstance(data.get("meta"), dict):
+            data["meta"]["total"] = KEEP
+    else:
+        data = data[:KEEP]
+    text = json.dumps(data, indent=2, ensure_ascii=False)
+    for name in sorted({slug, *names}, key=len, reverse=True):
+        words = r"[\s_-]*".join(re.escape(w) for w in name.split())
+        text = re.sub(rf"(?<![A-Za-z0-9])(?i:{words})(?![a-z0-9])",
+                      lambda m: _same_case(m.group(0), NEUTRAL_NAME), text)
+    json.loads(text)
+    (FIXTURES / filename).write_text(text + "\n", encoding="utf-8")
+    print(f"{filename}: kept {KEEP} of {total} roles. Read it before committing: "
+          "other names in the description text stay as recorded.")
 
 
 # --- Workday: record every exchange of a few fetches, then anonymize ----------
@@ -215,4 +225,11 @@ if __name__ == "__main__":
         parse_ref(args.board)             # fail before any request on a bad reference
         record_workday(args.kind, args.board, args.name)
     else:
-        main()
+        parser = argparse.ArgumentParser(prog="refresh_fixtures.py")
+        parser.add_argument("kind", choices=["board"])
+        parser.add_argument("source", choices=sorted(BOARDS))
+        parser.add_argument("slug", help="the board to record from")
+        parser.add_argument("--name", action="append", default=[], required=True,
+                            help="a name the company goes by; repeat for each")
+        args = parser.parse_args()
+        record_board(args.source, args.slug, args.name)

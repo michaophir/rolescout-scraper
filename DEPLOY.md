@@ -129,7 +129,9 @@ Run one scout by hand so problems show up now, not at the scheduled time:
 rolescout scout
 ```
 
-It takes about one second per board. The first run is a baseline: roles are
+It takes about one second per board on most job systems; Workday, Rippling
+and Eightfold boards take one request per page of roles and so longer. The
+first run is a baseline: roles are
 stored but not counted as "opened". The run ends with a table and a TOTAL
 line; `0 failed` is the expected result.
 
@@ -167,7 +169,8 @@ rolescout status
 The first line is `HEALTHY` or `NEEDS ATTENTION` with the reasons listed
 under it. It also shows the last run, companies ok and failed, boards failing
 more than two runs in a row, open roles, database size, the last backup and
-the next scheduled run. It makes no network call. The exit code is 0 when
+the next scheduled run, and any board whose last read was partial (see
+"Complete and partial reads"). It makes no network call. The exit code is 0 when
 healthy and 1 when not, so from your own machine:
 
 ```sh
@@ -210,6 +213,21 @@ paste any URL from the career site, a job page included:
 ```sh
 rolescout companies map "Acme" workday "https://acme.wd5.myworkdayjobs.com/en-US/Careers/login"
 ```
+
+Workday costs more requests than the other sources, so the scout prints the
+requests and time each board took:
+
+- The list of roles takes one request per 20 roles, one second apart.
+- A description takes one request per role. It is fetched once, and only for
+  roles whose title matches a wanted phrase in `ranking.toml` (and no excluded
+  one) and for roles you marked saved or applied. Every other role is stored
+  without a description. After you add a wanted phrase, the next scout fetches
+  the descriptions it now needs.
+- One board gets at most 150 descriptions, 900 requests and 15 minutes per
+  run. What does not fit waits for the next run; a board cut short is marked
+  `partial` and none of its roles are closed that day.
+- A posted date comes from "Posted 5 Days Ago" in the list (exact once the
+  description is fetched). "Posted 30+ Days Ago" gives no date.
 
 ## Company profiles, sectors and VCs
 
@@ -416,21 +434,6 @@ Rippling lists roles in one request, but a description, posted date and pay
 cost one request per role, so like Workday they are read only for roles whose
 title your ranking config wants and for roles you saved or applied to.
 
-Workday costs more requests than the other sources, so the scout prints the
-requests and time each board took:
-
-- The list of roles takes one request per 20 roles, one second apart.
-- A description takes one request per role. It is fetched once, and only for
-  roles whose title matches a wanted phrase in `ranking.toml` (and no excluded
-  one) and for roles you marked saved or applied. Every other role is stored
-  without a description. After you add a wanted phrase, the next scout fetches
-  the descriptions it now needs.
-- One board gets at most 150 descriptions, 900 requests and 15 minutes per
-  run. What does not fit waits for the next run; a board cut short is marked
-  `partial` and none of its roles are closed that day.
-- A posted date comes from "Posted 5 Days Ago" in the list (exact once the
-  description is fetched). "Posted 30+ Days Ago" gives no date.
-
 ## New companies from portfolio boards
 
 Investor portfolio job boards can be read for companies you do not track
@@ -491,7 +494,8 @@ rolescout status
 
 The schedule keeps working: it points at `~/.rolescout/venv`, which is
 updated in place. The database is upgraded automatically the next time any
-command opens it. If an update is running while the scheduled scout starts,
+command opens it (its schema version is stored in the file; a database from a
+newer rolescout is refused, not downgraded). If an update is running while the scheduled scout starts,
 that scout may fail once; `rolescout status` will show it and the next day's
 run recovers.
 
