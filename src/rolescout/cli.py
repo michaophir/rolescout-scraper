@@ -31,6 +31,7 @@ from rolescout.shortlist import ConfigError, MarkError
 from rolescout.transfer import TransferError, export_companies, import_companies
 from rolescout import candidates as cands
 from rolescout import portfolio
+from rolescout import starter
 
 DESCRIPTION_PREVIEW_CHARS = 400
 
@@ -549,31 +550,44 @@ def _cmd_shortlist_init(args) -> int:
         print(f"error: {path} already exists. Edit it, or pass --force to replace it "
               "(your changes would be lost).", file=sys.stderr)
         return 1
-    filters = Path(args.filters).expanduser() if args.filters else Path("role_filters.csv")
-    titles, seniority, seeded = [], [], ""
-    if filters.exists():
-        titles, seniority = ranking.read_filters_csv(filters)
-        seeded = filters.name
-    elif args.filters:
-        raise FileNotFoundError(f"no such file: {filters}")
-    text = ranking.starter_config(titles, seniority, seeded)
-    ranking.parse_config(text)  # a starter that does not load would be a bug
+    print(_write_ranking_starter(path, args.filters))
+    print("Next: edit it if you like, then run: rolescout shortlist rebuild")
+    _warn_inside_repo(path)
+    return 0
+
+
+def _write_private(path: Path, text: str) -> None:
+    """Write a personal config file, readable by its owner only."""
     path.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         f.write(text)
-    if seeded:
-        print(f"Wrote {path}: {len(titles)} title phrases and {len(seniority)} seniority words "
-              f"from {filters}.")
-    else:
-        print(f"Wrote {path} with example titles only (no role_filters.csv here; "
-              "pass --filters PATH to seed from one). Edit the titles before relying on it.")
-    print("Next: edit it if you like, then run: rolescout shortlist rebuild")
+
+
+def _warn_inside_repo(path: Path) -> None:
     repo = _inside_git_repo(path)
     if repo:
         print(f"warning: {path} is inside the git repository at {repo}. It is personal data; "
               "keep it out of commits.", file=sys.stderr)
-    return 0
+
+
+def _write_ranking_starter(path: Path, filters_arg: str | None = None) -> str:
+    """Write the starter ranking config; the line that says what was written."""
+    titles, seniority, seeded = [], [], ""
+    if filters_arg:
+        filters = Path(filters_arg).expanduser()
+        if not filters.exists():
+            raise FileNotFoundError(f"no such file: {filters}")
+        titles, seniority = ranking.read_filters_csv(filters)
+        seeded = filters.name
+    text = ranking.starter_config(titles, seniority, seeded)
+    ranking.parse_config(text)  # a starter that does not load would be a bug
+    _write_private(path, text)
+    if seeded:
+        return (f"Wrote {path}: {len(titles)} title phrases and {len(seniority)} seniority words "
+                f"from {filters_arg}.")
+    return (f"Wrote {path}: the starter ranking for product and engineering roles "
+            f"({len(ranking.STARTER_TITLES)} title phrases, no location preference).")
 
 
 def _cmd_shortlist_rebuild(args) -> int:
@@ -1060,27 +1074,72 @@ def _cmd_candidates_init(args) -> int:
         print(f"error: {path} already exists. Edit it, or pass --force to replace it "
               "(your changes would be lost).", file=sys.stderr)
         return 1
-    filters = Path(args.filters).expanduser() if args.filters else Path("role_filters.csv")
+    print(_write_candidates_starter(path, args.filters))
+    _warn_inside_repo(path)
+    return 0
+
+
+def _write_candidates_starter(path: Path, filters_arg: str | None = None) -> str:
+    """Write the starter candidates filter; the line that says what was written."""
     keywords, seeded = [], ""
-    if filters.exists():
+    if filters_arg:
+        filters = Path(filters_arg).expanduser()
+        if not filters.exists():
+            raise FileNotFoundError(f"no such file: {filters}")
         keywords, seeded = cands.read_sector_keywords(filters), filters.name
-    elif args.filters:
-        raise FileNotFoundError(f"no such file: {filters}")
     text = cands.starter_config(keywords, seeded)
     cands.parse_config(text)  # a starter that does not load would be a bug
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        f.write(text)
+    _write_private(path, text)
     if keywords:
-        print(f"Wrote {path}: {len(keywords)} sector keywords from {filters}.")
+        return f"Wrote {path}: {len(keywords)} sector keywords from {filters_arg}."
+    return (f"Wrote {path}: the starter filter ({len(cands.STARTER_KEYWORDS)} broad sector keywords, "
+            "every stage and size accepted).")
+
+
+# --- init: the starter set ---------------------------------------------------
+
+def _cmd_init(args) -> int:
+    """Everything a new install needs before its first scout."""
+    db_path = resolve_db_path(args.db)
+    conn = connect(args.db)
+    print(f"Database: {db_path}")
+    if args.no_companies:
+        print("Companies: skipped (--no-companies).")
     else:
-        print(f"Wrote {path} with example sector keywords only (no role_filters.csv with domain rows "
-              "here; pass --filters PATH to seed from one). Edit the keywords before relying on it.")
-    repo = _inside_git_repo(path)
-    if repo:
-        print(f"warning: {path} is inside the git repository at {repo}. It is personal data; "
-              "keep it out of commits.", file=sys.stderr)
+        # Only companies that are not here yet: a company already in the
+        # database keeps its website, tags, boards and active flag as they are.
+        data = starter.companies()
+        here = {row["name"].casefold() for row in conn.execute("SELECT name FROM companies")}
+        new = [c for c in data["companies"] if c["name"].casefold() not in here]
+        result = import_companies(conn, {**data, "companies": new})
+        mapped = conn.execute("SELECT COUNT(DISTINCT company_id) FROM boards").fetchone()[0]
+        print(f"Companies: {result['companies_added']} starter companies added, "
+              f"{len(data['companies']) - len(new)} already here, {result['boards_added']} boards mapped "
+              f"({mapped} companies now have a board).")
+        for warning in result["warnings"]:
+            print(f"  warning: {warning}")
+    for path, write in ((ranking.config_path(db_path), _write_ranking_starter),
+                        (cands.config_path(db_path), _write_candidates_starter)):
+        if path.exists() and not args.force:
+            print(f"Kept {path} (it already exists; --force replaces it).")
+        else:
+            print(write(path))
+            _warn_inside_repo(path)
+    if args.portfolio:
+        added = 0
+        for board in starter.portfolio_boards():
+            try:
+                portfolio.add_board(conn, board["url"], board.get("name") or "")
+                added += 1
+            except portfolio.PortfolioError:
+                pass                    # already registered
+        print(f"Portfolio boards: {added} example boards registered. "
+              "Read them with: rolescout portfolio harvest")
+    print("\nNext:\n"
+          "  rolescout scout            fetch every mapped board (the first run is a baseline)\n"
+          "  rolescout shortlist        the roles to look at first\n"
+          f"Then make it yours: edit {ranking.config_path(db_path)}, and add or remove companies with\n"
+          "rolescout companies add / deactivate. See README.md, \"Defaults and how to change them\".")
     return 0
 
 
@@ -1684,6 +1743,18 @@ def build_parser() -> argparse.ArgumentParser:
     db.add_argument("--db", metavar="PATH",
                     help=f"database file (default: ${DB_ENV_VAR}, else {DEFAULT_DB_PATH})")
 
+    init = commands.add_parser(
+        "init", parents=[db],
+        help="set up a new install: starter companies with their boards, and starter ranking "
+             "and candidates configs")
+    init.add_argument("--no-companies", action="store_true",
+                      help="do not add the starter companies (configs only)")
+    init.add_argument("--portfolio", action="store_true",
+                      help="also register a few example portfolio boards (see: rolescout portfolio)")
+    init.add_argument("--force", action="store_true",
+                      help="replace existing ranking and candidates configs with the starters")
+    init.set_defaults(func=_cmd_init)
+
     fetch = commands.add_parser(
         "fetch", help="fetch one board live and print the role count and a sample role")
     fetch.add_argument("source", choices=sorted(ADAPTERS))
@@ -1834,7 +1905,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = slsub.add_parser("init", parents=[late], help="create a starter ranking config")
     p.add_argument("--filters", metavar="CSV",
                    help="seed titles and seniority from a role_filters.csv-style file "
-                        "(default: role_filters.csv in the current folder, if present)")
+                        "(field,value rows) instead of the starter set")
     p.add_argument("--force", action="store_true", help="replace an existing config")
     p.set_defaults(func=_cmd_shortlist_init)
     p = slsub.add_parser("rebuild", parents=[late],
@@ -1928,7 +1999,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = cdsub.add_parser("init", parents=[late_c], help="create a starter filter config")
     p.add_argument("--filters", metavar="CSV",
                    help="seed sector keywords from the domain rows of a role_filters.csv-style file "
-                        "(default: role_filters.csv in the current folder, if present)")
+                        "instead of the starter set")
     p.add_argument("--force", action="store_true", help="replace an existing config")
     p.set_defaults(func=_cmd_candidates_init)
     p = cdsub.add_parser("apply", parents=[late_c],

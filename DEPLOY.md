@@ -56,6 +56,17 @@ Check: `rolescout --version` prints a version number.
 
 ## 3. Seed the companies and board mappings
 
+For a new install with no list of your own yet, one command sets up the
+starter companies with their boards and the starter ranking and candidates
+configs (README.md, "Defaults and how to change them", says what they hold):
+
+```sh
+rolescout init
+```
+
+Then go to step 4. The rest of this step is for moving a list you already
+have on another machine.
+
 The company list and its board mappings come from a machine where
 `rolescout companies resolve` has already been run, so this Mac never needs
 to resolve anything.
@@ -93,11 +104,16 @@ scout still runs and simply builds no shortlist. Either copy yours across
 scp ~/.rolescout/ranking.toml mac:.rolescout/ranking.toml
 ```
 
-or create a starter on the Mac and edit it:
+or create the starter on the Mac and edit it (`rolescout init` has already
+done this on a new install):
 
 ```sh
-cd ~/rolescout-scraper && rolescout shortlist init
+rolescout shortlist init
 ```
+
+The starter wants product and engineering titles, all worth the same, and
+has no location preference. `--filters FILE` seeds the titles and seniority
+words from a `field,value` CSV of your own instead.
 
 Two things the ranking does that are worth knowing when you read the list:
 no company takes more than `max_per_company` slots (5 in the starter; roles
@@ -443,7 +459,7 @@ personal data: the boards live in the database and the filter in
 
 ```sh
 rolescout portfolio add https://jobs.example.vc      # once per board
-cd ~/rolescout-scraper && rolescout candidates init   # starter filter; edit it
+rolescout candidates init                             # starter filter; edit it
 rolescout portfolio harvest                           # read the boards, apply the filter
 rolescout candidates --status eligible
 rolescout candidates why NAME

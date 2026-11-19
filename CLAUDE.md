@@ -46,6 +46,7 @@ touches live boards, and it is run by hand.
 | `src/rolescout/db.py` | SQLite connection and the `MIGRATIONS` list |
 | `src/rolescout/mcp_server.py` | The MCP server (`rolescout serve`) |
 | `src/rolescout/transfer.py` | Export and import of companies between machines |
+| `src/rolescout/starter/` | Starter companies with boards and example portfolio boards, loaded by `rolescout init` |
 
 ---
 
@@ -95,13 +96,22 @@ title the ranking config wants and for roles marked saved or applied.
 - Exception: `src/rolescout/adapters/google.py` reads Google's career site.
   Reason: Google runs its own site with no shared job system behind it, and
   publishes every open role in one public feed that robots.txt allows. The
-  company's name appears in that adapter, its tests, its fixture and the
-  docs that describe it, and nowhere else.
-- No real company names in code, comments, docstrings, error messages, tool
-  descriptions, CLI help, docs or tests. Use a neutral example such as
-  `acme/wd5/Careers`.
-- Target companies are personal data. They live in the database, not in the
-  repo.
+  company's name appears in that adapter, its tests, its fixture, the docs
+  that describe it and the starter data, and nowhere else.
+- Real company names are allowed in two places: the starter data in
+  `src/rolescout/starter/` (well-known companies and their boards, which a
+  new install begins with) and the docs that describe it. Everywhere else
+  (code, comments, docstrings, error messages, tool descriptions, CLI help
+  and tests) use a neutral example such as `acme/wd5/Careers`. Tests keep
+  neutral names.
+- Personal data never goes in the repo: your own target companies, ranking
+  and candidate filters, location preferences, weights, sector mapping and
+  VC or portfolio-board choices. They live in the database and in the config
+  files next to it. The starter data is a generic starting point for product
+  and engineering roles, not anyone's own list: every title earns the same
+  points and no location is preferred.
+- A board in the starter data must have been confirmed live: it answered,
+  listed open roles, and named the company.
 - Fixtures are recorded from real boards and then anonymized, and are named
   after the behavior they test.
 

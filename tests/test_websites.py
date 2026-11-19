@@ -19,16 +19,16 @@ def website(conn, name):
 # --- the normal form ---------------------------------------------------------
 
 @pytest.mark.parametrize("given, expected", [
-    ("alation.com", "https://alation.com"),
-    ("  Alation.COM  ", "https://alation.com"),
-    ("www.alation.com/about?x=1", "https://www.alation.com/about?x=1"),
-    ("//alation.com", "https://alation.com"),
-    ("https://alation.com", "https://alation.com"),
-    ("HTTPS://Alation.com/Careers", "https://alation.com/Careers"),   # host lowercased, path kept
+    ("acme.com", "https://acme.com"),
+    ("  Acme.COM  ", "https://acme.com"),
+    ("www.acme.com/about?x=1", "https://www.acme.com/about?x=1"),
+    ("//acme.com", "https://acme.com"),
+    ("https://acme.com", "https://acme.com"),
+    ("HTTPS://Acme.com/Careers", "https://acme.com/Careers"),   # host lowercased, path kept
     ("http://old.example.co.uk", "http://old.example.co.uk"),         # an explicit scheme is kept
-    ("alation.com:8443/jobs", "https://alation.com:8443/jobs"),
-    ("alation.com.", "https://alation.com"),
-    ("https://alation.com/#team", "https://alation.com/"),
+    ("acme.com:8443/jobs", "https://acme.com:8443/jobs"),
+    ("acme.com.", "https://acme.com"),
+    ("https://acme.com/#team", "https://acme.com/"),
     ("", ""), (None, ""), ("   ", ""),
 ])
 def test_normalize_website(given, expected):
@@ -37,9 +37,9 @@ def test_normalize_website(given, expected):
 
 
 @pytest.mark.parametrize("bad", [
-    "alation", "n/a", "none", "TBD", "not a website", "alation dot com", "ftp://alation.com",
-    "mailto:jobs@alation.com", "jobs@alation.com", "https://", "http:///careers", "alation..com",
-    "-alation.com", "192.168.1.5", "localhost", "https://exa mple.com", "alation.c",
+    "acme", "n/a", "none", "TBD", "not a website", "acme dot com", "ftp://acme.com",
+    "mailto:jobs@acme.com", "jobs@acme.com", "https://", "http:///careers", "acme..com",
+    "-acme.com", "192.168.1.5", "localhost", "https://exa mple.com", "acme.c",
 ])
 def test_obviously_invalid_websites_are_rejected(bad):
     with pytest.raises(InvalidWebsite, match="is not a website"):
@@ -49,8 +49,8 @@ def test_obviously_invalid_websites_are_rejected(bad):
 # --- every entry point -------------------------------------------------------
 
 def test_companies_add_normalizes_and_rejects(conn, capsys):
-    assert cli.main(["companies", "add", "Alation", "--website", "alation.com"]) == 0
-    assert website(conn, "Alation") == "https://alation.com"
+    assert cli.main(["companies", "add", "Acme", "--website", "acme.com"]) == 0
+    assert website(conn, "Acme") == "https://acme.com"
     companies.add_company(conn, "Plain")                               # no website is still fine
     assert website(conn, "Plain") == ""
     capsys.readouterr()
@@ -61,35 +61,35 @@ def test_companies_add_normalizes_and_rejects(conn, capsys):
 
 def test_csv_import_normalizes_and_a_bad_row_changes_nothing(conn, tmp_path, capsys):
     good = tmp_path / "good.csv"
-    good.write_text("company_name,website,tier\nAlation,alation.com,2\nBolt,https://bolt.com,1\nCobalt,,3\n")
+    good.write_text("company_name,website,tier\nAcme,acme.com,2\nBolt,https://bolt.com,1\nCobalt,,3\n")
     assert companies.import_csv(conn, good) == (3, 0)
-    assert [website(conn, n) for n in ("Alation", "Bolt", "Cobalt")] == [
-        "https://alation.com", "https://bolt.com", ""]
+    assert [website(conn, n) for n in ("Acme", "Bolt", "Cobalt")] == [
+        "https://acme.com", "https://bolt.com", ""]
     # Re-importing a scheme-less value for an existing company normalizes it too.
     good.write_text("company_name,website,tier\nBolt,www.bolt.com,1\n")
     companies.import_csv(conn, good)
     assert website(conn, "Bolt") == "https://www.bolt.com"
 
     bad = tmp_path / "bad.csv"
-    bad.write_text("company_name,website,tier\nDelta,delta.com,1\nEcho,see linkedin,2\n")
+    bad.write_text("company_name,website,tier\nDelta,delta.com,1\nEcho,see our page,2\n")
     assert cli.main(["companies", "import", str(bad)]) == 1
     err = capsys.readouterr().err
-    assert f"{bad}: Echo: 'see linkedin' is not a website: it contains a space" in err
+    assert f"{bad}: Echo: 'see our page' is not a website: it contains a space" in err
     assert conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0] == 3      # Delta was not added either
 
 
 def test_json_import_normalizes_and_rejects(conn):
     def export(site):
         return {"format": "rolescout-companies", "version": 1, "companies": [
-            {"name": "Alation", "website": site, "tier": 2, "boards": []},
+            {"name": "Acme", "website": site, "tier": 2, "boards": []},
             {"name": "Plain", "boards": []}]}
-    import_companies(conn, export("alation.com"))
-    assert (website(conn, "Alation"), website(conn, "Plain")) == ("https://alation.com", "")
-    import_companies(conn, export("WWW.Alation.com/"))                  # an update is normalized as well
-    assert website(conn, "Alation") == "https://www.alation.com/"
-    with pytest.raises(TransferError, match="Alation: 'ftp://alation.com' is not a website"):
-        import_companies(conn, export("ftp://alation.com"))
-    assert website(conn, "Alation") == "https://www.alation.com/"      # unchanged by the refused file
+    import_companies(conn, export("acme.com"))
+    assert (website(conn, "Acme"), website(conn, "Plain")) == ("https://acme.com", "")
+    import_companies(conn, export("WWW.Acme.com/"))                  # an update is normalized as well
+    assert website(conn, "Acme") == "https://www.acme.com/"
+    with pytest.raises(TransferError, match="Acme: 'ftp://acme.com' is not a website"):
+        import_companies(conn, export("ftp://acme.com"))
+    assert website(conn, "Acme") == "https://www.acme.com/"      # unchanged by the refused file
 
 
 def test_mcp_add_target_company_normalizes_and_rejects(conn, isolated_db_path):
@@ -97,10 +97,10 @@ def test_mcp_add_target_company_normalizes_and_rejects(conn, isolated_db_path):
     from rolescout import mcp_server
     from tests.test_mcp import Session
     session = Session(mcp_server.build_server(isolated_db_path))
-    session.call("add_target_company", name="Alation", website="alation.com")
-    assert website(conn, "Alation") == "https://alation.com"
+    session.call("add_target_company", name="Acme", website="acme.com")
+    assert website(conn, "Acme") == "https://acme.com"
     listed = session.call("list_target_companies")["companies"]
-    assert listed[0]["website"] == "https://alation.com"
+    assert listed[0]["website"] == "https://acme.com"
     assert "'nope' is not a website" in session.error("add_target_company", name="Broken", website="nope")
     assert conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0] == 1
 
@@ -112,7 +112,7 @@ def test_stored_scheme_less_websites_are_repaired_on_upgrade(tmp_path, monkeypat
     monkeypatch.setattr(db, "SCHEMA_VERSION", 4)
     old = db.connect(path)
     assert db.schema_version(old) == 4
-    stored = {"Alation": "alation.com", "Bolt": "WWW.Bolt.com/about", "Fine": "https://fine.com",
+    stored = {"Acme": "acme.com", "Bolt": "WWW.Bolt.com/about", "Fine": "https://fine.com",
               "Http": "http://http.com", "Empty": "", "Junk": "ask recruiter"}
     for name, site in stored.items():
         old.execute("INSERT INTO companies (name, website, created_at) VALUES (?, ?, 'x')", (name, site))
@@ -122,7 +122,7 @@ def test_stored_scheme_less_websites_are_repaired_on_upgrade(tmp_path, monkeypat
     conn = db.connect(path)
     assert db.schema_version(conn) == db.SCHEMA_VERSION >= 5
     assert {r["name"]: r["website"] for r in conn.execute("SELECT name, website FROM companies")} == {
-        "Alation": "https://alation.com", "Bolt": "https://www.bolt.com/about",
+        "Acme": "https://acme.com", "Bolt": "https://www.bolt.com/about",
         "Fine": "https://fine.com", "Http": "http://http.com", "Empty": "",
         "Junk": "ask recruiter"}                                        # not a website: left for resolve to report
     conn.close()
@@ -137,29 +137,29 @@ def store_raw(conn, name, site):
 
 
 def test_resolve_of_a_company_stored_without_a_scheme(conn):
-    store_raw(conn, "Alation", "alation.com")
+    store_raw(conn, "Acme", "acme.com")
     web = FakeWeb({
-        "https://alation.com": '<a href="/careers">Careers</a>',
-        "https://alation.com/careers": '<a href="https://jobs.lever.co/alation">Open roles</a>',
-        LEVER.format("alation"): lever_jobs(4),
+        "https://acme.com": '<a href="/careers">Careers</a>',
+        "https://acme.com/careers": '<a href="https://jobs.lever.co/acme">Open roles</a>',
+        LEVER.format("acme"): lever_jobs(4),
     })
     (res,) = resolve_companies(conn, resolver=Resolver(session=web))
     # Every request is a full URL: nothing scheme-less reaches the HTTP layer.
-    assert web.urls == ["https://alation.com/robots.txt", "https://alation.com",
-                        "https://alation.com/careers", LEVER.format("alation")]
+    assert web.urls == ["https://acme.com/robots.txt", "https://acme.com",
+                        "https://acme.com/careers", LEVER.format("acme")]
     assert res.outcome == "mapped" and not any("MissingSchema" in note for note in res.notes)
-    assert boards_of(conn, "Alation") == [
-        ("lever", "alation", "link", "linked from https://alation.com/careers")]
+    assert boards_of(conn, "Acme") == [
+        ("lever", "acme", "link", "linked from https://acme.com/careers")]
 
 
 def test_domain_tie_for_guessed_boards_works_without_a_scheme(conn):
     """The tie compares registrable domains, which never needed the scheme."""
-    store_raw(conn, "Alation", "alation.com")
+    store_raw(conn, "Acme", "acme.com")
     store_raw(conn, "Bolt", "www.bolt.io/home")
     store_raw(conn, "Cobalt", "cobalt.dev")
     web = FakeWeb({
         # Postings that reference the company's domain.
-        GH.format("alation"): gh_jobs(3, content="<p>Questions? jobs@alation.com</p>"),
+        GH.format("acme"): gh_jobs(3, content="<p>Questions? jobs@acme.com</p>"),
         # A board whose declared website is the company's.
         ASHBY.format("bolt"): ashby_jobs(2),
         ASHBY_PAGE.format("bolt"): ashby_page("Bolt", "https://bolt.io"),
@@ -168,8 +168,8 @@ def test_domain_tie_for_guessed_boards_works_without_a_scheme(conn):
         GH_BOARD.format("cobalt"): {"name": "Cobalt"},
     })
     results = {r.company: r for r in resolve_companies(conn, resolver=Resolver(session=web))}
-    assert boards_of(conn, "Alation") == [
-        ("greenhouse", "alation", "guess", "3 of 3 postings reference alation.com")]
+    assert boards_of(conn, "Acme") == [
+        ("greenhouse", "acme", "guess", "3 of 3 postings reference acme.com")]
     assert boards_of(conn, "Bolt") == [("ashby", "bolt", "guess", "board declares website https://bolt.io")]
     assert results["Cobalt"].outcome == "needs_review" and boards_of(conn, "Cobalt") == []
     assert results["Cobalt"].candidates[0].detail == "board is named 'Cobalt', but nothing ties it to cobalt.dev"
@@ -191,6 +191,6 @@ def test_a_bad_stored_website_is_reported_as_invalid_not_as_a_fetch_failure(conn
 
 def test_export_carries_normalized_websites(conn):
     from rolescout.transfer import export_companies
-    companies.add_company(conn, "Alation", website="alation.com")
+    companies.add_company(conn, "Acme", website="acme.com")
     exported = json.loads(json.dumps(export_companies(conn)))
-    assert exported["companies"][0]["website"] == "https://alation.com"
+    assert exported["companies"][0]["website"] == "https://acme.com"

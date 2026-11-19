@@ -13,7 +13,7 @@ DEFAULT_DB_PATH = Path("~/.rolescout/rolescout.db")
 # N+1. Never edit a released entry: append a new one. The current version is
 # stored in SQLite's `PRAGMA user_version`.
 def _repair_websites(conn: sqlite3.Connection) -> None:
-    """Give websites stored without a scheme ("alation.com") the normal form.
+    """Give websites stored without a scheme ("acme.com") the normal form.
     A value that cannot be a website is left as it is; resolve reports it."""
     from rolescout.urls import InvalidWebsite, normalize_website
 

@@ -13,7 +13,7 @@ class InvalidWebsite(ValueError):
 def normalize_website(value: object) -> str:
     """A full URL for a company website, or "" for none.
 
-    "alation.com", "www.alation.com/about" and "//alation.com" become
+    "acme.com", "www.acme.com/about" and "//acme.com" become
     https:// URLs; a value that already says http:// or https:// keeps its
     scheme. The host is lowercased. Anything that is not a web address with
     a dotted hostname is rejected with ``InvalidWebsite``.

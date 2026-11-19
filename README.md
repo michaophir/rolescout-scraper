@@ -50,18 +50,93 @@ in detail.
 ## First steps
 
 ```sh
+rolescout init                           # starter companies, their boards, starter configs
+rolescout scout                          # fetch every mapped board
+rolescout shortlist                      # the roles to look at first
+```
+
+`rolescout init` gives a new install something useful to run at once; the
+next section says what it sets up and how to change it. The first scout
+takes about 20 minutes, most of it on the few boards that are read page
+by page. The database is `~/.rolescout/rolescout.db`, and the two config
+files live next to it. All three are yours and are not part of this
+repository.
+
+To start from an empty list instead, run `rolescout init --no-companies`,
+then add companies and let rolescout find their boards:
+
+```sh
 rolescout companies add "Acme" --website acme.com
 rolescout companies resolve              # find each company's job board
 rolescout companies report               # mapped, unsupported, unresolved
-rolescout shortlist init                 # starter ranking config; edit it
-rolescout scout                          # fetch every mapped board
-rolescout shortlist
 ```
 
-A board can also be mapped by hand, for example
-`rolescout companies map "Acme" greenhouse acme`. The database is
-`~/.rolescout/rolescout.db`; the ranking config `ranking.toml` lives next to
-it. Both are personal data and are not part of this repository.
+## Defaults and how to change them
+
+What ships is a starting point for someone looking for product or
+engineering roles at technology companies. Nothing in it is a
+recommendation, and all of it is meant to be edited.
+
+| What | What ships | Where it lives after `init` |
+|---|---|---|
+| Companies | 150 well-known technology companies, each with its website and a job board that was confirmed live | the database |
+| Ranking | Product and engineering titles, all worth the same; seniority words, all worth the same; interns, new graduates and apprentices excluded; no location preference | `~/.rolescout/ranking.toml` |
+| Candidate filter | Broad technology sectors; every stage and size accepted; no location rule | `~/.rolescout/candidates.toml` |
+| Portfolio boards | None, unless you ask: `rolescout init --portfolio` registers 5 public investor job boards as an example | the database |
+| Sectors | Built-in rules that sort raw tags into sectors | `~/.rolescout/sectors.toml`, once you create it |
+
+The starter companies by job system: Greenhouse 92, Ashby 39, Workday 10, Lever 5, and one each on
+Rippling, Workable, Eightfold and Google's own career site. None is on Gem: no
+Gem board could be confirmed for a company on the list. The largest Workday
+and Eightfold boards were left out so that a first run stays short; add them
+with `rolescout companies map` if you want them.
+
+**Companies.** The starter list is only a list of well-known names.
+
+```sh
+rolescout companies list
+rolescout companies add "Acme" --website acme.com      # then: rolescout companies resolve "Acme"
+rolescout companies map "Acme" greenhouse acme         # or map a board by hand
+rolescout companies deactivate "Globex"                # stop fetching it; history is kept
+rolescout companies import my-companies.csv            # columns: company_name, website
+```
+
+Running `rolescout init` again adds starter companies you do not have and
+leaves every company you already have exactly as it is.
+
+**Ranking and filters.** Open `~/.rolescout/ranking.toml`. Each section
+says what it does:
+
+- `[title.wanted]`: the title phrases a role must match, with points. Delete
+  the half you do not want, and raise the points of the titles you want most.
+- `[title] exclude`: phrases that keep a role off the list.
+- `[seniority.words]`: points for seniority words in the title.
+- `[location]`: no preference to begin with. The file carries commented
+  examples for requiring a place (`require = ["United States"]`), for points
+  per place (`"New York" = 10`) and for points when a role is remote.
+- `[leveling]`: companies where a Senior title counts as Staff; empty to
+  begin with, with an example.
+
+Then run `rolescout shortlist rebuild` (no network), and `rolescout why ID`
+to see how any role was scored.
+
+**Sectors.** `rolescout sectors init` writes `sectors.toml` from the tags in
+your own data; edit it and run `rolescout sectors apply`.
+
+**Portfolio boards and VCs.** These suggest companies you do not track yet.
+
+```sh
+rolescout portfolio add https://jobs.example.vc        # your own choice of boards
+rolescout portfolio list
+rolescout portfolio remove https://jobs.example.vc
+rolescout portfolio harvest                            # read them, apply candidates.toml
+rolescout candidates --status eligible
+```
+
+`~/.rolescout/candidates.toml` decides which of the companies found are
+worth tracking; it has commented examples for a minimum size, stages to
+reject and a location rule. `rolescout vcs list` shows the investors behind
+the boards.
 
 ## The daily run
 

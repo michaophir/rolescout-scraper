@@ -99,9 +99,9 @@ def test_fingerprint_patterns():
 
 
 def test_second_hop_prefers_the_company_page_over_translations():
-    links = ["https://wb.ai/site/ko/careers/", "https://wb.ai/site/ja/careers/",
-             "https://parentco.com/careers/weights-biases", "https://wb.ai/careers/perks"]
-    assert rank_deeper_links(links, "Weights & Biases")[0] == "https://parentco.com/careers/weights-biases"
+    links = ["https://ht.ai/site/ko/careers/", "https://ht.ai/site/ja/careers/",
+             "https://parentco.com/careers/hammer-tongs", "https://ht.ai/careers/perks"]
+    assert rank_deeper_links(links, "Hammer & Tongs")[0] == "https://parentco.com/careers/hammer-tongs"
     assert rank_deeper_links(["https://x.com/de/careers", "https://x.com/careers/open-roles"], "X")[0] == (
         "https://x.com/careers/open-roles")
 
@@ -109,16 +109,16 @@ def test_second_hop_prefers_the_company_page_over_translations():
 def test_links_to_other_sites_need_more_than_career_in_the_path():
     from rolescout.resolve import careers_links
     page = '''
-        <a href="https://www.wsj.com/lifestyle/careers/ai-entry-level-jobs">Read our CEO in the press</a>
-        <a href="https://parentco.com/careers/weights-biases">Open positions at W&amp;B</a>
-        <a href="https://wbcareers.com/">Come build with us</a>
+        <a href="https://www.dailypaper.com/lifestyle/careers/ai-entry-level-jobs">Read our CEO in the press</a>
+        <a href="https://parentco.com/careers/hammer-tongs">Open positions at H&amp;T</a>
+        <a href="https://htcareers.com/">Come build with us</a>
         <a href="https://elsewhere.com/x">Careers</a>
         <a href="/company/careers">Work here</a>'''
-    assert set(careers_links(page, "https://wb.ai/", {"wb.ai"}, "Weights & Biases")) == {
-        "https://parentco.com/careers/weights-biases",   # names the company
-        "https://wbcareers.com/",                            # a careers host
+    assert set(careers_links(page, "https://ht.ai/", {"ht.ai"}, "Hammer & Tongs")) == {
+        "https://parentco.com/careers/hammer-tongs",   # names the company
+        "https://htcareers.com/",                            # a careers host
         "https://elsewhere.com/x",                        # the link text says Careers
-        "https://wb.ai/company/careers"}                  # the company's own site
+        "https://ht.ai/company/careers"}                  # the company's own site
 
 
 # --- hand-recorded job systems -----------------------------------------------

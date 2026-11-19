@@ -191,8 +191,21 @@ def read_filters_csv(path: str | os.PathLike) -> tuple[list[str], list[str]]:
     return list(dict.fromkeys(titles)), list(dict.fromkeys(seniority))
 
 
-EXAMPLE_TITLES = ["Senior Product Manager", "Product Manager"]
-EXAMPLE_SENIORITY = ["Senior", "Staff", "Principal"]
+# The starter ranking: a generic starting point for product and engineering
+# roles. Every title and every seniority word earns the same points, so the
+# file states no preference until its owner edits it.
+STARTER_TITLES = [
+    "Product Manager", "Product Lead", "Product Owner", "Group Product Manager", "Technical Product Manager",
+    "Head of Product", "Director of Product", "VP of Product",
+    "Software Engineer", "Software Developer", "Backend Engineer", "Frontend Engineer", "Full Stack Engineer",
+    "Mobile Engineer", "Machine Learning Engineer", "Data Engineer", "Platform Engineer",
+    "Infrastructure Engineer", "Site Reliability Engineer", "Security Engineer", "Staff Engineer",
+    "Principal Engineer", "Member of Technical Staff", "Engineering Manager", "Director of Engineering",
+    "Head of Engineering", "VP of Engineering",
+]
+STARTER_SENIORITY = ["Senior", "Staff", "Principal", "Lead", "Group", "Director", "Head", "VP"]
+STARTER_EXCLUDE = ["Intern", "Internship", "New Grad", "New Graduate", "University Graduate", "Early Career",
+                   "Apprentice", "Co-op", "Working Student"]
 
 
 def starter_config(titles: list[str] | None = None, seniority: list[str] | None = None,
@@ -200,9 +213,10 @@ def starter_config(titles: list[str] | None = None, seniority: list[str] | None 
     """The text of a starter ranking.toml."""
     def table(names: list[str], points: int) -> str:
         return "\n".join(f"{json.dumps(name)} = {points}" for name in names)
-    example = "EXAMPLES ONLY: replace them with your own"
+    example = "a starting point for product and engineering roles: make it yours"
     origin = f"seeded from {seeded_from}" if seeded_from and titles else example
     seniority_origin = f"seeded from {seeded_from}" if seeded_from and seniority else example
+    exclude = ", ".join(json.dumps(word) for word in STARTER_EXCLUDE)
     return f"""\
 # rolescout ranking: which open roles reach your shortlist, and in what order.
 #
@@ -225,8 +239,8 @@ max_per_company = 5
 
 [title]
 # A role whose title contains any of these phrases is never listed.
-# Whole words, any capitalization. Example: exclude = ["Intern", "Contract"]
-exclude = []
+# Whole words, any capitalization. Add your own, e.g. "Contract" or "Manager".
+exclude = [{exclude}]
 
 # Title phrases you want, with points ({origin}).
 # A role must match at least one of these or it is never listed.
@@ -234,12 +248,12 @@ exclude = []
 # Manager, Growth" but not "Product Marketing Manager". If several match, the
 # one worth the most points counts. Raise the points of the titles you want most.
 [title.wanted]
-{table(titles or EXAMPLE_TITLES, 30)}
+{table(titles or STARTER_TITLES, 30)}
 
 # Seniority words in the title, with points ({seniority_origin}).
 # If several match, the one worth the most counts.
 [seniority.words]
-{table(seniority or EXAMPLE_SENIORITY, 10)}
+{table(seniority or STARTER_SENIORITY, 10)}
 
 # Leveling: at the companies named here a "Senior" title is what most others
 # call "Staff", so it earns the points of "Staff" above instead of "Senior".
@@ -251,7 +265,8 @@ senior_as_staff = []
 
 [location]
 # Points when the role is remote (the board says so, or the location does).
-remote_points = 10
+# 0 means remote roles get no preference. Example: remote_points = 10
+remote_points = 0
 
 # Location requirement, off unless you remove the "#" below. With it, a role
 # reaches the shortlist only if at least one of its locations is in one of
@@ -263,7 +278,10 @@ remote_points = 10
 # kept off the list by this rule.
 # require = ["United States"]
 
-# Points when the location contains one of these, e.g. "New York" = 10.
+# Points when the location contains one of these. None by default; add a
+# line per place under the heading below, e.g.
+#   "New York" = 10
+#   "London" = 5
 # Any capitalization. A role that is both remote and in a preferred place
 # gets the larger of the two, not both.
 [location.preferred]

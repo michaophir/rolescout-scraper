@@ -593,24 +593,34 @@ def test_cut_short_or_failing_harvest_never_affects_the_scout(conn, monkeypatch,
 
 # --- config, starter, upgrade ------------------------------------------------
 
-def test_init_seeds_sector_keywords_from_the_repo_filters(conn, capsys, isolated_db_path, monkeypatch):
-    monkeypatch.chdir(REPO)
+FILTERS_CSV = REPO / "tests" / "fixtures" / "role_filters_csv_with_titles_seniority_and_domains.csv"
+
+
+def test_init_writes_a_neutral_starter_and_seeds_from_a_filters_file_only_when_asked(
+        conn, capsys, isolated_db_path, monkeypatch, tmp_path):
+    work = tmp_path / "work"
+    work.mkdir()
+    (work / "role_filters.csv").write_text(FILTERS_CSV.read_text())
+    monkeypatch.chdir(work)                      # a filters file in the current folder is not picked up
     path = isolated_db_path.parent / "candidates.toml"
     assert cli.main(["candidates", "init"]) == 0
-    assert f"Wrote {path}: 14 sector keywords from role_filters.csv." in capsys.readouterr().out
+    assert (f"Wrote {path}: the starter filter (12 broad sector keywords, every stage and size accepted)."
+            in capsys.readouterr().out)
     assert path.stat().st_mode & 0o777 == 0o600
     loaded = cands.load_config(path)
-    assert (loaded.min_employees, loaded.size_unknown, loaded.stage_reject) == (10, "review", ["pre_seed"])
-    assert "seed" in loaded.stage_accept and "pre_seed" not in loaded.stage_accept
-    assert loaded.sector_keywords[:3] == ["fintech", "media", "adtech"]
-    assert (loaded.require_open_role, loaded.role_locations) == (True, ["United States", "Remote"])
+    # No rule states a preference until its owner edits the file.
+    assert (loaded.min_employees, loaded.size_unknown, loaded.stage_reject) == (0, "review", [])
+    assert {"pre_seed", "seed", "ipo"} <= set(loaded.stage_accept)
+    assert loaded.sector_keywords == cands.STARTER_KEYWORDS
+    assert (loaded.require_open_role, loaded.role_locations, loaded.auto_activate) == (False, [], False)
+    assert '#   locations = ["United States", "Remote"]' in path.read_text()      # the commented example
     assert cli.main(["candidates", "init"]) == 1
     assert "already exists" in capsys.readouterr().err
 
-    monkeypatch.chdir(isolated_db_path.parent)
-    assert cli.main(["candidates", "init", "--force"]) == 0
-    assert "example sector keywords only" in capsys.readouterr().out
-    assert "EXAMPLES ONLY" in path.read_text()
+    assert cli.main(["candidates", "init", "--force", "--filters", str(FILTERS_CSV)]) == 0
+    assert f"Wrote {path}: 4 sector keywords from {FILTERS_CSV}." in capsys.readouterr().out
+    assert cands.load_config(path).sector_keywords == ["fintech", "developer tools", "analytics", "SaaS"]
+    assert cli.main(["candidates", "init", "--force", "--filters", str(tmp_path / "nope.csv")]) == 1
 
 
 def test_bad_configs_are_refused(conn, capsys, isolated_db_path):

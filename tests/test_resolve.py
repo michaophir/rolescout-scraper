@@ -351,11 +351,11 @@ def test_domain_helpers():
 
 
 def test_name_and_slug_helpers():
-    assert names_match("Palantir Technologies", "Palantir")
-    assert names_match("Scale AI", "scale")
+    assert names_match("Acme Technologies", "Acme")
+    assert names_match("Bolt AI", "bolt")
     assert not names_match("Cobalt Mining Corp", "Cobalt Robotics")
-    assert slug_guesses("Scale AI", "https://scale.com") == ["scale-ai", "scaleai", "scale"]
-    assert slug_guesses("Notion", "https://notion.so") == ["notion"]
+    assert slug_guesses("Bolt AI", "https://bolt.com") == ["bolt-ai", "boltai", "bolt"]
+    assert slug_guesses("Dynamo", "https://dynamo.so") == ["dynamo"]
 
 
 # --- report and CLI ----------------------------------------------------------

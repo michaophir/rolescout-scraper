@@ -158,14 +158,17 @@ def read_sector_keywords(path: str | os.PathLike) -> list[str]:
     return list(dict.fromkeys(found))
 
 
-EXAMPLE_KEYWORDS = ["software", "data"]
+# The starter filter: broad technology sectors and no rule that states a
+# preference. Its owner narrows it.
+STARTER_KEYWORDS = ["software", "AI", "data", "developer tools", "SaaS", "fintech", "security",
+                    "infrastructure", "health", "consumer", "marketplace", "hardware"]
 
 
 def starter_config(keywords: list[str] | None = None, seeded_from: str = "") -> str:
     """The text of a starter candidates.toml."""
     origin = (f"seeded from the domain rows of {seeded_from}" if seeded_from and keywords
-              else "EXAMPLES ONLY: replace them with the sectors you want")
-    words = ", ".join(json.dumps(k) for k in (keywords or EXAMPLE_KEYWORDS))
+              else "a broad starting point: keep the sectors you want")
+    words = ", ".join(json.dumps(k) for k in (keywords or STARTER_KEYWORDS))
     return f"""\
 # rolescout candidates filter: which companies found on portfolio boards are
 # worth tracking.
@@ -188,20 +191,22 @@ def starter_config(keywords: list[str] | None = None, seeded_from: str = "") -> 
 # auto_activate = true
 
 [size]
-# Smallest company worth tracking, by the board's employee count.
-min_employees = 10
+# Smallest company worth tracking, by the board's employee count. 0 means no
+# minimum. Example: min_employees = 10
+min_employees = 0
 # When the board gives no employee count: "review", "reject" or "pass".
 unknown = "review"
 
 [stage]
 # Funding stages, as the boards name them. A stage in `accept` passes, one in
 # `reject` is rejected, and anything else (no stage, "other", a name not
-# listed here) goes to review.
+# listed here) goes to review. Every stage is accepted to begin with; move
+# the ones you do not want into `reject`, e.g. reject = ["pre_seed"].
 accept = [
-    "seed", "series_a", "series_b", "series_c", "series_d", "series_e", "series_f",
+    "pre_seed", "seed", "series_a", "series_b", "series_c", "series_d", "series_e", "series_f",
     "series_g", "series_h", "series_unknown", "private_equity", "acquisition", "ipo",
 ]
-reject = ["pre_seed"]
+reject = []
 
 [sector]
 # The company's sector tags must contain at least one of these
@@ -216,9 +221,12 @@ unknown = "review"
 # Require at least one open role in one of `locations`. This is checked last
 # and only for candidates that passed everything above, because it costs one
 # request per company during a harvest. Only the number of matching roles is
-# stored, never the roles.
-require_open_role = true
-locations = ["United States", "Remote"]
+# stored, never the roles. Off to begin with. To turn it on, set it to true
+# and name the places, e.g.
+#   require_open_role = true
+#   locations = ["United States", "Remote"]
+require_open_role = false
+locations = []
 """
 
 

@@ -486,21 +486,23 @@ def test_daily_job_rebuilds_too(conn, monkeypatch, capsys, isolated_db_path):
 
 # --- starter config and CLI views --------------------------------------------
 
-def test_init_seeds_from_the_repo_filters_and_never_overwrites(conn, capsys, isolated_db_path, monkeypatch):
-    monkeypatch.chdir(REPO)
+FILTERS_CSV = REPO / "tests" / "fixtures" / "role_filters_csv_with_titles_seniority_and_domains.csv"
+
+
+def test_init_seeds_from_a_filters_file_when_asked_and_never_overwrites(conn, capsys, isolated_db_path):
     path = isolated_db_path.parent / "ranking.toml"
-    assert cli.main(["shortlist", "init"]) == 0
+    assert cli.main(["shortlist", "init", "--filters", str(FILTERS_CSV)]) == 0
     out = capsys.readouterr().out
-    assert f"Wrote {path}: 21 title phrases and 7 seniority words from role_filters.csv." in out
+    assert f"Wrote {path}: 5 title phrases and 3 seniority words from {FILTERS_CSV}." in out
     assert path.stat().st_mode & 0o777 == 0o600
     loaded = ranking.load_config(path)
     assert loaded.size == 100 and "tier_points" not in path.read_text()
     # A config written before tiers stopped earning points still loads.
     assert ranking.parse_config(path.read_text() + "\n[tier_points]\n1 = 30\n").size == 100
-    assert list(loaded.wanted)[:3] == ["Chief Product Officer", "CPO", "Vice President of Product"]
-    assert set(loaded.seniority) == {"Principal", "Director", "VP", "Head", "Staff", "Senior", "Founding"}
-    assert loaded.exclude == [] and loaded.preferred_locations == {}
-    assert (loaded.remote_points, loaded.recency_max_points) == (10.0, 15.0)
+    assert list(loaded.wanted)[:3] == ["Head of Product", "Staff Product Manager", "Senior Product Manager"]
+    assert set(loaded.seniority) == {"Staff", "Senior", "Head"}
+    assert loaded.exclude == ranking.STARTER_EXCLUDE and loaded.preferred_locations == {}
+    assert (loaded.remote_points, loaded.recency_max_points) == (0.0, 15.0)
 
     path.write_text(path.read_text() + "\n# my edit\n")
     assert cli.main(["shortlist", "init"]) == 1
@@ -509,13 +511,28 @@ def test_init_seeds_from_the_repo_filters_and_never_overwrites(conn, capsys, iso
     assert "# my edit" not in path.read_text()
 
 
-def test_init_without_a_filters_file_writes_marked_examples(conn, capsys, tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
+def test_init_writes_a_generic_starter_for_product_and_engineering(conn, capsys, tmp_path, monkeypatch):
+    (tmp_path / "role_filters.csv").write_text(FILTERS_CSV.read_text())
+    monkeypatch.chdir(tmp_path)                  # a filters file in the current folder is not picked up
     target = tmp_path / "elsewhere" / "rank.toml"
     assert cli.main(["shortlist", "init", "--config", str(target)]) == 0
-    assert "with example titles only" in capsys.readouterr().out
-    assert "EXAMPLES ONLY" in target.read_text()
-    assert list(ranking.load_config(target).wanted) == ["Senior Product Manager", "Product Manager"]
+    assert ("the starter ranking for product and engineering roles (27 title phrases, no location preference)"
+            in capsys.readouterr().out)
+    loaded, text = ranking.load_config(target), target.read_text()
+    assert list(loaded.wanted) == ranking.STARTER_TITLES
+    assert {"Product Manager", "Software Engineer", "Engineering Manager"} <= set(loaded.wanted)
+    assert set(loaded.wanted.values()) == {30.0} and set(loaded.seniority.values()) == {10.0}   # no title favored
+    assert {"Intern", "New Grad"} <= set(loaded.exclude)
+    # No location preference and no leveling until the owner adds one; each has a commented example.
+    assert (loaded.remote_points, loaded.preferred_locations, loaded.required_locations) == (0.0, {}, [])
+    assert loaded.senior_as_staff == []
+    for example in ('# require = ["United States"]', '#   "New York" = 10', "Example: remote_points = 10",
+                    'senior_as_staff = ["Acme", "Globex"]'):
+        assert example in text
+    for wanted, title in ((True, "Senior Product Manager, Growth"), (True, "Staff Software Engineer"),
+                          (False, "Product Manager Intern"), (False, "Software Engineer, New Grad"),
+                          (False, "Product Marketing Manager")):
+        assert loaded.wants_title(title) is wanted, title
     assert cli.main(["shortlist", "init", "--force", "--filters", str(tmp_path / "nope.csv")]) == 1
 
 
