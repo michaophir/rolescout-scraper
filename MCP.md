@@ -14,7 +14,8 @@ not expose it to the public internet.
 
 The server needs the official MCP Python SDK, which is an optional extra.
 The scraper and the scheduled job work without it. On the machine that
-holds the database (see DEPLOY.md for the base install):
+holds the database, after the base install ([README.md](README.md#quick-start),
+or [DEPLOY.md](DEPLOY.md) for an always-on Mac):
 
 ```sh
 ~/.rolescout/venv/bin/pip install "$HOME/rolescout-scraper[mcp]"
@@ -131,8 +132,8 @@ and return `next_offset`.
 
 ## 4. Client configuration
 
-Paths below assume the install from DEPLOY.md; replace `/Users/you` with
-your home folder and the address and token with your own.
+Paths below assume the base install (`~/.rolescout/venv`); replace
+`/Users/you` with your home folder and the address and token with your own.
 
 ### Claude Code
 
@@ -239,8 +240,8 @@ asyncio.run(over_stdio())
 | Symptom | Cause |
 |---|---|
 | `the MCP server needs the optional dependency` | Install the extra (section 1). |
-| `no database at ...` | No scout has run for that database yet, or `--db` points at the wrong file. |
+| `no database at ...` | Nothing has created that database yet (run `rolescout init`, then `rolescout scout`), or `--db` points at the wrong file. |
 | `401` | The `Authorization: Bearer` header is missing or the token differs from the server's. |
 | `421` | The client used a hostname the server does not expect; add it with `--allow-host`. |
 | A write tool is missing | The server was started with `--read-only`. |
-| Data looks old | The server never fetches; call `health` to see when the last scout ran. |
+| Data looks old | The server never fetches; call `health` to see when the last scout ran, then see [DEPLOY.md, Troubleshooting](DEPLOY.md#troubleshooting). |

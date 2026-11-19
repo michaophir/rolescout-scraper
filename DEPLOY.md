@@ -1,14 +1,17 @@
-# Deploying rolescout on an always-on Mac
+# Running rolescout
 
-rolescout runs once a day, fetches every open role from the mapped job boards,
-and stores them in a local SQLite database. This guide installs it on a fresh
-Mac, seeds the company list, schedules the daily run and shows how to check
-on it. Every step is a command to run in Terminal (or over SSH) on **the Mac
-that will run it**, unless the step says "on your own machine".
+This is the full guide: installing rolescout on a machine that stays on,
+scheduling the daily run, and a reference for each feature. For the short
+version, see the quick start in [README.md](README.md). Every step is a
+command to run in Terminal (or over SSH) on **the Mac that will run it**,
+unless the step says "on your own machine".
 
 Scheduling uses launchd and works on macOS only. On Linux, `rolescout schedule
 install` refuses and prints an equivalent cron line instead; everything else
-(scout, status, backup, export, import) works the same.
+works the same.
+
+Contents: [install and run](#1-check-python) (steps 1 to 9),
+[reference](#reference), [troubleshooting](#troubleshooting).
 
 ## Where things live
 
@@ -54,27 +57,26 @@ export PATH="$HOME/.local/bin:$PATH"
 
 Check: `rolescout --version` prints a version number.
 
-## 3. Seed the companies and board mappings
+## 3. Set up companies and configs
 
-For a new install with no list of your own yet, one command sets up the
-starter companies with their boards and the starter ranking and candidates
-configs (README.md, "Defaults and how to change them", says what they hold):
+**A new install.** One command adds the starter companies with their boards
+and writes the starter ranking and candidates configs:
 
 ```sh
 rolescout init
 ```
 
-Then go to step 4. The rest of this step is for moving a list you already
-have on another machine.
+[README.md](README.md#defaults-and-how-to-change-them) says what the starter
+set holds and how to change it. Go to step 4.
 
-The company list and its board mappings come from a machine where
-`rolescout companies resolve` has already been run, so this Mac never needs
-to resolve anything.
-
-**On your own machine** (replace `mac` with the SSH name of the always-on Mac):
+**Moving a list you already have.** The company list and its board mappings
+come from a machine where they are already set up, so this Mac never needs
+to resolve anything. On your own machine (replace `mac` with the SSH name of
+the always-on Mac):
 
 ```sh
 rolescout companies export - | ssh mac '~/.rolescout/venv/bin/rolescout companies import -'
+scp ~/.rolescout/ranking.toml mac:.rolescout/ranking.toml
 ```
 
 Or as a file. The export lists the companies you are targeting: it is
@@ -87,55 +89,15 @@ rolescout companies import ~/rolescout-companies.json      # on the Mac
 rm ~/rolescout-companies.json                              # on both, when done
 ```
 
-Check, on the Mac: `rolescout companies report` shows the same mapped,
-unsupported and unresolved counts as on your own machine.
+The export also carries the profile values you set by hand, the VC list and
+the VC links you made by hand. Check, on the Mac: `rolescout companies
+report` shows the same mapped, unsupported and unresolved counts as on your
+own machine. Importing again later is safe: it adds new companies and boards
+and updates details, and never removes anything. Marks (dismissed, saved,
+applied) stay in the database of the machine where you made them.
 
-Importing again later is safe: it adds new companies and boards and updates
-details, and never removes anything.
-
-### The shortlist ranking
-
-The shortlist is ranked by `~/.rolescout/ranking.toml`, a personal file that
-lives next to the database and is not part of the repository. Without it the
-scout still runs and simply builds no shortlist. Either copy yours across
-(on your own machine):
-
-```sh
-scp ~/.rolescout/ranking.toml mac:.rolescout/ranking.toml
-```
-
-or create the starter on the Mac and edit it (`rolescout init` has already
-done this on a new install):
-
-```sh
-rolescout shortlist init
-```
-
-The starter wants product and engineering titles, all worth the same, and
-has no location preference. `--filters FILE` seeds the titles and seniority
-words from a `field,value` CSV of your own instead.
-
-Two things the ranking does that are worth knowing when you read the list:
-no company takes more than `max_per_company` slots (5 in the starter; roles
-held back by that cap are counted in the by-company view and named by
-`rolescout why ID`), and a role's age is counted from the date the company
-posted it, falling back to the date rolescout first saw it. Roles that were
-already open when a company was first fetched and carry no posted date get
-no points for being new.
-
-The ranking file can also require a location. Add `require = ["United States"]`
-under `[location]` (above `[location.preferred]`) and a role reaches the
-shortlist only if one of its locations is in the United States, in any form
-boards use, or it is remote with no country named. Off unless set; the
-starter file carries the line commented out. In the table, a role with
-several locations shows the one that mattered first, then "+N more".
-
-After changing the file, `rolescout shortlist rebuild` re-ranks at once, with
-no network call.
-
-A wrong company website can be corrected in place with
-`rolescout companies set-website NAME URL`. Marks (dismissed, saved, applied) are stored in the database
-on the machine where you make them.
+Without a `ranking.toml` the scout still runs and simply builds no
+shortlist; `rolescout shortlist init` writes the starter one.
 
 ## 4. First run
 
@@ -145,11 +107,22 @@ Run one scout by hand so problems show up now, not at the scheduled time:
 rolescout scout
 ```
 
-It takes about one second per board on most job systems; Workday, Rippling
-and Eightfold boards take one request per page of roles and so longer. The
-first run is a baseline: roles are
-stored but not counted as "opened". The run ends with a table and a TOTAL
-line; `0 failed` is the expected result.
+Most boards take one request and about a second. Workday, Rippling and
+Eightfold boards are read page by page and take longer: with the starter
+set the whole run is about 20 minutes. The first run is a baseline: roles
+are stored but not counted as "opened". The run ends with a table and a
+TOTAL line; `0 failed` is the expected result.
+
+Over SSH, or on a laptop that may sleep, start it detached and awake
+instead, and watch it with `rolescout status`:
+
+```sh
+nohup caffeinate -i rolescout scout > ~/rolescout-first-run.log 2>&1 &
+rolescout status          # the "Right now" line shows how far it is
+```
+
+`nohup` keeps the run going when the SSH session closes, and `caffeinate -i`
+(macOS) keeps the Mac awake until the run ends.
 
 ## 5. Schedule the daily run
 
@@ -218,32 +191,97 @@ ls -lh ~/.rolescout/backups
 Each run in the log starts with `=== rolescout daily, <time> ===` and ends
 with `=== finished <time>, ok ===`.
 
-## Workday boards
-
-A Workday board is named by three things that do not follow from the company
-name: tenant, data center and career site, written `TENANT/wdN/SITE`
-(for example `acme/wd5/Careers`). `rolescout companies resolve` maps
-one whenever a company's site links to a Workday URL. To map one by hand,
-paste any URL from the career site, a job page included:
+## 7. Update to a new version
 
 ```sh
-rolescout companies map "Acme" workday "https://acme.wd5.myworkdayjobs.com/en-US/Careers/login"
+cd ~/rolescout-scraper && git pull
+~/.rolescout/venv/bin/pip install --upgrade ~/rolescout-scraper
+rolescout --version
+rolescout status
 ```
 
-Workday costs more requests than the other sources, so the scout prints the
-requests and time each board took:
+The schedule keeps working: it points at `~/.rolescout/venv`, which is
+updated in place. The database is upgraded automatically the next time any
+command opens it (its schema version is stored in the file; a database from a
+newer rolescout is refused, not downgraded). If an update is running while the scheduled scout starts,
+that scout may fail once; `rolescout status` will show it and the next day's
+run recovers.
 
-- The list of roles takes one request per 20 roles, one second apart.
-- A description takes one request per role. It is fetched once, and only for
-  roles whose title matches a wanted phrase in `ranking.toml` (and no excluded
-  one) and for roles you marked saved or applied. Every other role is stored
-  without a description. After you add a wanted phrase, the next scout fetches
-  the descriptions it now needs.
-- One board gets at most 150 descriptions, 900 requests and 15 minutes per
-  run. What does not fit waits for the next run; a board cut short is marked
-  `partial` and none of its roles are closed that day.
-- A posted date comes from "Posted 5 Days Ago" in the list (exact once the
-  description is fetched). "Posted 30+ Days Ago" gives no date.
+To take a safety copy before updating: `rolescout backup ~/.rolescout/backups`.
+
+## 8. Restore from a backup
+
+```sh
+rolescout schedule remove
+cp ~/.rolescout/backups/rolescout-YYYYMMDD-HHMMSS.db ~/.rolescout/rolescout.db
+rm -f ~/.rolescout/rolescout.db-wal ~/.rolescout/rolescout.db-shm
+rolescout status
+rolescout schedule install --at 07:30
+```
+
+## 9. Uninstall
+
+```sh
+rolescout schedule remove
+rm -f ~/.local/bin/rolescout
+rm -rf ~/.rolescout/venv ~/rolescout-scraper ~/Library/Logs/rolescout
+```
+
+This leaves the database and backups in `~/.rolescout`. To delete the data
+too, which cannot be undone: `rm -rf ~/.rolescout`.
+
+# Reference
+
+One section per topic. The commands are also described by `rolescout COMMAND --help`.
+
+## The shortlist ranking
+
+The shortlist is ranked by `~/.rolescout/ranking.toml`, a personal file next
+to the database. The file explains each of its sections;
+[README.md](README.md#defaults-and-how-to-change-them) summarizes them.
+`rolescout shortlist init` writes the starter; `--filters FILE` seeds the
+titles and seniority words from a `field,value` CSV of your own instead.
+After any change, `rolescout shortlist rebuild` re-ranks at once, with no
+network call, and `rolescout why ID` shows how one role was scored.
+
+What the ranking does that is worth knowing when you read the list:
+
+- No company takes more than `max_per_company` slots (5 in the starter).
+  Roles held back by that cap are counted in the by-company view and named
+  by `rolescout why ID`.
+- A role's age is counted from the date the company posted it, falling back
+  to the date rolescout first saw it. Roles that were already open when a
+  company was first fetched and carry no posted date get no points for being
+  new.
+- With `require = ["United States"]` under `[location]`, a role reaches the
+  shortlist only if one of its locations is in the United States, in any
+  form boards use, or it is remote with no country named. Off unless set. In
+  the table, a role with several locations shows the one that mattered
+  first, then "+N more".
+- At some companies a Senior title is what others call Staff. Name them
+  under `[leveling]` and a Senior title there earns the Staff points:
+  `senior_as_staff = ["Acme", "Globex"]`.
+
+## Cuts and company overviews
+
+The shortlist and the role search take filters on the company's profile and
+on where the role is. With a filter, `rolescout shortlist` ranks every
+qualifying role that passes it as of now, not only today's list, and shows
+each role's rank on today's list beside it:
+
+```sh
+rolescout shortlist --stage seed --sector fintech
+rolescout shortlist --vc "Acme Venture Partners" --location "United States"
+rolescout shortlist --employees 50-500 --hq "New York" --by-company
+rolescout query --title designer --stage "series B" --location remote
+```
+
+`rolescout company NAME` shows one company: profile, VCs, its top open roles
+and the last 30 days of hiring. `rolescout profile missing` lists companies
+with empty profile fields, the ones with the most open roles first; an agent
+can fill them over MCP (`list_incomplete_profiles`, `set_company_profile`),
+and what it sets is recorded as set by an agent and never replaces a value
+you set.
 
 ## Company profiles, sectors and VCs
 
@@ -292,164 +330,6 @@ For browsing (in Datasette, for example) the database has read-only views:
 `v_company_sectors` (one row per company and sector) and `v_hiring_weekly`
 (opened and closed per company per week).
 
-## Cuts, company overviews and filling in profiles
-
-The shortlist and the role search take filters on the company's profile and
-on where the role is. With a filter, `rolescout shortlist` ranks every
-qualifying role that passes it as of now, not only today's list, and shows
-each role's rank on today's list beside it:
-
-```sh
-rolescout shortlist --stage seed --sector fintech
-rolescout shortlist --vc "Acme Venture Partners" --location "United States"
-rolescout shortlist --employees 50-500 --hq "New York" --by-company
-rolescout query --title designer --stage "series B" --location remote
-```
-
-`rolescout company NAME` shows one company: profile, VCs, its top open roles
-and the last 30 days of hiring. `rolescout profile missing` lists companies
-with empty profile fields, the ones with the most open roles first; an agent
-can fill them over MCP (`list_incomplete_profiles`, `set_company_profile`),
-and what it sets is recorded as set by an agent and never replaces a value
-you set.
-
-At some companies a Senior title is what others call Staff. Name them in
-`ranking.toml` and a Senior title there earns the Staff points:
-
-```toml
-[leveling]
-senior_as_staff = ["Acme", "Globex"]
-```
-
-`rolescout companies export` also carries the profile values you set by
-hand, the VC list and the VC links you made by hand; `companies import` on
-the other machine restores them as yours.
-
-## What is running, and what changed
-
-`rolescout status` has a "Right now" line: the job in progress (scout,
-resolve, harvest, or the daily job and the step it is on), when it started,
-how far it is and when it should finish at its pace so far. It says "Idle"
-when nothing is running, and names a job that died or stopped on an error
-until the next job of that kind starts.
-
-`rolescout digest` says what changed since the previous completed scout:
-roles opened and closed, companies fetched for the first time, roles new on
-the shortlist, companies added, mapped or newly failing, and coverage now
-against then. `rolescout digest --since 2026-01-31` compares with the last
-scout completed before that day began. The daily job ends its log with the
-digest. Over MCP the same two are the `health` and `digest` tools.
-
-## Eightfold career sites
-
-An Eightfold site is named by its address and the company's domain:
-`acme.eightfold.ai/acme.com`, or `careers.acme.com/acme.com` when the site is
-on the company's own hostname. `rolescout companies resolve` maps one when a
-company's site links to it, and companies recorded earlier as being on
-Eightfold are mapped from the URL recorded then. To map one by hand, paste
-the site's URL; a URL without `?domain=` works too, and the domain is then
-read from the careers page:
-
-```sh
-rolescout companies map "Acme" eightfold "https://acme.eightfold.ai/careers?domain=acme.com"
-```
-
-These sites list ten roles per request and answer "try again later" when
-asked too often, so a board is read at one request every 1.5 seconds. A long
-list moves while it is read, so each page starts two roles before the end of
-the last one: a board with 2,000 roles takes about 250 requests and six
-minutes. The pages rarely add up exactly to the number the site reports, so
-the 99% rule below decides whether the read counts as complete. A page that is refused is
-retried after 30 and then 90 seconds, and the rest of the board is read at
-half the pace. If it is refused a third time the fetch fails, and as with any
-failed fetch no role is closed. Only titles, locations, departments, dates and
-links are stored; these sites have no description in their lists.
-
-A site answers one of two list addresses and refuses the other. When the
-first cannot be read (robots.txt refuses it, or it answers an error or
-something that is not a list) the second is tried before the fetch fails, and
-a failure names what each one answered. A site that says it is asked too
-often is not asked again at the other address.
-
-## robots.txt
-
-Every site's robots.txt is read before anything else on it, and a page it
-disallows is not requested. The file is evaluated as RFC 9309 says: of the
-rules that match a page, the longest wins, `Allow` wins a tie, `*` stands for
-any run of characters and `$` for the end of the address. So a file that
-reads `Disallow: /` and then `Allow: /careers` lets `/careers` through and
-nothing else. The answer no longer depends on the Python version: before 3.14
-Python's own reader obeyed the first matching rule and refused such sites.
-A refusal names the line of the file that decided:
-
-```
-robots.txt on jobs.acme.com disallows /api/list (board 'acme'; line 2: Disallow: /api/)
-```
-
-Companies that `rolescout companies resolve` looked at before this change may
-have had pages skipped that were in fact allowed. To count them and look at
-them again:
-
-```sh
-sqlite3 ~/.rolescout/rolescout.db "SELECT r.outcome, COUNT(*) FROM company_resolutions r WHERE r.evidence LIKE '%robots.txt disallows%' GROUP BY 1"
-rolescout companies resolve NAME
-```
-
-## Complete and partial reads
-
-Some sources say how many roles they list (Eightfold, Workday, Rippling). A
-read of such a board counts as complete when it saw at least 99% of that
-number. Only a complete read can count a role as missing, and a role still
-closes on its second miss in a row. A read below 99% stores and updates what
-it saw and closes nothing.
-
-Every fetch records how many roles it saw and how many the site reported.
-`rolescout status` has a "Partial reads" line and lists each board whose last
-successful read was below 99%, with both numbers; the MCP `health` tool has
-the same list as `partial_reads`. A board that stays on that list is not
-closing roles and is worth a look.
-
-## The Google career site
-
-Google runs its own career site with no job system behind it, so it has an
-adapter of its own, the one exception to "one adapter per job system" (see
-CLAUDE.md). Map it once:
-
-```sh
-rolescout companies add "Google" --website google.com
-rolescout companies map "Google" google careers
-```
-
-Every open role comes from one public feed in a single request. Roles the
-feed lists for another employer in the group belong to the same company, and
-the employer leads the role's department (`rolescout query --json` shows it).
-The feed carries every description; they are stored for roles whose title
-your ranking config wants and for roles you saved or applied to, as with
-Workday and Rippling, and cost no extra request.
-
-## Rippling, Gem and Workable boards
-
-These three are named by the board name in their URL: `ats.rippling.com/NAME/jobs`,
-`jobs.gem.com/NAME` and `apply.workable.com/NAME`. `rolescout companies resolve`
-maps one whenever a company's site links to such a URL, a job page, an
-embedded board or an API URL included. Companies an earlier version recorded
-as being on one of these systems are mapped from the URL recorded then, by
-the same command or by the weekly re-check.
-
-A site that shows the system but names no board (it only loads the system's
-script) gets one more try: the board at the company's own name. It is saved
-when the board declares the company's website, and otherwise listed for you
-to confirm. To map one by hand, paste any URL of the board:
-
-```sh
-rolescout companies map "Acme" rippling "https://ats.rippling.com/acme/jobs/JOB-ID"
-```
-
-Gem and Workable return every role with its description in one request.
-Rippling lists roles in one request, but a description, posted date and pay
-cost one request per role, so like Workday they are read only for roles whose
-title your ranking config wants and for roles you saved or applied to.
-
 ## New companies from portfolio boards
 
 Investor portfolio job boards can be read for companies you do not track
@@ -493,57 +373,216 @@ Once a harvest has run, the shortlist, `rolescout why ID` and
 ones: a harvest (or `rolescout candidates apply`) links a listing to a
 tracked company with the same website domain.
 
+## What is running, and what changed
+
+`rolescout status` has a "Right now" line: the job in progress (scout,
+resolve, harvest, or the daily job and the step it is on), when it started,
+how far it is and when it should finish at its pace so far. It says "Idle"
+when nothing is running, and names a job that died or stopped on an error
+until the next job of that kind starts.
+
+`rolescout digest` says what changed since the previous completed scout:
+roles opened and closed, companies fetched for the first time, roles new on
+the shortlist, companies added, mapped or newly failing, and coverage now
+against then. `rolescout digest --since 2026-01-31` compares with the last
+scout completed before that day began. The daily job ends its log with the
+digest. Over MCP the same two are the `health` and `digest` tools.
+
+## Workday boards
+
+A Workday board is named by three things that do not follow from the company
+name: tenant, data center and career site, written `TENANT/wdN/SITE`
+(for example `acme/wd5/Careers`). `rolescout companies resolve` maps
+one whenever a company's site links to a Workday URL. To map one by hand,
+paste any URL from the career site, a job page included:
+
+```sh
+rolescout companies map "Acme" workday "https://acme.wd5.myworkdayjobs.com/en-US/Careers/login"
+```
+
+Workday costs more requests than the other sources, so the scout prints the
+requests and time each board took:
+
+- The list of roles takes one request per 20 roles, one second apart.
+- A description takes one request per role. It is fetched once, and only for
+  roles whose title matches a wanted phrase in `ranking.toml` (and no excluded
+  one) and for roles you marked saved or applied. Every other role is stored
+  without a description. After you add a wanted phrase, the next scout fetches
+  the descriptions it now needs.
+- One board gets at most 150 descriptions, 900 requests and 15 minutes per
+  run. What does not fit waits for the next run; a board cut short is marked
+  `partial` and none of its roles are closed that day.
+- A posted date comes from "Posted 5 Days Ago" in the list (exact once the
+  description is fetched). "Posted 30+ Days Ago" gives no date.
+
+## Eightfold career sites
+
+An Eightfold site is named by its address and the company's domain:
+`acme.eightfold.ai/acme.com`, or `careers.acme.com/acme.com` when the site is
+on the company's own hostname. `rolescout companies resolve` maps one when a
+company's site links to it, and companies recorded earlier as being on
+Eightfold are mapped from the URL recorded then. To map one by hand, paste
+the site's URL; a URL without `?domain=` works too, and the domain is then
+read from the careers page:
+
+```sh
+rolescout companies map "Acme" eightfold "https://acme.eightfold.ai/careers?domain=acme.com"
+```
+
+These sites list ten roles per request and answer "try again later" when
+asked too often, so a board is read at one request every 1.5 seconds. A long
+list moves while it is read, so each page starts two roles before the end of
+the last one: a board with 2,000 roles takes about 250 requests and six
+minutes. The pages rarely add up exactly to the number the site reports, so
+the 99% rule below decides whether the read counts as complete. A page that is refused is
+retried after 30 and then 90 seconds, and the rest of the board is read at
+half the pace. If it is refused a third time the fetch fails, and as with any
+failed fetch no role is closed. Only titles, locations, departments, dates and
+links are stored; these sites have no description in their lists.
+
+A site answers one of two list addresses and refuses the other. When the
+first cannot be read (robots.txt refuses it, or it answers an error or
+something that is not a list) the second is tried before the fetch fails, and
+a failure names what each one answered. A site that says it is asked too
+often is not asked again at the other address.
+
+## The Google career site
+
+Google runs its own career site with no job system behind it, so it has an
+adapter of its own, the one exception to "one adapter per job system" (see
+CLAUDE.md). Map it once:
+
+```sh
+rolescout companies add "Google" --website google.com
+rolescout companies map "Google" google careers
+```
+
+Every open role comes from one public feed in a single request. Roles the
+feed lists for another employer in the group belong to the same company, and
+the employer leads the role's department (`rolescout query --json` shows it).
+The feed carries every description; they are stored for roles whose title
+your ranking config wants and for roles you saved or applied to, as with
+Workday and Rippling, and cost no extra request.
+
+## Rippling, Gem and Workable boards
+
+These three are named by the board name in their URL: `ats.rippling.com/NAME/jobs`,
+`jobs.gem.com/NAME` and `apply.workable.com/NAME`. `rolescout companies resolve`
+maps one whenever a company's site links to such a URL, a job page, an
+embedded board or an API URL included. Companies an earlier version recorded
+as being on one of these systems are mapped from the URL recorded then, by
+the same command or by the weekly re-check.
+
+A site that shows the system but names no board (it only loads the system's
+script) gets one more try: the board at the company's own name. It is saved
+when the board declares the company's website, and otherwise listed for you
+to confirm. To map one by hand, paste any URL of the board:
+
+```sh
+rolescout companies map "Acme" rippling "https://ats.rippling.com/acme/jobs/JOB-ID"
+```
+
+Gem and Workable return every role with its description in one request.
+Rippling lists roles in one request, but a description, posted date and pay
+cost one request per role, so like Workday they are read only for roles whose
+title your ranking config wants and for roles you saved or applied to.
+
+## robots.txt
+
+Every site's robots.txt is read before anything else on it, and a page it
+disallows is not requested. The file is evaluated as RFC 9309 says: of the
+rules that match a page, the longest wins, `Allow` wins a tie, `*` stands for
+any run of characters and `$` for the end of the address. So a file that
+reads `Disallow: /` and then `Allow: /careers` lets `/careers` through and
+nothing else. A missing file allows everything; a file that answers with a
+server error disallows everything. A refusal names the line that decided:
+
+```
+robots.txt on jobs.acme.com disallows /api/list (board 'acme'; line 2: Disallow: /api/)
+```
+
+## Complete and partial reads
+
+Some sources say how many roles they list (Eightfold, Workday, Rippling). A
+read of such a board counts as complete when it saw at least 99% of that
+number. Only a complete read can count a role as missing, and a role still
+closes on its second miss in a row. A read below 99% stores and updates what
+it saw and closes nothing.
+
+Every fetch records how many roles it saw and how many the site reported.
+`rolescout status` has a "Partial reads" line and lists each board whose last
+successful read was below 99%, with both numbers; the MCP `health` tool has
+the same list as `partial_reads`. A board that stays on that list is not
+closing roles and is worth a look.
+
 ## Agents (MCP)
 
 To let an AI agent read the shortlist and work with rolescout without the
 command line, see [MCP.md](MCP.md). It needs one extra install step and is
 optional: the scraper and the scheduled job do not depend on it.
 
-## 7. Update to a new version
-
-```sh
-cd ~/rolescout-scraper && git pull
-~/.rolescout/venv/bin/pip install --upgrade ~/rolescout-scraper
-rolescout --version
-rolescout status
-```
-
-The schedule keeps working: it points at `~/.rolescout/venv`, which is
-updated in place. The database is upgraded automatically the next time any
-command opens it (its schema version is stored in the file; a database from a
-newer rolescout is refused, not downgraded). If an update is running while the scheduled scout starts,
-that scout may fail once; `rolescout status` will show it and the next day's
-run recovers.
-
-To take a safety copy before updating: `rolescout backup ~/.rolescout/backups`.
-
-## 8. Restore from a backup
-
-```sh
-rolescout schedule remove
-cp ~/.rolescout/backups/rolescout-YYYYMMDD-HHMMSS.db ~/.rolescout/rolescout.db
-rm -f ~/.rolescout/rolescout.db-wal ~/.rolescout/rolescout.db-shm
-rolescout status
-rolescout schedule install --at 07:30
-```
-
-## 9. Uninstall
-
-```sh
-rolescout schedule remove
-rm -f ~/.local/bin/rolescout
-rm -rf ~/.rolescout/venv ~/rolescout-scraper ~/Library/Logs/rolescout
-```
-
-This leaves the database and backups in `~/.rolescout`. To delete the data
-too, which cannot be undone: `rm -rf ~/.rolescout`.
-
 ## Troubleshooting
+
+Start with `rolescout status`: it names what needs attention and makes no
+network call.
+
+**A board is refused by robots.txt.** The error names the line of the
+site's robots.txt that decided (see [robots.txt](#robotstxt)). A real
+refusal is respected and there is no override: deactivate the company or
+leave it failing. To see the answer for one board without a full scout:
+`rolescout fetch SOURCE REF`. If the refusals date from a rolescout older
+than the RFC 9309 change, they were wrong: update (step 7) and scout again.
+The same old versions also made `companies resolve` skip pages that were
+allowed; count the companies affected and look at them again with:
+
+```sh
+sqlite3 ~/.rolescout/rolescout.db "SELECT r.outcome, COUNT(*) FROM company_resolutions r WHERE r.evidence LIKE '%robots.txt disallows%' GROUP BY 1"
+rolescout companies resolve NAME
+```
+
+**`status` lists a partial read.** The board was read, but to less than 99%
+of what it lists, so none of its roles were closed that day (see
+[Complete and partial reads](#complete-and-partial-reads)). One day of this
+is normal for a long Eightfold list, or for a Workday board that hit its
+per-run limit of requests, descriptions or time: the next run continues. A
+board that stays on the list for days is not closing roles; run
+`rolescout fetch SOURCE REF` to see whether it still answers in full.
+
+**The Mac slept in the middle of a run.** Requests fail while it sleeps, the
+boards not yet read are marked failed, and nothing is closed: a failed fetch
+changes nothing. If the process itself was cut off, `status` says the last
+run never finished, and no lock is left behind. Run `rolescout scout` again;
+the scheduled run does the same the next day, and retries by itself when
+every board fails. To keep the Mac awake for a run by hand:
+`caffeinate -i rolescout scout`. For the schedule, see the two conditions in
+step 5.
+
+**A long run over SSH stops when the connection drops.** Start it detached,
+as in step 4: `nohup caffeinate -i rolescout scout > ~/rolescout-run.log 2>&1 &`.
+`rolescout status` shows the job in progress, how far it is and when it
+should finish; the log file has the table when it ends.
+
+**A board has disappeared.** A board that answers "not found" fails its
+fetch, and its roles stay as they were. `status` lists it once it has failed
+more than two runs in a row, and the weekly re-check then tries to find the
+company's new board by itself. To act sooner:
+
+```sh
+rolescout companies resolve NAME                 # look for the board it uses now
+rolescout companies unmap NAME SOURCE REF        # remove the dead board; closes its open roles
+rolescout companies deactivate NAME              # or stop tracking the company; history is kept
+```
+
+If the company moved to a job system rolescout cannot read, it shows under
+`rolescout gaps`.
+
+**Other symptoms**
 
 | Symptom | What to do |
 |---|---|
 | `status` says no run for N hours | Is the Mac on and the user logged in? Run `rolescout schedule install --at HH:MM` again, then `launchctl print gui/$(id -u)/com.getrolescout.scout`. |
 | `status` says the last run could not fetch any board | The Mac had no network. Run `rolescout scout` by hand to confirm it works now. |
-| A board has failed more than two runs in a row | The company probably moved job systems. On your own machine run `rolescout companies resolve NAME`, then export and import again; remove the dead board on the Mac with `rolescout companies unmap NAME SOURCE REF`. |
-| `Not starting: another scout is already running` | Normal if a run is in progress. A crashed run cannot leave the lock behind. |
+| `Not starting: another scout is already running` | Normal if a run is in progress; `rolescout status` shows it. A crashed run cannot leave the lock behind. |
 | Nothing in `scout.log` at all | Look at `~/Library/Logs/rolescout/launchd.log`, which holds anything printed before rolescout could open its own log. |
+| The shortlist is empty or says the config changed | Run `rolescout shortlist rebuild`; if there is no `ranking.toml`, `rolescout shortlist init` first. |
+| An agent cannot connect or sees old data | See the troubleshooting table in [MCP.md](MCP.md#troubleshooting). |

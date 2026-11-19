@@ -1734,8 +1734,54 @@ def _add_filter_flags(parser: argparse.ArgumentParser, title: str) -> None:
     group.add_argument("--vc", metavar="VC", help="companies linked to this VC or ecosystem group")
 
 
+# Help for the arguments that mean the same thing wherever they appear.
+_COMMON_HELP = {
+    "json": "print the result as JSON",
+    "name": "the company's name, as `rolescout companies list` shows it",
+    "company": "the company's name, as `rolescout companies list` shows it",
+    "source": "the job system",
+    "ref": "the board's reference, as `rolescout companies list` shows it",
+    "website": "its website, e.g. acme.example",
+    "id": "the role's ID, from the ID column",
+    "status": "the mark: dismissed, saved or applied",
+    "limit": "show at most this many",
+    "names": "candidates, by name",
+    "field": "the profile field: description, sectors, stage, employees or hq",
+    "vc": "the VC, by name or short name",
+    "delay": "minimum pause between requests, in seconds (default: 1.0)",
+    "keep": "backups to keep (default: 7)",
+    "retry_wait": "seconds between tries when every board fails (default: 120)",
+    "short": "the short name shown in tables",
+    "type": "vc or ecosystem",
+}
+
+
+def _fill_help(parser: argparse.ArgumentParser, path: tuple[str, ...]) -> None:
+    """Give every argument that has no help text of its own the common one."""
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            for name, sub in action.choices.items():
+                _fill_help(sub, (*path, name))
+        elif action.help is None:
+            text = _COMMON_HELP.get(action.dest)
+            if path[:1] == ("vcs",) and action.dest == "name":
+                text = "the VC's name" if path[1:] == ("add",) else "a new name"
+            if path[:2] == ("vcs", "edit") and action.dest == "website":
+                text = "a new website"
+            action.help = text
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="rolescout", description=__doc__)
+    parser = argparse.ArgumentParser(
+        prog="rolescout", formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="Fetch open roles from the job boards of the companies you track into a local "
+                    "database, and rank a shortlist of the ones to look at first.",
+        epilog="First steps:\n"
+               "  rolescout init         starter companies, their boards and starter configs\n"
+               "  rolescout scout        fetch every mapped board\n"
+               "  rolescout shortlist    the roles to look at first\n"
+               "  rolescout status       health, last run and what is running now\n"
+               "Every command takes --help. Guides: README.md, DEPLOY.md and MCP.md in the repository.")
     parser.add_argument("--version", action="version", version=f"rolescout {__version__}")
     commands = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
 
@@ -2204,6 +2250,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_filter_flags(query, "Narrow by the company's profile, its VC, or the role's place:")
     query.add_argument("--json", action="store_true")
     query.set_defaults(func=_cmd_query, status="open")
+    _fill_help(parser, ())
     return parser
 
 

@@ -31,45 +31,81 @@ It is polite by design: at most one request per second per site, an honest
 User-Agent, robots.txt obeyed as RFC 9309 defines it, no headless browser
 and no login.
 
-## Install
+## Quick start
 
-Python 3.11 or newer.
+From a clone to a ranked shortlist takes well under an hour, most of it the
+first fetch. You need Python 3.11 or newer (`python3 --version`); macOS or
+Linux.
+
+**1. Install**
 
 ```sh
-git clone https://github.com/michaophir/rolescout-scraper.git
-cd rolescout-scraper
-python3 -m venv .venv
-.venv/bin/pip install .
-.venv/bin/rolescout --version
+git clone https://github.com/michaophir/rolescout-scraper.git ~/rolescout-scraper
+python3 -m venv ~/.rolescout/venv
+~/.rolescout/venv/bin/pip install ~/rolescout-scraper
+mkdir -p ~/.local/bin && ln -sf ~/.rolescout/venv/bin/rolescout ~/.local/bin/rolescout
+export PATH="$HOME/.local/bin:$PATH"
+rolescout --version
 ```
 
-[DEPLOY.md](DEPLOY.md) is the full guide for an always-on Mac: install,
-seeding the company list, the schedule, backups, updates and every feature
-in detail.
-
-## First steps
+**2. Set up the starter companies and configs**
 
 ```sh
-rolescout init                           # starter companies, their boards, starter configs
-rolescout scout                          # fetch every mapped board
+rolescout init
+```
+
+This adds 150 well-known technology companies with their job boards and
+writes a starter ranking. [Defaults and how to change them](#defaults-and-how-to-change-them)
+says what you get.
+
+**3. Fetch the roles** (about 20 minutes with the starter set)
+
+```sh
+rolescout scout
+```
+
+**4. Read the shortlist**
+
+```sh
 rolescout shortlist                      # the roles to look at first
+rolescout why 123                        # how one role was scored
+rolescout mark 123 saved                 # or dismissed, applied
+rolescout query --title designer --location remote
 ```
 
-`rolescout init` gives a new install something useful to run at once; the
-next section says what it sets up and how to change it. The first scout
-takes about 20 minutes, most of it on the few boards that are read page
-by page. The database is `~/.rolescout/rolescout.db`, and the two config
-files live next to it. All three are yours and are not part of this
-repository.
-
-To start from an empty list instead, run `rolescout init --no-companies`,
-then add companies and let rolescout find their boards:
+**5. Run it every day** (macOS; on Linux the command prints a cron line)
 
 ```sh
-rolescout companies add "Acme" --website acme.com
-rolescout companies resolve              # find each company's job board
-rolescout companies report               # mapped, unsupported, unresolved
+rolescout schedule install --at 07:30
+rolescout status                         # health, last run, what is running now
+rolescout digest                         # what changed since the previous scout
 ```
+
+**6. Connect an agent** (optional)
+
+```sh
+~/.rolescout/venv/bin/pip install "$HOME/rolescout-scraper[mcp]"
+claude mcp add --transport stdio --scope user rolescout -- ~/.rolescout/venv/bin/rolescout serve
+```
+
+The second line is for Claude Code on the same machine; [MCP.md](MCP.md) has
+the other clients, remote access and the list of tools.
+
+To start from an empty list instead of the starter companies, run
+`rolescout init --no-companies`, then `rolescout companies add "Acme"
+--website acme.com` and `rolescout companies resolve` to find each board.
+
+## Where to read more
+
+| For | Read |
+|---|---|
+| An always-on Mac: install, schedule, backups, updates, moving a list between machines | [DEPLOY.md](DEPLOY.md), steps 1 to 9 |
+| How a feature works: ranking, filters, profiles and VCs, portfolio boards, each job system, robots.txt, partial reads | [DEPLOY.md, Reference](DEPLOY.md#reference) |
+| Something went wrong | [DEPLOY.md, Troubleshooting](DEPLOY.md#troubleshooting) |
+| Agents over MCP | [MCP.md](MCP.md) |
+| Working on the code | [CLAUDE.md](CLAUDE.md) |
+
+Every command also explains itself: `rolescout --help`, `rolescout COMMAND --help`.
 
 ## Defaults and how to change them
 
@@ -104,86 +140,40 @@ rolescout companies import my-companies.csv            # columns: company_name, 
 Running `rolescout init` again adds starter companies you do not have and
 leaves every company you already have exactly as it is.
 
-**Ranking and filters.** Open `~/.rolescout/ranking.toml`. Each section
-says what it does:
-
-- `[title.wanted]`: the title phrases a role must match, with points. Delete
-  the half you do not want, and raise the points of the titles you want most.
-- `[title] exclude`: phrases that keep a role off the list.
-- `[seniority.words]`: points for seniority words in the title.
-- `[location]`: no preference to begin with. The file carries commented
-  examples for requiring a place (`require = ["United States"]`), for points
-  per place (`"New York" = 10`) and for points when a role is remote.
-- `[leveling]`: companies where a Senior title counts as Staff; empty to
-  begin with, with an example.
-
-Then run `rolescout shortlist rebuild` (no network), and `rolescout why ID`
-to see how any role was scored.
+**Ranking and filters.** Open `~/.rolescout/ranking.toml`; each section in
+the file says what it does. Delete the titles you do not want under
+`[title.wanted]` and raise the points of the ones you want most; add
+phrases to `exclude`; and use the commented examples to require or prefer a
+location, give points for remote roles, or name companies whose Senior
+counts as Staff. Then run `rolescout shortlist rebuild` (no network).
+[DEPLOY.md](DEPLOY.md#the-shortlist-ranking) has the details.
 
 **Sectors.** `rolescout sectors init` writes `sectors.toml` from the tags in
-your own data; edit it and run `rolescout sectors apply`.
+your own data; edit it and run `rolescout sectors apply`
+([details](DEPLOY.md#company-profiles-sectors-and-vcs)).
 
 **Portfolio boards and VCs.** These suggest companies you do not track yet.
+`~/.rolescout/candidates.toml` decides which of the companies found are
+worth tracking; it has commented examples for a minimum size, stages to
+reject and a location rule ([details](DEPLOY.md#new-companies-from-portfolio-boards)).
 
 ```sh
 rolescout portfolio add https://jobs.example.vc        # your own choice of boards
-rolescout portfolio list
 rolescout portfolio remove https://jobs.example.vc
 rolescout portfolio harvest                            # read them, apply candidates.toml
 rolescout candidates --status eligible
 ```
 
-`~/.rolescout/candidates.toml` decides which of the companies found are
-worth tracking; it has commented examples for a minimum size, stages to
-reject and a location rule. `rolescout vcs list` shows the investors behind
-the boards.
-
-## The daily run
-
-```sh
-rolescout schedule install --at 07:30    # macOS; on Linux it prints a cron line
-rolescout status                         # health, last run, what is running now
-rolescout digest                         # what changed since the previous scout
-```
-
-Each day the schedule runs the scout, retries if the machine was offline,
-and writes a backup. About once a week it also re-checks companies it could
-not fetch and reads the portfolio boards. `rolescout status` exits 0 when
-healthy and 1 when something needs attention, and lists any board whose last
-read saw less than 99% of the roles the site reports.
-
-Day to day:
-
-```sh
-rolescout shortlist --new                # roles new since the previous list
-rolescout query --title designer --location remote
-rolescout company "Acme"
-rolescout mark 123 saved                 # or dismissed, applied
-```
-
-## Agents (MCP)
-
-`rolescout serve` exposes the database to an AI agent over the Model Context
-Protocol: the shortlist, role search, marks, companies, profiles, coverage
-gaps and health. It makes no network request of its own. It needs one extra
-install step:
-
-```sh
-.venv/bin/pip install ".[mcp]"
-```
-
-[MCP.md](MCP.md) covers starting it, the tools, read-only mode and client
-configuration.
-
 ## Development
 
 ```sh
+python3 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 .venv/bin/python -m pytest -q
 ```
 
-The tests run offline against recorded, anonymized responses. Conventions
-for contributors are in [CLAUDE.md](CLAUDE.md).
+The tests run offline against recorded, anonymized responses. Layout, rules
+and conventions are in [CLAUDE.md](CLAUDE.md).
 
 ## Website demo data
 

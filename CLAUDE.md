@@ -6,8 +6,21 @@ SQLite database on your machine, and ranks a shortlist. There is no hosted
 service. An optional MCP server lets an agent read and update the same
 database.
 
-User docs: README.md (overview), DEPLOY.md (install, schedule, every
-feature), MCP.md (the MCP server).
+## Docs
+
+Each topic lives in one file; the others link to it. Keep it that way.
+
+| File | Reader | Owns |
+|---|---|---|
+| `README.md` | A new user | What it is, the quick start, what the starter set holds and how to change it |
+| `DEPLOY.md` | A user running it | Install and schedule on an always-on Mac (steps 1 to 9), the reference for every feature and job system, troubleshooting |
+| `MCP.md` | A user connecting an agent | Starting the server, its tools, client configuration |
+| `CLAUDE.md` | Whoever changes the code | Layout, rules, conventions |
+| `rolescout COMMAND --help` | Anyone at a terminal | What a command and its options do |
+
+When a command, flag, default, MCP tool or limit changes, update the file
+that owns it in the same change, and the CLI help. The starter counts and
+the first-run time are stated in README.md and DEPLOY.md step 4.
 
 ---
 
@@ -67,12 +80,14 @@ title the ranking config wants and for roles marked saved or applied.
 
 ## Rules the code keeps
 
+DEPLOY.md's reference explains these to users; here is what the code must
+keep doing.
+
 - Politeness: at most one request per second per host, an honest
   User-Agent, no headless browser, no login. The Getro API is never called.
 - robots.txt is read before anything else on a host and evaluated by
-  `rolescout.robots`: longest matching rule wins, `Allow` wins a tie, `*`
-  and `$` are wildcards. A missing file allows everything; a server error
-  disallows everything. Never use the standard library's parser for this.
+  `rolescout.robots` as RFC 9309 says. Never use the standard library's
+  parser: before Python 3.14 it obeys the first matching rule.
 - Closing: a role closes on its second miss in a row, and only complete
   reads count a miss. A failed fetch changes nothing.
 - Completeness: a source that reports a total counts as complete when it saw
@@ -81,9 +96,8 @@ title the ranking config wants and for roles marked saved or applied.
 - Schema: version 10, kept in `PRAGMA user_version`. A change is a new entry
   at the end of `MIGRATIONS` in `db.py`; existing databases upgrade in place
   when any command opens them. Never edit an earlier entry.
-- Personal files live next to the database in `~/.rolescout`, not in the
-  repo: `ranking.toml`, `candidates.toml`, `sectors.toml` and company
-  exports. `.gitignore` names them.
+- `rolescout init` never changes a company or a config that is already
+  there.
 
 ---
 
