@@ -278,3 +278,38 @@ def test_query_and_mcp_search_match_text_in_the_description(paid, capsys, isolat
     role = session.call("get_role", role_id=role_id(paid, "described"))
     assert role["compensation"]["several_ranges"] is True and (role["compensation"]["min"], role["compensation"]["max"]) == (130_000, 180_000)
     assert session.call("explain_rank", role_id=role_id(paid, "field"))["compensation"]["text"] == "$190,000 — $230,000 USD"
+
+
+# --- a Greenhouse pay field with several zones -------------------------------------
+
+def test_every_zone_of_a_greenhouse_pay_field_is_read(conn, load_fixture, fake_session):
+    from rolescout.adapters import GreenhouseAdapter
+    board = load_fixture("greenhouse_pay_field_with_zones.json")
+    roles = GreenhouseAdapter(fake_session(board)).fetch("acme")
+    texts = {r.title.strip(): r.compensation_text for r in roles}
+    # Each zone after its title, all of them, in the board's order.
+    assert texts["Business Systems Analyst, IT Vendor Operations"] == (
+        "Zone A: $83,900 — $125,900 USD; Zone B: $78,100 — $117,100 USD; "
+        "Zone C: $71,400 — $107,000 USD; Zone D: $63,000 — $94,400 USD")
+    assert texts["Chargé de Compte PME"] == "$86,000 — $129,000 CAD"          # one range: as before, no title
+    # Zones written in the block's text after a long explanation: the figures are kept.
+    lead = texts["Enterprise Sales Lead, US"]
+    assert lead.startswith("…") and "Zone D: $319,040-$478,560" in lead and len(lead) <= 500
+
+    companies.add_company(conn, "Acme")
+    companies.add_board(conn, "Acme", "greenhouse", "acme")
+    scout.run_scout(conn, adapter_for=lambda source: GreenhouseAdapter(fake_session(board)))
+    stored = {r["title"].strip(): tuple(r)[1:] for r in conn.execute(
+        "SELECT title, pay_min, pay_max, pay_currency, pay_period, pay_varies, pay_source FROM roles")}
+    assert stored == {
+        # Zones that differ: the lowest and the highest, marked as several ranges.
+        "Business Systems Analyst, IT Vendor Operations": (63_000, 125_900, "USD", "year", 1, "field"),
+        "SMB Account Executive": (30.07, 56.38, "USD", "hour", 1, "field"),
+        # Four zones with the same range are one range.
+        "Chief Compliance Officer, Acme Pay Investing": (217_800, 326_800, "USD", "year", 0, "field"),
+        "Enterprise Sales Lead, US": (319_040, 478_560, "USD", "year", 0, "field"),
+        "Chargé de Compte PME": (86_000, 129_000, "CAD", "year", 0, "field"),
+    }
+    row = conn.execute("SELECT * FROM roles WHERE title LIKE 'Business Systems Analyst%'").fetchone()
+    assert pay.shown(row) == "USD 63K-125.9K/yr* (board)"
+    assert pay.summary(row)["several_ranges"] is True

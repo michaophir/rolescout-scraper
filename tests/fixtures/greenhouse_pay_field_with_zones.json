@@ -1,0 +1,97 @@
+{
+  "jobs": [
+    {
+      "id": 5427849008,
+      "title": "Business Systems Analyst, IT Vendor Operations",
+      "absolute_url": "http://acme.example/careers/jobs/5427849008?gh_jid=5427849008",
+      "location": {
+        "name": "Bay Area, CA, United States of America"
+      },
+      "departments": [
+        {
+          "id": 4061226008,
+          "name": "10415 Engineering - Acme Technology"
+        }
+      ],
+      "first_published": "2026-10-06T14:55:23-04:00",
+      "updated_at": "2026-11-18T20:23:09-05:00",
+      "company_name": "Acme",
+      "content": "&lt;p&gt;About the role.&lt;/p&gt;&lt;div class=&quot;content-pay-transparency&quot;&gt;&lt;div class=&quot;pay-input&quot;&gt;&lt;div class=&quot;description&quot;&gt;&lt;p&gt;&amp;nbsp;&lt;/p&gt;\n&lt;p&gt;Acme takes a market-based approach to pay, and pay may vary depending on your location. U.S. locations are categorized into one of four zones based on a cost of labor index for that geographic area. The successful candidate’s starting pay will be determined based on job-related skills, experience, qualifications, work location, and market conditions. These ranges may be modified in the future.&lt;/p&gt;\n&lt;p&gt;To find a location’s zone designation, please refer to this&amp;nbsp;&lt;a href=&quot;https://acme.example/documents/salaryzones.pdf&quot; target=&quot;_blank&quot;&gt;resource&lt;/a&gt;. If a location of interest is not listed, please speak with a recruiter for additional information.&amp;nbsp;&lt;/p&gt;\n&lt;p&gt;&amp;nbsp;&lt;/p&gt;&lt;/div&gt;&lt;div class=&quot;title&quot;&gt;Zone A:&lt;/div&gt;&lt;div class=&quot;pay-range&quot;&gt;&lt;span&gt;$83,900&lt;/span&gt;&lt;span class=&quot;divider&quot;&gt;&amp;mdash;&lt;/span&gt;&lt;span&gt;$125,900 USD&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;pay-input&quot;&gt;&lt;div class=&quot;title&quot;&gt;Zone B: &lt;/div&gt;&lt;div class=&quot;pay-range&quot;&gt;&lt;span&gt;$78,100&lt;/span&gt;&lt;span class=&quot;divider&quot;&gt;&amp;mdash;&lt;/span&gt;&lt;span&gt;$117,100 USD&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;pay-input&quot;&gt;&lt;div class=&quot;title&quot;&gt;Zone C:&lt;/div&gt;&lt;div class=&quot;pay-range&quot;&gt;&lt;span&gt;$71,400&lt;/span&gt;&lt;span class=&quot;divider&quot;&gt;&amp;mdash;&lt;/span&gt;&lt;span&gt;$107,000 USD&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;pay-input&quot;&gt;&lt;div class=&quot;title&quot;&gt;Zone D:&lt;/div&gt;&lt;div class=&quot;pay-range&quot;&gt;&lt;span&gt;$63,000&lt;/span&gt;&lt;span class=&quot;divider&quot;&gt;&amp;mdash;&lt;/span&gt;&lt;span&gt;$94,400 USD&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;"
+    },
+    {
+      "id": 5428440008,
+      "title": "SMB Account Executive ",
+      "absolute_url": "http://acme.example/careers/jobs/5428440008?gh_jid=5428440008",
+      "location": {
+        "name": "Bay Area, CA, United States of America"
+      },
+      "departments": [
+        {
+          "id": 4008865008,
+          "name": "20209 S&M - Sales - Acme Shop Inside"
+        }
+      ],
+      "first_published": "2026-11-03T15:21:51-05:00",
+      "updated_at": "2026-11-18T20:23:09-05:00",
+      "company_name": "Acme",
+      "content": "&lt;p&gt;About the role.&lt;/p&gt;&lt;div class=&quot;content-pay-transparency&quot;&gt;&lt;div class=&quot;pay-input&quot;&gt;&lt;div class=&quot;description&quot;&gt;&lt;p&gt;&amp;nbsp;&lt;/p&gt;\n&lt;p&gt;Acme takes a market-based approach to pay, and pay may vary depending on your location. U.S. locations are categorized into one of four zones based on a cost of labor index for that geographic area. The successful candidate’s starting pay will be determined based on job-related skills, experience, qualifications, work location, and market conditions. These ranges may be modified in the future.&lt;/p&gt;\n&lt;p&gt;To find a location’s zone designation, please refer to this&amp;nbsp;&lt;a href=&quot;https://acme.example/documents/salaryzones.pdf&quot; target=&quot;_blank&quot;&gt;resource&lt;/a&gt;. If a location of interest is not listed, please speak with a recruiter for additional information.&amp;nbsp;&lt;/p&gt;\n&lt;p&gt;&amp;nbsp;&lt;/p&gt;&lt;/div&gt;&lt;div class=&quot;title&quot;&gt;Zone A:&lt;/div&gt;&lt;div class=&quot;pay-range&quot;&gt;&lt;span&gt;$37.58&lt;/span&gt;&lt;span class=&quot;divider&quot;&gt;&amp;mdash;&lt;/span&gt;&lt;span&gt;$56.38 USD&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;pay-input&quot;&gt;&lt;div class=&quot;title&quot;&gt;Zone B: &lt;/div&gt;&lt;div class=&quot;pay-range&quot;&gt;&lt;span&gt;$34.94&lt;/span&gt;&lt;span class=&quot;divider&quot;&gt;&amp;mdash;&lt;/span&gt;&lt;span&gt;$52.42 USD&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;pay-input&quot;&gt;&lt;div class=&quot;title&quot;&gt;Zone C:&lt;/div&gt;&lt;div class=&quot;pay-range&quot;&gt;&lt;span&gt;$33.06&lt;/span&gt;&lt;span class=&quot;divider&quot;&gt;&amp;mdash;&lt;/span&gt;&lt;span&gt;$49.60 USD&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;pay-input&quot;&gt;&lt;div class=&quot;title&quot;&gt;Zone D:&lt;/div&gt;&lt;div class=&quot;pay-range&quot;&gt;&lt;span&gt;$30.07&lt;/span&gt;&lt;span class=&quot;divider&quot;&gt;&amp;mdash;&lt;/span&gt;&lt;span&gt;$45.11 USD&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;"
+    },
+    {
+      "id": 5431065008,
+      "title": "Chief Compliance Officer, Acme Pay Investing",
+      "absolute_url": "http://acme.example/careers/jobs/5431065008?gh_jid=5431065008",
+      "location": {
+        "name": "Bay Area, CA, United States of America"
+      },
+      "departments": [
+        {
+          "id": 4008951008,
+          "name": "30305 Risk - Compliance - Acme Pay"
+        }
+      ],
+      "first_published": "2026-10-07T15:02:27-04:00",
+      "updated_at": "2026-11-18T20:23:09-05:00",
+      "company_name": "Acme",
+      "content": "&lt;p&gt;About the role.&lt;/p&gt;&lt;div class=&quot;content-pay-transparency&quot;&gt;&lt;div class=&quot;pay-input&quot;&gt;&lt;div class=&quot;description&quot;&gt;&lt;p&gt;&amp;nbsp;&lt;/p&gt;\n&lt;p&gt;Acme takes a market-based approach to pay, and pay may vary depending on your location. U.S. locations are categorized into one of four zones based on a cost of labor index for that geographic area. The successful candidate’s starting pay will be determined based on job-related skills, experience, qualifications, work location, and market conditions. These ranges may be modified in the future.&lt;/p&gt;\n&lt;p&gt;To find a location’s zone designation, please refer to this&amp;nbsp;&lt;a href=&quot;https://acme.example/documents/salaryzones.pdf&quot; target=&quot;_blank&quot;&gt;resource&lt;/a&gt;. If a location of interest is not listed, please speak with a recruiter for additional information.&amp;nbsp;&lt;/p&gt;\n&lt;p&gt;&amp;nbsp;&lt;/p&gt;&lt;/div&gt;&lt;div class=&quot;title&quot;&gt;Zone A:&lt;/div&gt;&lt;div class=&quot;pay-range&quot;&gt;&lt;span&gt;$217,800&lt;/span&gt;&lt;span class=&quot;divider&quot;&gt;&amp;mdash;&lt;/span&gt;&lt;span&gt;$326,800 USD&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;pay-input&quot;&gt;&lt;div class=&quot;title&quot;&gt;Zone B: &lt;/div&gt;&lt;div class=&quot;pay-range&quot;&gt;&lt;span&gt;$217,800&lt;/span&gt;&lt;span class=&quot;divider&quot;&gt;&amp;mdash;&lt;/span&gt;&lt;span&gt;$326,800 USD&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;pay-input&quot;&gt;&lt;div class=&quot;title&quot;&gt;Zone C:&lt;/div&gt;&lt;div class=&quot;pay-range&quot;&gt;&lt;span&gt;$217,800&lt;/span&gt;&lt;span class=&quot;divider&quot;&gt;&amp;mdash;&lt;/span&gt;&lt;span&gt;$326,800 USD&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;pay-input&quot;&gt;&lt;div class=&quot;title&quot;&gt;Zone D:&lt;/div&gt;&lt;div class=&quot;pay-range&quot;&gt;&lt;span&gt;$217,800&lt;/span&gt;&lt;span class=&quot;divider&quot;&gt;&amp;mdash;&lt;/span&gt;&lt;span&gt;$326,800 USD&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;"
+    },
+    {
+      "id": 5458383008,
+      "title": "Enterprise Sales Lead, US",
+      "absolute_url": "http://acme.example/careers/jobs/5458383008?gh_jid=5458383008",
+      "location": {
+        "name": "Bay Area, CA, United States of America"
+      },
+      "departments": [
+        {
+          "id": 4008930008,
+          "name": "20213 S&M - Sales - Acme Shop Outside"
+        }
+      ],
+      "first_published": "2026-10-27T15:35:45-04:00",
+      "updated_at": "2026-11-18T20:23:09-05:00",
+      "company_name": "Acme",
+      "content": "&lt;p&gt;About the role.&lt;/p&gt;&lt;div class=&quot;content-pay-transparency&quot;&gt;\n&lt;div class=&quot;pay-input&quot;&gt;\n&lt;div class=&quot;description&quot;&gt;\n&lt;p&gt;Acme takes a market-based approach to pay, and pay may vary depending on your location. U.S. locations are categorized into one of four zones based on a cost of labor index for that geographic area. The successful candidate’s starting pay will be determined based on job-related skills, experience, qualifications, work location, and market conditions. These ranges may be modified in the future.&lt;/p&gt;\n&lt;p&gt;To find a location’s zone designation, please refer to this&amp;nbsp;&lt;a href=&quot;https://acme.example/documents/salaryzones.pdf&quot; target=&quot;_blank&quot;&gt;resource&lt;/a&gt;. If a location of interest is not listed, please speak with a recruiter for additional information.&amp;nbsp;&lt;/p&gt;\n&lt;p&gt;&amp;nbsp;&lt;/p&gt;\n&lt;/div&gt;\n&lt;div class=&quot;title&quot;&gt;Zone A: $319,040-$478,560&lt;/div&gt;\n&lt;/div&gt;\n&lt;div class=&quot;pay-input&quot;&gt;\n&lt;div class=&quot;title&quot;&gt;Zone B: $319,040-$478,560&lt;/div&gt;\n&lt;/div&gt;\n&lt;div class=&quot;pay-input&quot;&gt;\n&lt;div class=&quot;title&quot;&gt;Zone C: $319,040-$478,560&lt;/div&gt;\n&lt;/div&gt;\n&lt;div class=&quot;pay-input&quot;&gt;\n&lt;div class=&quot;title&quot;&gt;Zone D: $319,040-$478,560&lt;/div&gt;\n&lt;div class=&quot;title&quot;&gt;&amp;nbsp;&lt;/div&gt;\n&lt;div class=&quot;title&quot;&gt;Amounts listed above include target variable compensation.&lt;/div&gt;\n&lt;/div&gt;\n&lt;/div&gt;\n"
+    },
+    {
+      "id": 5428323008,
+      "title": "Chargé de Compte PME",
+      "absolute_url": "http://acme.example/careers/jobs/5428323008?gh_jid=5428323008",
+      "location": {
+        "name": "Toronto, Ontario, Canada"
+      },
+      "departments": [
+        {
+          "id": 4008865008,
+          "name": "20209 S&M - Sales - Acme Shop Inside"
+        }
+      ],
+      "first_published": "2026-11-13T17:30:12-05:00",
+      "updated_at": "2026-11-18T20:23:09-05:00",
+      "company_name": "Acme",
+      "content": "&lt;p&gt;About the role.&lt;/p&gt;&lt;div class=&quot;description&quot;&gt;\n&lt;p&gt;&lt;span data-sheets-root=&quot;1&quot; data-sheets-value=&quot;{&amp;quot;1&amp;quot;:2,&amp;quot;2&amp;quot;:&amp;quot;Acme takes a market-based approach to pay, and pay may vary depending on your location. Canada locations are categorized into one of two zones based on a cost of labor index for that geographic area. The successful candidate’s starting pay will be determined based on job-related skills, experience, qualifications, work location, and market conditions. These ranges may be modified in the future.\\n\\nZone A: CAD $125,900 - CAD $188,900\\nZone B: CAD $121,500 - CAD $182,300&amp;quot;}&quot; data-sheets-userformat=&quot;{&amp;quot;2&amp;quot;:448,&amp;quot;9&amp;quot;:0,&amp;quot;10&amp;quot;:1,&amp;quot;11&amp;quot;:4}&quot; data-sheets-formula=&quot;=TO_TEXT(iferror(index(Calculator!R10C3:R11C3,match(&amp;quot;This One&amp;quot;,Calculator!R10C1:R11C1,0))&amp;amp;CHAR(10)&amp;amp;CHAR(10)&amp;amp;index(Calculator!R14C3:R20C3,match(&amp;quot;This One&amp;quot;,Calculator!R14C1:R20C1,0))&amp;amp;if(Calculator!R6C3=&amp;quot;Yes&amp;quot;,CHAR(10)&amp;amp;CHAR(10)&amp;amp;Calculator!R22C3,&amp;quot;&amp;quot;),&amp;quot;No output found. Please review inputs.&amp;quot;))&quot;&gt;Acme adopte une approche fondée sur le marché en matière de rémunération, laquelle peut varier selon le lieu de travail. Au Canada, les sites sont répartis en deux zones en fonction d&#x27;un indice du coût de la main-d&#x27;œuvre propre à chaque zone géographique. La rémunération initiale du candidat retenu sera déterminée en fonction de ses compétences liées au poste, de son expérience, de ses qualifications, du lieu de travail et des conditions du marché. Ces fourchettes sont susceptibles d&#x27;être modifiées ultérieurement.&lt;br&gt;&lt;/span&gt;&lt;/p&gt;\n&lt;/div&gt;\n&lt;div class=&quot;title&quot;&gt;La rémunération globale pour ce poste est de:&lt;/div&gt;\n&lt;div class=&quot;pay-range&quot;&gt;$86,000&lt;span class=&quot;divider&quot;&gt;—&lt;/span&gt;$129,000 CAD&lt;/div&gt;\n&lt;/div&gt;"
+    }
+  ],
+  "meta": {
+    "total": 5
+  }
+}

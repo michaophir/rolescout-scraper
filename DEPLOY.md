@@ -547,8 +547,10 @@ currency, per year or per hour), with where it came from:
   revenue, funding, a bonus, equity or a benefit, nor pay per month. Empty
   is better than wrong, so some pay that is stated is missed.
 
-A posting that gives several ranges (one per location or level) is stored as
-the lowest and the highest, marked as several ranges. When base pay and
+A posting that gives several ranges (one per location, pay zone or level) is
+stored as the lowest and the highest, marked as several ranges, whether the
+ranges are in the board's pay field (Greenhouse lists one per zone) or in the
+description. Ranges that are all the same count as one. When base pay and
 on-target earnings are both given, base pay is stored. The shortlist,
 `rolescout why ID`, `rolescout company NAME` and `rolescout query` show pay
 with its source: `(board)` or `(description)`. Pay is read again whenever a

@@ -1,29 +1,63 @@
 """Greenhouse job boards (boards-api.greenhouse.io)."""
 
 import html
+import re
 
 from bs4 import BeautifulSoup
 
 from rolescout.adapters.base import BoardIdentity, SourceAdapter, SourceError
 from rolescout.models import Role
-from rolescout.text import pay_text, strip_html
+from rolescout.text import collapse_whitespace, pay_text, strip_html
 
 COMPENSATION_BLOCK_MAX_CHARS = 500
+LEAD_IN_CHARS = 100        # of the text before the first figure, when the block is cut
+_AMOUNT = re.compile(r"(?:[$£€]|\b(?:USD|CAD|GBP|EUR)\b)\s?\d")
 
 
 def extract_compensation(content_html: str) -> str:
-    """Pay from a Greenhouse `content` HTML blob: the pay range the board
+    """Pay from a Greenhouse `content` HTML blob: the pay ranges the board
     marks up, else its pay-transparency block. Either counts only when it
-    names a figure."""
+    names a figure.
+
+    A board may give several ranges, one per pay zone or location, each in a
+    ``.pay-input`` with a ``.title`` ("Zone A:") and a ``.pay-range``. Every
+    one is kept, each after its title: "Zone A: $83,900 — $125,900 USD;
+    Zone B: $78,100 — $117,100 USD". A single range is kept on its own.
+    """
     if not content_html:
         return ""
     soup = BeautifulSoup(html.unescape(content_html), "html.parser")
-    for selector in (".pay-range", ".content-pay-transparency"):
-        found = soup.select_one(selector)
-        text = pay_text(found.get_text(separator=" "), COMPENSATION_BLOCK_MAX_CHARS) if found else ""
-        if text:
-            return text
-    return ""
+    ranges = []
+    for found in soup.select(".pay-range"):
+        text = pay_text(found.get_text(separator=" "))
+        if not text:
+            continue
+        block = found.find_parent(class_="pay-input")
+        title = block.select_one(".title") if block is not None else None
+        label = collapse_whitespace(title.get_text(separator=" ")).rstrip(" :") if title is not None else ""
+        ranges.append((label, text))
+    if len(ranges) == 1:
+        return ranges[0][1]
+    if ranges:
+        parts = [f"{label}: {text}" if label else text for label, text in dict.fromkeys(ranges)]
+        joined = ""
+        for part in parts:         # whole ranges only, within the length kept
+            candidate = f"{joined}; {part}" if joined else part
+            if len(candidate) > COMPENSATION_BLOCK_MAX_CHARS:
+                break
+            joined = candidate
+        return joined
+    block = soup.select_one(".content-pay-transparency")
+    if block is None:
+        return ""
+    text = collapse_whitespace(block.get_text(separator=" "))
+    first = _AMOUNT.search(text)
+    if first is not None and len(text) > COMPENSATION_BLOCK_MAX_CHARS and first.start() > LEAD_IN_CHARS:
+        # The figures come after a long explanation: keep them, and a little
+        # of what leads into them, rather than the explanation alone.
+        start = text.rfind(" ", 0, first.start() - LEAD_IN_CHARS) + 1
+        text = "…" + text[start:]
+    return pay_text(text, COMPENSATION_BLOCK_MAX_CHARS)
 
 
 class GreenhouseAdapter(SourceAdapter):
