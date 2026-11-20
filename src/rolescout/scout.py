@@ -11,7 +11,7 @@ from itertools import groupby
 
 from rolescout.adapters import FetchContext, KnownRole, get_adapter
 from rolescout.db import transaction, utc_now
-from rolescout import jobs
+from rolescout import jobs, pay
 from rolescout.http import make_session
 from rolescout.models import Role
 
@@ -25,8 +25,10 @@ except ImportError:  # not a Unix system: no lock is taken
 MISSES_TO_CLOSE = 2
 NO_DEPARTMENT = "(none)"
 
-ROLE_COLUMNS = ("title", "department", "location", "workplace_type", "url",
-                "date_posted", "compensation_text")
+# What a fetch writes on a role as the board gave it. Pay is written
+# separately (``pay.PAY_COLUMNS``): it comes from the board's field or, when
+# the board gave none, from the description.
+ROLE_COLUMNS = ("title", "department", "location", "workplace_type", "url", "date_posted")
 
 
 @dataclass
@@ -147,24 +149,36 @@ def apply_fetch(conn: sqlite3.Connection, company_id: int, board_id: int,
     for role in roles:
         values = [getattr(role, col) for col in ROLE_COLUMNS]
         row = conn.execute(
-            "SELECT id, closed_at FROM roles WHERE source = ? AND source_job_id = ?",
+            "SELECT id, closed_at, pay_source FROM roles WHERE source = ? AND source_job_id = ?",
             (role.source, role.source_job_id)).fetchone()
+        if role.compensation_text.strip() or role.description:
+            # The board's pay field wins; without one, what the description states.
+            paid = pay.columns(role.compensation_text, role.description)
+        elif row is not None and row["pay_source"] == pay.SOURCE_DESCRIPTION:
+            # No description came with this fetch (it is fetched once and
+            # kept): the pay read from the stored one stands.
+            paid = None
+        else:
+            paid = pay.NO_PAY
         if row is None:
+            columns = (*ROLE_COLUMNS, *pay.PAY_COLUMNS)
             role_id = conn.execute(
                 f"INSERT INTO roles (source, source_job_id, company_id, board_id, "
-                f"{', '.join(ROLE_COLUMNS)}, first_seen_at, last_seen_at) "
-                f"VALUES ({', '.join('?' * (len(ROLE_COLUMNS) + 6))})",
-                (role.source, role.source_job_id, company_id, board_id, *values, now, now)).lastrowid
+                f"{', '.join(columns)}, first_seen_at, last_seen_at) "
+                f"VALUES ({', '.join('?' * (len(columns) + 6))})",
+                (role.source, role.source_job_id, company_id, board_id, *values, *(paid or pay.NO_PAY),
+                 now, now)).lastrowid
             new += 1
         else:
             role_id = row["id"]
             if role_id in seen:
                 continue  # the source listed the same posting twice
+            columns = ROLE_COLUMNS if paid is None else (*ROLE_COLUMNS, *pay.PAY_COLUMNS)
             conn.execute(
                 f"UPDATE roles SET company_id = ?, board_id = ?, "
-                f"{', '.join(f'{c} = ?' for c in ROLE_COLUMNS)}, "
+                f"{', '.join(f'{c} = ?' for c in columns)}, "
                 "last_seen_at = ?, closed_at = NULL, missed_fetches = 0 WHERE id = ?",
-                (company_id, board_id, *values, now, role_id))
+                (company_id, board_id, *values, *(paid or ()), now, role_id))
             if row["closed_at"] is not None:
                 reopened += 1
         seen.add(role_id)

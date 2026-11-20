@@ -352,7 +352,7 @@ does not come back until you link the two again.
 
 For browsing (in Datasette, for example) the database has read-only views:
 `v_company_overview` (profile, VCs, open roles, opened and closed in the last
-30 days), `v_open_roles` (open roles with the company's profile and VCs),
+30 days), `v_open_roles` (open roles with pay, the company's profile and VCs),
 `v_company_sectors` (one row per company and sector) and `v_hiring_weekly`
 (opened and closed per company per week).
 
@@ -494,9 +494,8 @@ rolescout companies map "Google" google careers
 Every open role comes from one public feed in a single request. Roles the
 feed lists for another employer in the group belong to the same company, and
 the employer leads the role's department (`rolescout query --json` shows it).
-The feed carries every description; they are stored for roles whose title
-your ranking config wants and for roles you saved or applied to, as with
-Workday and Rippling, and cost no extra request.
+The feed carries every description at no extra request, so every open role
+is stored with its description.
 
 ## Rippling, Gem and Workable boards
 
@@ -516,10 +515,44 @@ to confirm. To map one by hand, paste any URL of the board:
 rolescout companies map "Acme" rippling "https://ats.rippling.com/acme/jobs/JOB-ID"
 ```
 
-Compensation is stored only from the fields a job system has for pay
-(Greenhouse, Lever, Ashby and Rippling have one), and only when it names a
-figure. Pay that a company writes into the description stays in the
-description.
+## Descriptions and pay
+
+Which roles have a stored description depends on what the job system charges
+for it:
+
+| Job system | Description comes | Stored for |
+|---|---|---|
+| Greenhouse, Lever, Ashby, Gem, Workable, the Google career site | with the list, at no extra request | every open role |
+| Workday, Rippling | one request per role | roles whose title your ranking wants, and roles you saved or applied to |
+| Eightfold | not at all | none |
+
+A description is deleted when its role closes, unless you saved or applied
+to the role. `rolescout query --text PHRASE` finds the roles whose stored
+description contains a phrase and shows the text around it; over MCP,
+`search_roles` takes `description_contains`.
+
+Descriptions are most of the database: a role with one takes about 8 KB, so
+a database with 13,000 open roles is about 100 MB. The seven daily backups
+are full copies of it.
+
+Pay is stored as text and, when it can be read, as numbers (lowest, highest,
+currency, per year or per hour), with where it came from:
+
+- **The board's pay field** (Greenhouse, Lever, Ashby and Rippling have
+  one), when it names a figure. It always wins.
+- **The description**, for a role with no pay field. Rules read it, with no
+  model and no network: a range near a pay word ("the base salary range is
+  $120,000 - $150,000", "$180K–$220K", "$25 - $30 per hour"). It is
+  conservative: a lone figure is not read, nor a range that is about
+  revenue, funding, a bonus, equity or a benefit, nor pay per month. Empty
+  is better than wrong, so some pay that is stated is missed.
+
+A posting that gives several ranges (one per location or level) is stored as
+the lowest and the highest, marked as several ranges. When base pay and
+on-target earnings are both given, base pay is stored. The shortlist,
+`rolescout why ID`, `rolescout company NAME` and `rolescout query` show pay
+with its source: `(board)` or `(description)`. Pay is read again whenever a
+description is stored, and upgrading reads the descriptions already stored.
 
 Gem and Workable return every role with its description in one request.
 Rippling lists roles in one request, but a description, posted date and pay

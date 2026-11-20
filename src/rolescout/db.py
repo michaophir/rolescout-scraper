@@ -55,6 +55,23 @@ _BACKED_BY = ("(SELECT group_concat(short_name, ', ') FROM (SELECT v.short_name 
               "JOIN vcs v ON v.id = l.vc_id WHERE l.company_id = c.id AND v.type = 'vc' ORDER BY v.id))")
 _ECOSYSTEMS = _BACKED_BY.replace("'vc'", "'ecosystem'")
 
+def _backfill_pay(conn: sqlite3.Connection) -> None:
+    """Fill the pay columns from what is already stored: the numbers in a
+    board's pay field, and for a role without one, the pay its stored
+    description states. Reads the database only."""
+    from rolescout import pay   # here, so that this module imports nothing of the package
+
+    assign = ", ".join(f"{column} = ?" for column in pay.PAY_COLUMNS)
+    rows = conn.execute(
+        "SELECT r.id, r.compensation_text, d.description FROM roles r "
+        "LEFT JOIN role_descriptions d ON d.role_id = r.id "
+        "WHERE r.compensation_text != '' OR d.description IS NOT NULL").fetchall()
+    for row in rows:
+        values = pay.columns(row["compensation_text"], row["description"])
+        if values != pay.NO_PAY:
+            conn.execute(f"UPDATE roles SET {assign} WHERE id = ?", (*values, row["id"]))
+
+
 MIGRATIONS: list[list] = [
     [
         """
@@ -463,6 +480,32 @@ MIGRATIONS: list[list] = [
         )
         """,
         "CREATE INDEX shortlist_postings_lead ON shortlist_postings (shortlist_id, lead_role_id)",
+    ],
+    [
+        # Pay as numbers, and where it came from. compensation_text stays the
+        # text that is shown: the board's pay field as written, or what the
+        # description states, written out.
+        "ALTER TABLE roles ADD COLUMN pay_min REAL",
+        "ALTER TABLE roles ADD COLUMN pay_max REAL",
+        "ALTER TABLE roles ADD COLUMN pay_currency TEXT NOT NULL DEFAULT ''",   # USD, CAD, ...
+        "ALTER TABLE roles ADD COLUMN pay_period TEXT NOT NULL DEFAULT ''",     # year | hour
+        # 1: the posting gives several ranges (by location or level); min and max span them.
+        "ALTER TABLE roles ADD COLUMN pay_varies INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE roles ADD COLUMN pay_source TEXT NOT NULL DEFAULT ''",     # field | description
+        _backfill_pay,
+        "DROP VIEW v_open_roles",
+        f"""
+        CREATE VIEW v_open_roles AS
+        SELECT r.id AS role_id, c.name AS company, r.title, r.department, r.location, r.workplace_type,
+               r.date_posted, r.first_seen_at, r.compensation_text, r.url,
+               p.stage, p.sectors, p.employees, p.hq,
+               {_BACKED_BY} AS backed_by,
+               c.id AS company_id,
+               r.pay_min, r.pay_max, r.pay_currency, r.pay_period, r.pay_varies, r.pay_source
+        FROM roles r JOIN companies c ON c.id = r.company_id
+        LEFT JOIN company_profiles p ON p.company_id = c.id
+        WHERE r.closed_at IS NULL AND c.active = 1
+        """,
     ],
 ]
 

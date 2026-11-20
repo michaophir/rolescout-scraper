@@ -8,7 +8,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from rolescout import __version__, digest, filters, jobs, overview, profiles, vcs
+from rolescout import __version__, digest, filters, jobs, overview, pay, profiles, vcs
 from rolescout.adapters import ADAPTERS, SourceError, get_adapter
 from rolescout.companies import (
     CompanyError, add_board, add_company, board_ref, get_company, import_csv, list_companies,
@@ -590,6 +590,22 @@ def _write_ranking_starter(path: Path, filters_arg: str | None = None) -> str:
             f"({len(ranking.STARTER_TITLES)} title phrases, no location preference).")
 
 
+PAY_WIDTH = 24       # of a pay field shown as written, before where it came from
+PAY_COLUMN = 40
+PAY_NOTE = ("Pay: (board) is the board's own pay field; (description) was found in the description text. "
+            "* marks several ranges, by location or level: the lowest and the highest are shown.")
+
+
+def _pay_cell(compensation: dict | None) -> str:
+    """``pay.summary`` as a table cell."""
+    if not compensation:
+        return ""
+    return pay.shown({"compensation_text": compensation["text"], "pay_min": compensation["min"],
+                      "pay_max": compensation["max"], "pay_currency": compensation["currency"] or "",
+                      "pay_period": compensation["period"] or "", "pay_varies": compensation["several_ranges"],
+                      "pay_source": compensation["source"] or ""}, PAY_WIDTH)
+
+
 def _cmd_shortlist_rebuild(args) -> int:
     conn = connect(args.db)
     cfg = ranking.load_config(_ranking_path(args))
@@ -632,9 +648,13 @@ def _cmd_shortlist_filtered(conn, args, only: filters.RoleFilter) -> int:
     widths = {"Title": 52, "Location": 26, "Company": 18, "Backed by": 28}
     backed = ["Backed by"] if any(e["backed_by"] for e in entries) else []
 
+    paid = ["Pay"] if any(e["compensation_text"] for e in entries) else []
+    widths["Pay"] = PAY_COLUMN
+
     def row(e: dict, with_company: bool) -> list:
         return [e["rank"], e["id"], f"{e['score']:g}", *([e["company"]] if with_company else []), e["title"],
-                e["location_shown"], *([", ".join(e["backed_by"])] if backed else []),
+                e["location_shown"], *([pay.shown(e, PAY_WIDTH)] if paid else []),
+                *([", ".join(e["backed_by"])] if backed else []),
                 "-" if e["list_rank"] is None else e["list_rank"], "saved" if e["mark"] == "saved" else "", e["url"]]
     if args.by_company:
         groups: dict[str, list[dict]] = {}
@@ -642,14 +662,16 @@ def _cmd_shortlist_filtered(conn, args, only: filters.RoleFilter) -> int:
             groups.setdefault(e["company"], []).append(e)
         for company, members in groups.items():
             print(f"{company}: {len(members)} role{'' if len(members) == 1 else 's'}, best rank {members[0]['rank']}")
-            print(format_table(["Rank", "ID", "Score", "Title", "Location", *backed, "On list", "Flags", "URL"],
+            print(format_table(["Rank", "ID", "Score", "Title", "Location", *paid, *backed, "On list", "Flags", "URL"],
                                [row(e, False) for e in members], widths))
             print()
     else:
-        print(format_table(["Rank", "ID", "Score", "Company", "Title", "Location", *backed, "On list", "Flags", "URL"],
+        print(format_table(["Rank", "ID", "Score", "Company", "Title", "Location", *paid, *backed, "On list", "Flags", "URL"],
                            [row(e, True) for e in entries], widths))
         print()
     print("\"On list\" is the role's rank on today's shortlist; - means it is not on it.")
+    if paid:
+        print(PAY_NOTE)
     return 0
 
 
@@ -723,8 +745,11 @@ def _cmd_shortlist(args) -> int:
     # The column appears once any role shown is at a company a portfolio board lists.
     backed = ["Backed by"] if any(e["backed_by"] for e in entries) else []
 
+    paid = ["Pay"] if any(e["compensation_text"] for e in entries) else []
+    widths["Pay"] = PAY_COLUMN
+
     def backers(e: dict) -> list[str]:
-        return [", ".join(e["backed_by"])] if backed else []
+        return [*([pay.shown(e, PAY_WIDTH)] if paid else []), *([", ".join(e["backed_by"])] if backed else [])]
     if args.by_company:
         groups: dict[str, list[dict]] = {}
         for e in entries:
@@ -736,16 +761,18 @@ def _cmd_shortlist(args) -> int:
                   f"best rank {members[0]['rank']}"
                   + (f"; {more} more held back by the per-company cap" if more else ""))
             print(format_table(
-                ["Rank", "ID", "Score", "Title", "Location", *backed, "Flags", "URL"],
+                ["Rank", "ID", "Score", "Title", "Location", *paid, *backed, "Flags", "URL"],
                 [[e["rank"], e["id"], f"{e['score']:g}", e["title"], e["location_shown"], *backers(e),
                   _flags(e, new_ids), e["url"]] for e in members], widths))
             print()
     else:
         print(format_table(
-            ["Rank", "ID", "Score", "Company", "Title", "Location", *backed, "Flags", "URL"],
+            ["Rank", "ID", "Score", "Company", "Title", "Location", *paid, *backed, "Flags", "URL"],
             [[e["rank"], e["id"], f"{e['score']:g}", e["company"], e["title"],
               e["location_shown"], *backers(e), _flags(e, new_ids), e["url"]] for e in entries], widths))
         print()
+    if paid:
+        print(PAY_NOTE)
     print("Why a role ranks where it does: rolescout why ID.  "
           "Mark one: rolescout mark ID dismissed|saved|applied")
     return 0
@@ -810,6 +837,7 @@ def _cmd_why(args) -> int:
         print(f"Backed by: {', '.join(role['backed_by'])}")
     if role["mark"]:
         print(f"Marked {role['mark']}" + (f": {role['mark_note']}" if role["mark_note"] else ""))
+    print(f"Pay: {pay.line(role) or 'none stated'}")
     print()
     under = info["listed_under"]
     if info["rank"]:
@@ -1471,11 +1499,13 @@ def _cmd_company(args) -> int:
     print(f"\nTop {len(roles)} of {data['open_roles']} open roles ({data['top_roles_ranked_by']}):")
     if roles:
         print(format_table(
-            ["ID", "Score", "Title", "Location", "Posted", "Note", "URL"],
+            ["ID", "Score", "Title", "Location", "Pay", "Posted", "Note", "URL"],
             [[r["role_id"], "" if r["score"] is None else f"{r['score']:g}", r["title"], r["location"],
-              r["date_posted"] or "", " ".join(x for x in (r["mark"] or "", "" if r["qualifies"] in (True, None)
+              _pay_cell(r["compensation"]), r["date_posted"] or "", " ".join(x for x in (r["mark"] or "", "" if r["qualifies"] in (True, None)
                                                             else "does not qualify") if x), r["url"]]
-             for r in roles], {"Title": 52, "Location": 30}))
+             for r in roles], {"Title": 52, "Location": 30, "Pay": PAY_COLUMN}))
+        if any(r["compensation"] for r in roles):
+            print(PAY_NOTE)
     else:
         print("  (none)")
     return 0
@@ -1717,7 +1747,7 @@ def _cmd_query(args) -> int:
     if args.company:
         get_company(conn, args.company)  # a typo should fail loudly, not match nothing
     try:
-        roles = query_roles(conn, company=args.company, title=args.title, status=args.status,
+        roles = query_roles(conn, company=args.company, title=args.title, text=args.text, status=args.status,
                             since=args.since, include_inactive=args.include_inactive,
                             limit=args.limit, only=_filter(conn, args))
     except ValueError:
@@ -1726,11 +1756,18 @@ def _cmd_query(args) -> int:
     if args.json:
         print(json.dumps(roles, indent=2, ensure_ascii=False))
         return 0
-    headers = ["ID", "Company", "Title", "Location", "Posted", "First seen", "Status", "URL"]
-    rows = [[r["id"], r["company"], r["title"], r["location"], r["date_posted"], r["first_seen_at"][:10],
-             r["status"] if r["status"] == "open" else f"closed {r['closed_at'][:10]}", r["url"]]
+    # The columns for pay and for the text found appear when a role has them.
+    paid = ["Pay"] if any(r["compensation_text"] for r in roles) else []
+    found = ["In the description"] if args.text else []
+    headers = ["ID", "Company", "Title", "Location", *paid, "Posted", "First seen", "Status", "URL", *found]
+    rows = [[r["id"], r["company"], r["title"], r["location"], *([pay.shown(r, PAY_WIDTH)] if paid else []),
+             r["date_posted"], r["first_seen_at"][:10],
+             r["status"] if r["status"] == "open" else f"closed {r['closed_at'][:10]}", r["url"],
+             *([r["excerpt"]] if found else [])]
             for r in roles]
-    print(format_table(headers, rows, {"Company": 20, "Title": 55, "Location": 30}))
+    print(format_table(headers, rows, {"Company": 20, "Title": 55, "Location": 30, "Pay": PAY_COLUMN}))
+    if paid:
+        print("\n" + PAY_NOTE)
     print(f"\n{len(roles)} role{'' if len(roles) == 1 else 's'}.")
     return 0
 
@@ -2254,6 +2291,9 @@ def build_parser() -> argparse.ArgumentParser:
     query.add_argument("--company", help="exact company name (case-insensitive)")
     query.add_argument("--title", action="append", metavar="PHRASE",
                        help="title contains this phrase; repeat to match any of several")
+    query.add_argument("--text", action="append", metavar="PHRASE",
+                       help="the stored description contains this phrase; repeat to match any of several. "
+                            "Closed roles have no description unless you saved or applied to them")
     status = query.add_mutually_exclusive_group()
     status.add_argument("--open", dest="status", action="store_const", const="open",
                         help="open roles only (default)")

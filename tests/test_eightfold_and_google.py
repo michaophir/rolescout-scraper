@@ -407,30 +407,35 @@ def test_google_feed_gives_every_role_with_its_employer():
     assert not GoogleAdapter.guessable
 
 
-def test_google_descriptions_are_kept_for_wanted_and_marked_roles_only(conn):
-    """The same rule as the sources that charge a request per description."""
-    from rolescout.adapters import FetchContext, KnownRole
-    assert GoogleAdapter.uses_context
+def test_google_descriptions_are_stored_for_every_open_role_and_deleted_when_one_closes(conn):
+    """The feed carries them at no extra request, as the one-request boards do."""
+    from rolescout.adapters import FetchContext
+    assert not GoogleAdapter.uses_context
     adapter = GoogleAdapter(FakeWeb({FEED_URL: feed()}))
-    context = FetchContext(wants_description=lambda title: "product manager" in title.lower(),
-                           known={"100000000000000005": KnownRole(keep=True),         # saved or applied
-                                  "100000000000000003": KnownRole()})                 # seen before, not marked
-    roles = adapter.fetch("careers", context=context)
-    assert [bool(r.description) for r in roles] == [True, False, False, False, True]
-    assert adapter.last_stats.descriptions_fetched == 2
-    assert all(not r.description for r in adapter.fetch("careers", context=FetchContext()))
+    assert all(r.description for r in adapter.fetch("careers"))
+    assert all(r.description for r in adapter.fetch("careers", context=FetchContext()))   # whatever the caller wants
 
-    # Through a scout: only the wanted role's description is stored.
+    # Through a scout whose ranking wants one title only: all five are stored.
     companies.add_company(conn, "Google")
     companies.add_board(conn, "Google", "google", "careers")
     scout.run_scout(conn, adapter_for=lambda source: GoogleAdapter(FakeWeb({FEED_URL: feed()})),
                     wants_description=lambda title: title.startswith("Senior Security"))
-    stored = conn.execute("SELECT r.title, d.description FROM role_descriptions d JOIN roles r ON r.id = d.role_id").fetchall()
-    assert [tuple(row) for row in stored] == [
-        ("Senior Security Engineer", "Minimum qualifications: Shortened for the fixture.")]
-    # A later scout that wants nothing keeps what is stored.
-    scout.run_scout(conn, adapter_for=lambda source: GoogleAdapter(FakeWeb({FEED_URL: feed()})))
-    assert conn.execute("SELECT COUNT(*) FROM role_descriptions").fetchone()[0] == 1
+    stored = dict(conn.execute("SELECT r.title, d.description FROM role_descriptions d JOIN roles r ON r.id = d.role_id"))
+    assert len(stored) == 5
+    assert stored["Senior Security Engineer"] == "Minimum qualifications: Shortened for the fixture."
+
+    # A role that closes loses its description, unless it is saved or applied.
+    gone, saved = "100000000000000005", "100000000000000003"
+    conn.execute("INSERT INTO role_marks (role_id, status, marked_at) SELECT id, 'saved', 'x' FROM roles "
+                 "WHERE source_job_id = ?", (saved,))
+    shorter = feed().replace(f"<jobid>{gone}</jobid>", "<jobid></jobid>").replace(f"<jobid>{saved}</jobid>", "<jobid></jobid>")
+    for _ in range(2):                                         # closed on the second miss
+        scout.run_scout(conn, adapter_for=lambda source: GoogleAdapter(FakeWeb({FEED_URL: shorter})))
+    left = {r["source_job_id"]: (r["closed_at"] is not None, r["description"] is not None) for r in conn.execute(
+        "SELECT r.source_job_id, r.closed_at, d.description FROM roles r "
+        "LEFT JOIN role_descriptions d ON d.role_id = r.id")}
+    assert left[gone] == (True, False) and left[saved] == (True, True)
+    assert sum(1 for closed, described in left.values() if not closed and described) == 3
 
 
 def test_google_reference_is_one_board_whatever_url_names_it():
@@ -443,7 +448,7 @@ def test_google_reference_is_one_board_whatever_url_names_it():
     assert google.parse_ref("careers") == "careers"
 
 
-def test_scout_stores_google_roles_as_metadata_and_a_broken_feed_closes_nothing(conn):
+def test_scout_stores_google_roles_and_a_broken_feed_closes_nothing(conn):
     companies.add_company(conn, "Google", website="google.com")
     companies.add_board(conn, "Google", "google", "careers")
     run = scout.run_scout(conn, adapter_for=lambda source: GoogleAdapter(FakeWeb({FEED_URL: feed()})))
@@ -451,7 +456,7 @@ def test_scout_stores_google_roles_as_metadata_and_a_broken_feed_closes_nothing(
     rows = conn.execute("SELECT c.name, r.department FROM roles r JOIN companies c ON c.id = r.company_id "
                         "ORDER BY r.source_job_id").fetchall()
     assert {r["name"] for r in rows} == {"Google"} and rows[1]["department"] == "Acme Labs: Software Engineering"
-    assert conn.execute("SELECT COUNT(*) FROM role_descriptions").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM role_descriptions").fetchone()[0] == 5
     open_roles = lambda: conn.execute("SELECT COUNT(*) FROM roles WHERE closed_at IS NULL").fetchone()[0]
 
     empty = '<?xml version="1.0" encoding="UTF-8"?><jobs><updated>2026-11-18T00:00:00+00:00</updated></jobs>'

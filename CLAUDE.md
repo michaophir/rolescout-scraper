@@ -52,6 +52,7 @@ touches live boards, and it is run by hand.
 | `src/rolescout/resolve.py` | Finds a company's board from its website, with evidence |
 | `src/rolescout/scout.py` | The scout run: fetch, store, open and close roles |
 | `src/rolescout/shortlist.py`, `filters.py` | Ranking from `ranking.toml`, and cuts by profile and location |
+| `src/rolescout/pay.py` | Pay as numbers: from a board's pay field, or found in a description by rules |
 | `src/rolescout/companies.py`, `profiles.py`, `vcs.py`, `overview.py` | Companies, their profiles, the VC list |
 | `src/rolescout/portfolio.py`, `candidates.py` | Portfolio boards as a source of new companies |
 | `src/rolescout/gaps.py`, `trends.py`, `digest.py`, `query.py` | Reports from the database, no network |
@@ -71,10 +72,13 @@ touches live boards, and it is run by hand.
 | `rippling` | board name | List in one request; description, date and pay cost one request per role |
 | `workday` | `TENANT/wdN/SITE` | 20 roles per request; one request per description; paced per host, a 429 retried after a pause |
 | `eightfold` | `SITE-HOST/COMPANY-DOMAIN` | Ten roles per request; two list endpoints, the second tried when the first cannot be read; no descriptions |
-| `google` | `careers` | The single-company exception below: one feed, one request |
+| `google` | `careers` | The single-company exception below: one feed with descriptions, one request |
 
-Sources that charge a request per description fetch it only for roles whose
-title the ranking config wants and for roles marked saved or applied.
+A source whose descriptions come with the list stores one for every open
+role. Sources that charge a request per description (`workday`, `rippling`)
+fetch it only for roles whose title the ranking config wants and for roles
+marked saved or applied. A description is deleted when its role closes,
+unless the role is saved or applied.
 
 ---
 
@@ -90,9 +94,15 @@ keep doing.
   parser: before Python 3.14 it obeys the first matching rule.
 - Closing: a role closes on its second miss in a row, and only complete
   reads count a miss. A failed fetch changes nothing.
-- Compensation: `compensation_text` holds pay or nothing. An adapter fills
-  it only from a field the source has for pay, through `text.pay_text`,
-  which returns "" for text that names no figure.
+- Compensation: an adapter fills `Role.compensation_text` only from a field
+  the source has for pay, through `text.pay_text`, which returns "" for
+  text that names no figure. `scout.apply_fetch` stores it with its numbers
+  (`pay_min`, `pay_max`, `pay_currency`, `pay_period`, `pay_varies`) and
+  `pay_source` = `field`; for a role without one, `pay.from_description`
+  reads the description (`pay_source` = `description`). The field always
+  wins. The rules in `pay.py` use no model and no network, and prefer
+  nothing to a guess: a change to them needs a snippet in
+  `tests/fixtures/pay_snippets_from_descriptions.json`.
 - One job, one entry: postings that are clearly one job are one entry on
   the shortlist and in the filtered ranking, led by the best-scoring
   posting. `shortlist.SameJob` decides: the same company and title, and the
@@ -103,7 +113,7 @@ keep doing.
 - Completeness: a source that reports a total counts as complete when it saw
   at least 99% of it (`COMPLETE_SHARE` in `adapters/base.py`). Seen and
   reported are stored per fetch in `run_boards`.
-- Schema: version 12, kept in `PRAGMA user_version`. A change is a new entry
+- Schema: version 13, kept in `PRAGMA user_version`. A change is a new entry
   at the end of `MIGRATIONS` in `db.py`; existing databases upgrade in place
   when any command opens them. Never edit an earlier entry.
 - `rolescout init` never changes a company or a config that is already

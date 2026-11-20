@@ -17,7 +17,7 @@ from typing import Annotated, Any, Literal
 
 from rolescout import candidates as cands
 from rolescout import digest as changes
-from rolescout import filters, overview, portfolio, profiles, vcs
+from rolescout import filters, overview, pay, portfolio, profiles, vcs
 from rolescout import shortlist as ranking
 from rolescout.adapters import ADAPTERS
 from rolescout.companies import CompanyError, add_board, add_company, backed_by, get_company, list_companies, set_active, set_website
@@ -217,7 +217,10 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
         description is stored) are one entry: role_id is its best-scoring posting, location counts the
         other places as "+N more", other_postings lists them (role_id and location), and it takes
         one of the company's slots. Roles with the same score are ordered by posted date, newest
-        first, then by company name. For view=by_company,
+        first, then by company name. An entry whose pay is known has compensation: text, min, max,
+        currency, period (year or hour), several_ranges (true when the posting gives one range
+        per location or level; min and max then span them) and source ("field": the board's own
+        pay field; "description": read from the description text by rules). For view=by_company,
         limit and offset page over companies. Follow up with get_role for a description or
         explain_rank for the scoring.
         """
@@ -236,6 +239,8 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
                     if e["other_postings"]:
                         row["other_postings"] = [{"role_id": o["id"], "location": o["location"]}
                                                  for o in e["other_postings"]]
+                    if e["compensation_text"]:
+                        row["compensation"] = pay.summary(e)
                     if include_reasons:
                         row["reasons"] = e["reasons"]
                     return row
@@ -284,6 +289,8 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
                 if e["other_postings"]:
                     row["other_postings"] = [{"role_id": o["id"], "location": o["location"]}
                                              for o in e["other_postings"]]
+                if e["compensation_text"]:
+                    row["compensation"] = pay.summary(e)
                 if include_reasons:
                     row["reasons"] = e["reasons"]
                 return row
@@ -329,9 +336,12 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
             "descriptions run to several thousand characters."))] = False,
     ) -> dict[str, Any]:
         """Everything stored about one role: company, title, department, location, workplace
-        type, URL, posted date, compensation text, when it was first and last seen, whether it
+        type, URL, posted date, compensation, when it was first and last seen, whether it
         is open or closed, the owner's mark on it, and backed_by: the names of the portfolio
-        boards that list the company (empty if none).
+        boards that list the company (empty if none). compensation is null or text, min, max,
+        currency, period (year or hour), several_ranges and source: "field" is the board's own
+        pay field, "description" was read from the description text by rules (ranges only, so
+        it can miss pay that is stated; it is not checked by a person).
 
         Use it after get_shortlist or search_roles when you need the details or the description
         of a specific role. The description of a closed role is deleted unless the owner marked
@@ -349,6 +359,7 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
                 "department": role["department"], "location": role["location"],
                 "workplace_type": role["workplace_type"], "url": role["url"],
                 "date_posted": role["date_posted"], "compensation_text": role["compensation_text"],
+                "compensation": pay.summary(role),
                 "source": extra["source"], "status": "closed" if role["closed_at"] else "open",
                 "first_seen_at": role["first_seen_at"], "last_seen_at": extra["last_seen_at"],
                 "closed_at": role["closed_at"], "mark": role["mark"], "mark_note": role["mark_note"] or None,
@@ -365,6 +376,10 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
         title: Annotated[list[str] | None, Field(description=(
             'Title phrases; a role matches if its title contains any one of them, ignoring case. '
             'Example: ["product manager", "program manager"].'))] = None,
+        description_contains: Annotated[list[str] | None, Field(description=(
+            'Phrases to find in the description text; a role matches if its stored description contains '
+            'any one of them, ignoring case. Example: ["Kubernetes", "payments"]. Only roles with a stored '
+            'description can match: nearly every open role, not closed ones.'))] = None,
         company: Annotated[str | None, Field(description="Only this company (exact name, case does not matter).")] = None,
         status: Annotated[Literal["open", "closed", "all"], Field(description="open (default), closed, or all.")] = "open",
         first_seen_since: Annotated[str | None, Field(description=(
@@ -389,15 +404,20 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
         Use it for questions the shortlist does not answer: "does Acme have any design roles",
         "what closed at Acme", "what appeared since Monday", "design roles at series B health
         companies". Results are ordered by company then title, not ranked, and include role_id
-        for follow-up calls. Descriptions are not searched and not returned; use get_role for one.
+        for follow-up calls, and compensation where it is known (see get_role). With
+        description_contains the description text is searched as well, and each role comes back
+        with excerpt, the text around the first phrase found. Descriptions themselves are not
+        returned; use get_role for one. Descriptions are stored for every open role of the job
+        systems that give them with the list, and for the roles the ranking wants on Workday and
+        Rippling; Eightfold sites give none.
         """
         with database() as conn:
             if company:
                 company = get_company(conn, company)["name"]
             limit, offset = _page(limit, offset)
             only = make_filter(conn, stage, sector, hq, role_location, employees_min, employees_max, vc)
-            common = dict(company=company, title=title, status=status, since=first_seen_since,
-                          include_inactive=include_inactive, only=only)
+            common = dict(company=company, title=title, text=description_contains, status=status,
+                          since=first_seen_since, include_inactive=include_inactive, only=only)
             total = len(query_roles(conn, **common))
             rows = query_roles(conn, **common, limit=limit, offset=offset)
             return {
@@ -407,7 +427,8 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
                            "status": r["status"], "date_posted": r["date_posted"],
                            "first_seen": r["first_seen_at"][:10],
                            "closed": r["closed_at"][:10] if r["closed_at"] else None,
-                           "url": r["url"]} for r in rows],
+                           "url": r["url"], "compensation": pay.summary(r),
+                           **({"excerpt": r["excerpt"]} if "excerpt" in r else {})} for r in rows],
                 "next_offset": _next(offset, len(rows), total),
             }
 
@@ -432,6 +453,7 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
                 "list_date": info["list_date"], "score": info["score"], "score_breakdown": info["detail"],
                 "why_not_listed": info["why_not"] or None,
                 "held_back_by_company_cap": info["held_back_by_cap"], "mark": role["mark"],
+                "compensation": pay.summary(role),
                 "listed_under_role_id": info["listed_under"]["id"] if info["listed_under"] else None,
                 "other_postings": [{"role_id": o["id"], "location": o["location"], "score": o["score"]}
                                    for o in info["other_postings"]],

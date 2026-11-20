@@ -3,7 +3,7 @@
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
-from rolescout import profiles, vcs
+from rolescout import pay, profiles, vcs
 from rolescout import shortlist as ranking
 from rolescout.companies import get_company
 
@@ -23,7 +23,7 @@ def company_overview(conn: sqlite3.Connection, name: str, cfg=None, *, top: int 
     def shaped(role, **extra) -> dict:
         return {"role_id": role["id"], "title": role["title"], "location": role["location"],
                 "date_posted": role["date_posted"] or None, "first_seen": role["first_seen_at"][:10],
-                "url": role["url"], "mark": role["mark"], **extra}
+                "url": role["url"], "mark": role["mark"], "compensation": pay.summary(role), **extra}
     if cfg is not None:
         ranked = ranking.rank_roles(conn, cfg, now, company_id=company["id"], qualifying_only=False)
         roles = [shaped(role, score=ev.score, qualifies=ev.eligible) for role, ev in ranked[:top]]

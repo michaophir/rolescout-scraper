@@ -1,0 +1,170 @@
+[
+  {
+    "about": "a single range",
+    "text": "you bring your best self to work. For US based applicants: The US base salary range for this full-time position is $130,000 - $150,000 annually + equity + benefits Our salary ranges are determined by role, level and location",
+    "expect": {
+      "min": 130000.0,
+      "max": 150000.0,
+      "currency": "USD",
+      "period": "year",
+      "several_ranges": false
+    }
+  },
+  {
+    "about": "a single range joined by 'to'",
+    "text": "target base salary for this position ranges from $137,300 to $166,000 in addition to a competitive equity and benefits package (as applicable). When determining",
+    "expect": {
+      "min": 137300.0,
+      "max": 166000.0,
+      "currency": "USD",
+      "period": "year",
+      "several_ranges": false
+    }
+  },
+  {
+    "about": "two ranges by location",
+    "text": "medical coverage, dental and vision for you and your dependents.) USA base pay range (CA, WA, NY, NJ, CT) per year: $ 145,000 - $ 205,000 USA base pay range (all other U.S. states) per year: $ 128,000 - $ 188,000 Please note",
+    "expect": {
+      "min": 128000.0,
+      "max": 205000.0,
+      "currency": "USD",
+      "period": "year",
+      "several_ranges": true
+    }
+  },
+  {
+    "about": "a list of ranges by pay zone, introduced several sentences earlier",
+    "text": "a market-based approach to pay, and pay may vary depending on your location. U.S. locations are categorized into one of four zones based on a cost of labor index for that geographic area. The successful candidate's starting pay will be determined based on job-related skills, experience, qualifications, work location, and market conditions. These ranges may be modified in the future. To find a location's zone designation, please refer to this resource . If a location of interest is not listed, please speak with a recruiter for additional information. Zone A: ($198,000 - $297,000) Zone B: ($184,200 - $276,200) Zone C: ($174,200 - $261,400) Zone D: ($164,300 - $246,500) Application",
+    "expect": {
+      "min": 164300.0,
+      "max": 297000.0,
+      "currency": "USD",
+      "period": "year",
+      "several_ranges": true
+    }
+  },
+  {
+    "about": "hourly pay",
+    "text": "counseling, and fitness The hourly rate for new hires in this position is $20.00-$21.50, plus a benefits package (as applicable). When determining compensation,",
+    "expect": {
+      "min": 20.0,
+      "max": 21.5,
+      "currency": "USD",
+      "period": "hour",
+      "several_ranges": false
+    }
+  },
+  {
+    "about": "hourly pay by level",
+    "text": "bend, grasp, sit, pull, push, stoop, and stretch as needed US Hourly Range Specialist/Level 1: $32 - $43/hour Specialist/Level 2: $37 - $49/hour Specialist/Level 3: $41 - $54/hour Your job level will be",
+    "expect": {
+      "min": 32.0,
+      "max": 54.0,
+      "currency": "USD",
+      "period": "hour",
+      "several_ranges": true
+    }
+  },
+  {
+    "about": "K notation",
+    "text": "from prototype → reliable, measurable production impact Compensation $200K – $400K + Offers Equity This range reflects the expected compensation for this role. Compensation within the",
+    "expect": {
+      "min": 200000.0,
+      "max": 400000.0,
+      "currency": "USD",
+      "period": "year",
+      "several_ranges": false
+    }
+  },
+  {
+    "about": "K notation after a place label",
+    "text": "roles include equity. Final compensation is determined on factors including but not limited to experience, skills, qualifications, and location. United States: $198K – $319K base",
+    "expect": {
+      "min": 198000.0,
+      "max": 319000.0,
+      "currency": "USD",
+      "period": "year",
+      "several_ranges": false
+    }
+  },
+  {
+    "about": "base pay and on-target earnings: base pay is kept",
+    "text": "For candidates based in the United States, the pay range for this position at the start of employment is expected to be between $150,000 and $163,500/year, with an expected On Target Earnings (OTE) between $300,000 and $327,000/year (including bonus or commission). Your exact offer may vary",
+    "expect": {
+      "min": 150000.0,
+      "max": 163500.0,
+      "currency": "USD",
+      "period": "year",
+      "several_ranges": false
+    }
+  },
+  {
+    "about": "Canadian dollars",
+    "text": "ERPs, etc). Compensation The expected salary range for this role is $240,000 - $285,000 CAD. However, the starting base pay will depend on a number of",
+    "expect": {
+      "min": 240000.0,
+      "max": 285000.0,
+      "currency": "CAD",
+      "period": "year",
+      "several_ranges": false
+    }
+  },
+  {
+    "about": "a range that opens its sentence, then on-target earnings",
+    "text": "national base pay range for this position within the United States, including Illinois and Colorado. $102,000 — $150,000 USD The total on-target earnings (base + commissions) for this position within the United States, including Illinois and Colorado. $189,000 — $278,000 USD About Acme At",
+    "expect": {
+      "min": 102000.0,
+      "max": 150000.0,
+      "currency": "USD",
+      "period": "year",
+      "several_ranges": false
+    }
+  },
+  {
+    "about": "on-target earnings only",
+    "text": "modern sales tools. BA/BS degree or equivalent experience OTE for this role is: $152,320 - $228,480 CAD We're working to",
+    "expect": {
+      "min": 152320.0,
+      "max": 228480.0,
+      "currency": "CAD",
+      "period": "year",
+      "several_ranges": false
+    }
+  },
+  {
+    "about": "ranges by country in two currencies, each followed by what is added on: the first currency is kept",
+    "text": "We are pushing the boundaries across multiple domains. Our global teams offer diverse learning opportunities and varied career pathways for those driven to achieve exceptional results through collective effort. Individual pay is determined by factors including job-related skills, experience, and relevant education or training. France: €130000 - €133000 (EUR) + 20% bonus target + equity + benefits US: $207000 - $300000 (USD) + 20% bonus target + equity + benefits Learn more",
+    "expect": {
+      "min": 130000.0,
+      "max": 133000.0,
+      "currency": "EUR",
+      "period": "year",
+      "several_ranges": false
+    }
+  },
+  {
+    "about": "false positive: a lone figure",
+    "text": "counseling, and fitness The hourly rate for new hires in this position is $17, plus a benefits package (as applicable). When determining",
+    "expect": null
+  },
+  {
+    "about": "false positive: deal sizes",
+    "text": "and exceeding quota Proven ability to build pipeline, not just manage it Experience closing new-logo deals in the $50K-$100K range with multiple stakeholders in a consultative, solutions-oriented selling",
+    "expect": null
+  },
+  {
+    "about": "false positive: quotas in millions",
+    "text": "A consistent record of exceeding $2M+ annual quotas, including experience carrying quotas in the $2M–$5M+ range and closing complex, multi-million-dollar opportunities. Multiple",
+    "expect": null
+  },
+  {
+    "about": "false positive: an equity grant",
+    "text": "to share in that growth financially. Acme Holdings, Inc. Equity Grade Equity grade: 3 (awarded in US Dollars) New hire equity: $24,000 - $36,000 USD Annual Refresh: $7,500 Reward equity: $0 - $112,500 Acme also provides",
+    "expect": null
+  },
+  {
+    "about": "false positive: monthly pay in another currency",
+    "text": "For this role, the estimated base salary range is between $43,500 - $45,000 PLN gross per month (subject to all taxes and necessary deductions). The",
+    "expect": null
+  }
+]

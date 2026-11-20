@@ -283,14 +283,16 @@ def test_a_link_removed_by_hand_does_not_come_back_from_a_board(harvested, filte
 def test_removals_table_arrives_by_upgrade_and_links_made_before_it_are_kept(harvested, monkeypatch):
     bolt = company_id(harvested, "Bolt")
     harvested.execute("DROP TABLE company_vc_removals")
-    harvested.execute("DROP TABLE shortlist_postings")
     harvested.execute("PRAGMA user_version = 10")            # the version before the table came
     harvested.commit()
     with db.transaction(harvested):
         vcs.sync_board_links(harvested)                     # as an older migration would call it: no table yet
     path = harvested.execute("PRAGMA database_list").fetchone()["file"]
+    # Only the step that brings the table: the rest of this database is already current.
+    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS[:11])
+    monkeypatch.setattr(db, "SCHEMA_VERSION", 11)
     upgraded = db.connect(path)
-    assert db.schema_version(upgraded) == db.SCHEMA_VERSION
+    assert db.schema_version(upgraded) == 11
     assert upgraded.execute("SELECT COUNT(*) FROM company_vc_removals").fetchone()[0] == 0
     assert companies.backed_by(upgraded)[bolt] == ["Alpha"]
 
@@ -353,7 +355,8 @@ def test_upgrade_makes_vcs_from_boards_and_backfills_without_a_network(tmp_path,
 
     conn = db.connect(path)                                        # sockets are blocked: no network here
     assert db.schema_version(conn) == current >= 9
-    assert [tuple(r) for r in conn.execute("SELECT * FROM roles")] == roles_before      # history untouched
+    # History untouched; the columns added since come after the ones it had.
+    assert [tuple(r)[:len(roles_before[0])] for r in conn.execute("SELECT * FROM roles")] == roles_before
     made = [(v["name"], v["short_name"], v["type"], v["website"], v["boards"]) for v in vcs.list_vcs(conn)]
     assert made == [("Alpha Ventures", "Alpha", "vc", "https://alpha.example", ["https://jobs.alpha.example"]),
                     ("careers.city.example", "careers.city.example", "vc", "https://city.example",

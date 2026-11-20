@@ -90,8 +90,8 @@ Read (always available):
 | Tool | What it does |
 |---|---|
 | `get_shortlist` | The ranked shortlist: flat, grouped by company, or only what is new. With a filter (stage, sector, HQ, role location, employees, VC) it ranks every qualifying role that passes, not only today's list. Postings that are clearly one job posted once per location are one entry, with `other_postings` naming the rest |
-| `get_role` | One role in full; the description only when asked for; includes the portfolio boards that list its company |
-| `search_roles` | Search all stored roles by title, company, open/closed and first-seen date, with the same filters as `get_shortlist` |
+| `get_role` | One role in full, with its pay and where the pay came from (the board's field, or the description); the description only when asked for; includes the portfolio boards that list its company |
+| `search_roles` | Search all stored roles by title, text in the description, company, open/closed and first-seen date, with the same filters as `get_shortlist`; results carry pay and its source |
 | `explain_rank` | Why a role ranks where it does, or why it is not on the shortlist. For a posting listed under another posting of the same job, `listed_under_role_id` names that one |
 | `list_marks` | Roles marked dismissed, saved or applied |
 | `list_target_companies` | Target companies with boards and coverage state |

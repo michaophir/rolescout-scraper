@@ -19,6 +19,7 @@ from pathlib import Path
 from rolescout.companies import backed_by
 from rolescout.db import transaction, utc_now
 from rolescout.locations import Requirement, is_remote, split_locations
+from rolescout.pay import PAY_COLUMNS
 
 CONFIG_NAME = "ranking.toml"
 CONFIG_ENV_VAR = "ROLESCOUT_RANKING"
@@ -526,7 +527,8 @@ def in_baseline(role, baselines: dict[int, set[str]]) -> bool:
 
 ROLE_SELECT = (
     "SELECT r.id, r.board_id, r.company_id, r.title, r.department, r.location, r.workplace_type, r.url, r.date_posted, "
-    "r.compensation_text, r.first_seen_at, r.closed_at, c.name AS company, c.active, "
+    "r.compensation_text, r.pay_min, r.pay_max, r.pay_currency, r.pay_period, r.pay_varies, r.pay_source, "
+    "r.first_seen_at, r.closed_at, c.name AS company, c.active, "
     "m.status AS mark, m.note AS mark_note "
     "FROM roles r JOIN companies c ON c.id = r.company_id "
     "LEFT JOIN role_marks m ON m.role_id = r.id ")
@@ -756,7 +758,7 @@ def filtered_entries(conn: sqlite3.Connection, cfg: RankingConfig, only, now: da
         entry = {
             "rank": len(entries) + 1, "score": job.ev.score, "reasons": job.ev.reasons,
             **{k: role[k] for k in ("id", "title", "department", "location", "workplace_type", "url",
-                                    "date_posted", "compensation_text", "first_seen_at", "closed_at",
+                                    "date_posted", *PAY_COLUMNS, "first_seen_at", "closed_at",
                                     "company_id", "company", "mark", "mark_note")},
             "backed_by": backers.get(role["company_id"], []),
             "list_rank": next((on_list[r["id"]] for r in job.postings if r["id"] in on_list), None)}
@@ -889,7 +891,8 @@ def shortlist_entries(conn: sqlite3.Connection, shortlist_id: int,
     others = _other_postings(conn, shortlist_id)
     rows = conn.execute(
         "SELECT e.rank, e.score, e.reasons, r.id, r.title, r.department, r.location, "
-        "r.workplace_type, r.url, r.date_posted, r.compensation_text, r.first_seen_at, r.closed_at, "
+        "r.workplace_type, r.url, r.date_posted, r.compensation_text, r.pay_min, r.pay_max, r.pay_currency, r.pay_period, r.pay_varies, r.pay_source, "
+        "r.first_seen_at, r.closed_at, "
         "c.id AS company_id, c.name AS company, m.status AS mark, m.note AS mark_note "
         "FROM shortlist_entries e JOIN roles r ON r.id = e.role_id "
         "JOIN companies c ON c.id = r.company_id LEFT JOIN role_marks m ON m.role_id = r.id "

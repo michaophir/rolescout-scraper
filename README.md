@@ -71,6 +71,7 @@ rolescout shortlist                      # the roles to look at first
 rolescout why 123                        # how one role was scored
 rolescout mark 123 saved                 # or dismissed, applied
 rolescout query --title designer --location remote
+rolescout query --text kubernetes        # search the descriptions
 ```
 
 **5. Run it every day** (macOS; on Linux the command prints a cron line)

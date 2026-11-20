@@ -63,10 +63,28 @@ def test_newer_database_is_refused(tmp_path):
         db.connect(path)
 
 
-def test_upgrade_clears_compensation_that_is_not_pay(isolated_db_path):
-    conn = db.connect()
+def at_version(monkeypatch, version):
+    """Open the test database as rolescout of an earlier schema version made it."""
+    with monkeypatch.context() as earlier:
+        earlier.setattr(db, "MIGRATIONS", db.MIGRATIONS[:version])
+        earlier.setattr(db, "SCHEMA_VERSION", version)
+        return db.connect()
+
+
+def add_roles(conn, roles):
+    """``roles`` maps (source, job id) to (compensation text, description or None)."""
     company_id = companies.add_company(conn, "Acme")
     board_id = companies.add_board(conn, "Acme", "lever", "acme")
+    for (source, job_id), (text, description) in roles.items():
+        role_id = conn.execute(
+            "INSERT INTO roles (source, source_job_id, company_id, board_id, title, compensation_text, "
+            "first_seen_at, last_seen_at) VALUES (?, ?, ?, ?, 'Engineer', ?, 'x', 'x')",
+            (source, job_id, company_id, board_id, text)).lastrowid
+        if description is not None:
+            conn.execute("INSERT INTO role_descriptions (role_id, description) VALUES (?, ?)", (role_id, description))
+
+
+def test_upgrade_clears_compensation_that_is_not_pay(isolated_db_path, monkeypatch):
     stored = {
         ("lever", "eeo"): "We are an equal opportunity employer and value diversity.",
         ("lever", "benefits"): "401(k) match, 25 days off and the chance to work with 300 colleagues.",
@@ -78,13 +96,8 @@ def test_upgrade_clears_compensation_that_is_not_pay(isolated_db_path):
         ("rippling", "pay"): "USD 185,000 - 240,000 per year (US)",
         ("workday", "none"): "",
     }
-    for (source, job_id), text in stored.items():
-        conn.execute("INSERT INTO roles (source, source_job_id, company_id, board_id, title, compensation_text, "
-                     "first_seen_at, last_seen_at) VALUES (?, ?, ?, ?, 'Engineer', ?, 'x', 'x')",
-                     (source, job_id, company_id, board_id, text))
-    # As the database was before this version.
-    conn.execute("DROP TABLE shortlist_postings")
-    conn.execute("PRAGMA user_version = 11")
+    conn = at_version(monkeypatch, 11)
+    add_roles(conn, {key: (text, None) for key, text in stored.items()})
     conn.close()
 
     upgraded = db.connect()

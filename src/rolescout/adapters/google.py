@@ -16,13 +16,10 @@ recorded, shortened feed.
   the front of the role's department.
 - robots.txt allows the feed. It disallows the paged search results, which
   this adapter never reads.
-- The feed carries every description, at no extra request. They are kept
-  the way the sources that charge a request per description keep them: for
-  roles whose title the ranking config wants, and for roles marked saved or
-  applied. A fetch given no context (``rolescout fetch``) keeps them all.
+- The feed carries every description, at no extra request, so every open
+  role is stored with its description, as with the other sources that
+  return a whole board in one request.
 """
-
-from dataclasses import replace
 
 from urllib.parse import urlsplit
 from xml.etree import ElementTree
@@ -69,7 +66,6 @@ def _place(location: ElementTree.Element) -> str:
 class GoogleAdapter(SourceAdapter):
     name = "google"
     guessable = False      # one company's site: it is mapped by hand, never guessed for others
-    uses_context = True    # which descriptions are kept depends on the caller
 
     @classmethod
     def canonical_ref(cls, ref: str) -> str:
@@ -115,17 +111,8 @@ class GoogleAdapter(SourceAdapter):
 
     def fetch(self, ref: str, *, company: str | None = None,
               context: FetchContext | None = None) -> list[Role]:
-        self.last_stats = stats = FetchStats()
-        roles = self.parse(self.fetch_raw(ref), ref, company=company)
-        if context is None:
-            return roles
-        for index, role in enumerate(roles):
-            known = context.known.get(role.source_job_id)
-            if not ((known is not None and known.keep) or context.wants_description(role.title)):
-                roles[index] = replace(role, description="")
-            elif role.description and not (known is not None and known.has_description):
-                stats.descriptions_fetched += 1
-        return roles
+        self.last_stats = FetchStats()
+        return self.parse(self.fetch_raw(ref), ref, company=company)
 
     def confirm(self, ref: str) -> tuple[str, int]:
         self.last_stats = FetchStats()
