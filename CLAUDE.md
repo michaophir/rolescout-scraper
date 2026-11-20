@@ -93,7 +93,7 @@ keep doing.
 - Completeness: a source that reports a total counts as complete when it saw
   at least 99% of it (`COMPLETE_SHARE` in `adapters/base.py`). Seen and
   reported are stored per fetch in `run_boards`.
-- Schema: version 10, kept in `PRAGMA user_version`. A change is a new entry
+- Schema: version 11, kept in `PRAGMA user_version`. A change is a new entry
   at the end of `MIGRATIONS` in `db.py`; existing databases upgrade in place
   when any command opens them. Never edit an earlier entry.
 - `rolescout init` never changes a company or a config that is already

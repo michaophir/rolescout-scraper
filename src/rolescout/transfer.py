@@ -47,6 +47,10 @@ def export_companies(conn: sqlite3.Connection) -> dict:
     for l in conn.execute("SELECT l.company_id, v.name, l.linked_at FROM company_vcs l JOIN vcs v "
                           "ON v.id = l.vc_id WHERE l.source = 'manual' ORDER BY v.name COLLATE NOCASE"):
         linked.setdefault(l["company_id"], []).append({"vc": l["name"], "linked_at": l["linked_at"]})
+    unlinked: dict[int, list[dict]] = {}
+    for r in conn.execute("SELECT r.company_id, v.name, r.removed_at FROM company_vc_removals r JOIN vcs v "
+                          "ON v.id = r.vc_id ORDER BY v.name COLLATE NOCASE"):
+        unlinked.setdefault(r["company_id"], []).append({"vc": r["name"], "removed_at": r["removed_at"]})
     board_urls: dict[int, list[str]] = {}
     for b in conn.execute("SELECT vc_id, url FROM portfolio_boards WHERE vc_id IS NOT NULL ORDER BY id"):
         board_urls.setdefault(b["vc_id"], []).append(b["url"])
@@ -72,6 +76,8 @@ def export_companies(conn: sqlite3.Connection) -> dict:
             entry["profile"] = by_hand[c["id"]]
         if c["id"] in linked:
             entry["vcs"] = linked[c["id"]]
+        if c["id"] in unlinked:
+            entry["vcs_removed"] = unlinked[c["id"]]
         companies.append(entry)
     return {"format": FORMAT, "version": FORMAT_VERSION, "exported_at": utc_now(),
             "vcs": vc_list, "companies": companies}
@@ -185,7 +191,16 @@ def import_companies(conn: sqlite3.Connection, data: object) -> dict:
                         continue
                     conn.execute("INSERT OR REPLACE INTO company_vcs (company_id, vc_id, source, linked_at) "
                                  "VALUES (?, ?, 'manual', ?)", (company_id, vc_id, link.get("linked_at") or now))
+                    conn.execute("DELETE FROM company_vc_removals WHERE company_id = ? AND vc_id = ?",
+                                 (company_id, vc_id))
                     result["vc_links"] += 1
+                for gone in entry.get("vcs_removed") or []:
+                    vc_id = vc_ids.get(str(gone.get("vc") or "").casefold())
+                    if vc_id is None:
+                        continue
+                    conn.execute("INSERT OR REPLACE INTO company_vc_removals (company_id, vc_id, removed_at) "
+                                 "VALUES (?, ?, ?)", (company_id, vc_id, gone.get("removed_at") or now))
+                    conn.execute("DELETE FROM company_vcs WHERE company_id = ? AND vc_id = ?", (company_id, vc_id))
 
                 r = entry.get("resolution")
                 if r:

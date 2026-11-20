@@ -265,10 +265,43 @@ def test_a_senior_title_scores_as_staff_at_the_listed_companies(world, capsys, i
     staff = {**alpha, "title": "Staff Product Manager"}
     assert 'Seniority: "Staff" (+15)' in ranking.evaluate(staff, leveled, today).detail
 
+    # A config that wants the Staff title for more: the Senior title earns those title points too.
+    staff_wanted = ranking.parse_config(LEVELED.replace(
+        '"Group Product Manager" = 40', '"Group Product Manager" = 40\n"Staff Product Manager" = 45'), "test")
+    as_written = ranking.evaluate({**alpha, "company": "Beta"}, staff_wanted, today)
+    leveled_up = ranking.evaluate(alpha, staff_wanted, today)
+    the_staff_title = ranking.evaluate({**staff, "company": "Beta"}, staff_wanted, today)
+    assert leveled_up.score == the_staff_title.score == as_written.score + 15 + 5      # title 30 -> 45, seniority 10 -> 15
+    assert ('Title counts as "Staff Product Manager" at Alpha (leveling), which matches "Staff Product Manager" (+45)'
+            in leveled_up.detail)
+    assert 'Seniority: "Senior" counts as "Staff" at Alpha (leveling) (+15)' in leveled_up.detail
+    assert 'Title matches "Product Manager" (+30)' in as_written.detail
+    # A Senior title that only the Staff phrase admits reaches the list at a leveled company, and nowhere else.
+    only_staff = ranking.parse_config(
+        '[title.wanted]\n"Staff Engineer" = 30\n[seniority.words]\n"Senior" = 10\n"Staff" = 15\n'
+        '[leveling]\nsenior_as_staff = ["Alpha"]\n', "test")
+    engineer = {**alpha, "title": "Senior Engineer, Payments"}
+    assert ranking.evaluate(engineer, only_staff, today).eligible
+    assert not ranking.evaluate({**engineer, "company": "Beta"}, only_staff, today).eligible
+    # Leveling never lowers a score, never touches a title without "Senior", and never lifts an exclusion.
+    lower = ranking.parse_config(LEVELED.replace('"Staff" = 15', '"Staff" = 5'), "test")
+    assert 'Seniority: "Senior" (+10)' in ranking.evaluate(alpha, lower, today).detail
+    assert staff_wanted.leveled_title("Product Manager", "Alpha") is None
+    assert staff_wanted.leveled_title("Senior Product Manager", "Beta") is None
+    assert staff_wanted.leveled_title("senior product manager", "ALPHA") == "Staff product manager"
+    assert not ranking.evaluate({**alpha, "title": "Senior Product Manager Intern"}, staff_wanted, today).eligible
+
     (isolated_db_path.parent / "ranking.toml").write_text(LEVELED)
     a1 = world.execute("SELECT id FROM roles WHERE source_job_id = 'a1'").fetchone()["id"]
     assert cli.main(["why", str(a1)]) == 0
     assert 'Seniority: "Senior" counts as "Staff" at Alpha (leveling) (+15)' in capsys.readouterr().out
+    # `why` shows both lines when the title is leveled as well.
+    (isolated_db_path.parent / "ranking.toml").write_text(LEVELED.replace(
+        '"Group Product Manager" = 40', '"Group Product Manager" = 40\n"Staff Product Manager" = 45'))
+    assert cli.main(["why", str(a1)]) == 0
+    out = capsys.readouterr().out
+    assert 'Title counts as "Staff Product Manager" at Alpha (leveling), which matches "Staff Product Manager" (+45)' in out
+    assert 'Seniority: "Senior" counts as "Staff" at Alpha (leveling) (+15)' in out
     for text, message in ((SMALL_CONFIG + '\n[leveling]\nsenior_as_staff = "Alpha"\n', "must be a list of company names"),
                           ('[leveling]\nsenior_as_staff = ["Alpha"]\n', 'needs both "Senior" and "Staff"')):
         with pytest.raises(ranking.ConfigError, match=message):

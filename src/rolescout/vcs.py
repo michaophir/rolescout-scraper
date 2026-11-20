@@ -165,7 +165,17 @@ def ensure_for_board(conn: sqlite3.Connection, board_id: int) -> int | None:
 def sync_board_links(conn: sqlite3.Connection) -> None:
     """Make the board-sourced links match what the boards list now: a tracked
     company is linked to a VC when one of that VC's boards lists it. Links
-    made by hand are never touched. Must run inside a transaction."""
+    made by hand are never touched, and a link removed by hand is not made
+    again. Must run inside a transaction."""
+    # An upgrade runs this from a migration older than the removals table.
+    kept_out = ""
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'company_vc_removals'").fetchone():
+        kept_out = ("AND NOT EXISTS (SELECT 1 FROM company_vc_removals r "
+                    "WHERE r.company_id = c.company_id AND r.vc_id = b.vc_id) ")
+        conn.execute(
+            "DELETE FROM company_vcs WHERE source = 'board' AND EXISTS ("
+            "  SELECT 1 FROM company_vc_removals r "
+            "  WHERE r.company_id = company_vcs.company_id AND r.vc_id = company_vcs.vc_id)")
     conn.execute(
         "DELETE FROM company_vcs WHERE source = 'board' AND NOT EXISTS ("
         "  SELECT 1 FROM candidates c JOIN candidate_listings l ON l.candidate_id = c.id "
@@ -175,7 +185,8 @@ def sync_board_links(conn: sqlite3.Connection) -> None:
         "INSERT OR IGNORE INTO company_vcs (company_id, vc_id, source, linked_at) "
         "SELECT c.company_id, b.vc_id, 'board', MIN(l.listed_at) FROM candidates c "
         "JOIN candidate_listings l ON l.candidate_id = c.id JOIN portfolio_boards b ON b.id = l.board_id "
-        "WHERE c.company_id IS NOT NULL AND b.vc_id IS NOT NULL GROUP BY c.company_id, b.vc_id")
+        f"WHERE c.company_id IS NOT NULL AND b.vc_id IS NOT NULL {kept_out}"
+        "GROUP BY c.company_id, b.vc_id")
 
 
 def link_company(conn: sqlite3.Connection, company: str, vc_ref: str) -> tuple[str, str, bool]:
@@ -188,15 +199,18 @@ def link_company(conn: sqlite3.Connection, company: str, vc_ref: str) -> tuple[s
     with transaction(conn):
         had = conn.execute("SELECT source FROM company_vcs WHERE company_id = ? AND vc_id = ?",
                            (row["id"], vc["id"])).fetchone()
-        # By hand outranks a board: the link stays if the board drops the company.
+        # By hand outranks a board: the link stays if the board drops the
+        # company, and it undoes an earlier removal by hand.
+        conn.execute("DELETE FROM company_vc_removals WHERE company_id = ? AND vc_id = ?", (row["id"], vc["id"]))
         conn.execute("INSERT OR REPLACE INTO company_vcs (company_id, vc_id, source, linked_at) "
                      "VALUES (?, ?, 'manual', ?)", (row["id"], vc["id"], utc_now()))
     return row["name"], vc["name"], had is None or had["source"] != "manual"
 
 
 def unlink_company(conn: sqlite3.Connection, company: str, vc_ref: str) -> tuple[str, str, bool]:
-    """Remove a link made by hand. A link a board makes comes back for as long
-    as the board lists the company. Returns (company, VC, whether one was removed)."""
+    """Remove a link, however it was made, and record the removal: a board
+    that lists the company does not bring it back. Linking the two by hand
+    again does. Returns (company, VC, whether one was removed)."""
     try:
         row = get_company(conn, company)
     except CompanyError as exc:
@@ -205,6 +219,13 @@ def unlink_company(conn: sqlite3.Connection, company: str, vc_ref: str) -> tuple
     with transaction(conn):
         removed = conn.execute("DELETE FROM company_vcs WHERE company_id = ? AND vc_id = ?",
                                (row["id"], vc["id"])).rowcount
+        listed = conn.execute(
+            "SELECT 1 FROM candidates c JOIN candidate_listings l ON l.candidate_id = c.id "
+            "JOIN portfolio_boards b ON b.id = l.board_id WHERE c.company_id = ? AND b.vc_id = ?",
+            (row["id"], vc["id"])).fetchone()
+        if removed or listed:
+            conn.execute("INSERT OR REPLACE INTO company_vc_removals (company_id, vc_id, removed_at) "
+                         "VALUES (?, ?, ?)", (row["id"], vc["id"], utc_now()))
         sync_board_links(conn)
     return row["name"], vc["name"], bool(removed)
 
@@ -214,4 +235,12 @@ def company_links(conn: sqlite3.Connection, company_id: int) -> list[dict]:
     rows = conn.execute(
         "SELECT v.name, v.short_name, v.type, l.source, l.linked_at FROM company_vcs l "
         "JOIN vcs v ON v.id = l.vc_id WHERE l.company_id = ? ORDER BY v.type, v.id", (company_id,))
+    return [dict(r) for r in rows]
+
+
+def removed_links(conn: sqlite3.Connection, company_id: int) -> list[dict]:
+    """The VCs whose link to one company was removed by hand."""
+    rows = conn.execute(
+        "SELECT v.name, v.short_name, r.removed_at FROM company_vc_removals r "
+        "JOIN vcs v ON v.id = r.vc_id WHERE r.company_id = ? ORDER BY v.id", (company_id,))
     return [dict(r) for r in rows]

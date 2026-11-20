@@ -429,6 +429,18 @@ MIGRATIONS: list[list] = [
         "ALTER TABLE run_boards ADD COLUMN roles_reported INTEGER",
         "ALTER TABLE run_boards ADD COLUMN complete INTEGER NOT NULL DEFAULT 1",
     ],
+    [
+        """
+        -- VC links removed by hand. A board that lists the company does not
+        -- bring such a link back; linking the two by hand again clears it.
+        CREATE TABLE company_vc_removals (
+            company_id  INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            vc_id       INTEGER NOT NULL REFERENCES vcs(id) ON DELETE CASCADE,
+            removed_at  TEXT NOT NULL,
+            PRIMARY KEY (company_id, vc_id)
+        )
+        """,
+    ],
 ]
 
 SCHEMA_VERSION = len(MIGRATIONS)

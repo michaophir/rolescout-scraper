@@ -851,9 +851,10 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
     def unlink_company_from_vc(company: CompanyName, vc: VcRef) -> dict[str, Any]:
         """Remove a link between a company and a VC.
 
-        Use it to undo link_company_to_vc. A link that a portfolio board makes cannot be removed
-        this way: it returns for as long as that board lists the company, and still_linked says
-        whether that happened. To hide a whole group from backed_by, edit its type instead."""
+        Removes the link however it was made, by hand or by a portfolio board, and records the
+        removal: a board that lists the company does not bring the link back. link_company_to_vc
+        restores it. still_linked is always false after a removal. To hide a whole group from
+        backed_by, edit its type instead."""
         with database() as conn:
             company_name, vc_name, removed = vcs.unlink_company(conn, company, vc)
             still = any(l["name"] == vc_name for l in vcs.company_links(

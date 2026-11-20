@@ -7,6 +7,7 @@ import pytest
 from rolescout import candidates as cands
 from rolescout import cli, companies, db, portfolio, profiles, scout, vcs
 from rolescout.db import transaction
+from rolescout.transfer import export_companies, import_companies
 from tests.test_candidates import A, B, CONFIG, board_pages, co, run
 from tests.test_scout import Scripted
 from tests.test_shortlist import mk
@@ -234,6 +235,65 @@ def test_a_vc_link_made_by_hand(harvested, filters, capsys):
     assert "no company named" in capsys.readouterr().err
 
 
+def test_a_link_removed_by_hand_does_not_come_back_from_a_board(harvested, filters, capsys, tmp_path):
+    conn = harvested
+    acme, bolt = company_id(conn, "Acme"), company_id(conn, "Bolt")
+    assert companies.backed_by(conn)[bolt] == ["Alpha"]            # made by board A, which lists Bolt
+    assert cli.main(["vcs", "unlink", "Bolt", "Alpha Venture Partners"]) == 0
+    out = capsys.readouterr().out
+    assert "Bolt is no longer linked to Alpha Venture Partners. A board that lists it will not bring the link back" in out
+    assert 'rolescout vcs link "Bolt" "Alpha Venture Partners"' in out
+    assert bolt not in companies.backed_by(conn)
+    assert [r["name"] for r in vcs.removed_links(conn, bolt)] == ["Alpha Venture Partners"]
+
+    # Neither a backfill nor the next harvest of the same boards makes it again.
+    cands.apply_filter(conn, filters)
+    with db.transaction(conn):
+        vcs.sync_board_links(conn)
+    assert bolt not in companies.backed_by(conn)
+    run(conn, filters, {
+        **board_pages(A, "ignored", "1", [listed("acme", "acme.example", id=1), listed("bolt", "bolt.example", id=2)]),
+        **board_pages(B, "Beta City Tech Network", "2", [listed("acme", "acme.example", id=1)])})
+    assert bolt not in companies.backed_by(conn)
+    assert conn.execute("SELECT COUNT(*) FROM candidate_listings l JOIN candidates c ON c.id = l.candidate_id "
+                        "WHERE c.company_id = ?", (bolt,)).fetchone()[0] == 1          # the board still lists it
+    # Other companies' links from the same board are untouched.
+    assert "Alpha" in companies.backed_by(conn)[acme]
+
+    # The removal travels with an export, and survives an import of it.
+    exported = export_companies(conn)
+    assert next(c for c in exported["companies"] if c["name"] == "Bolt")["vcs_removed"][0]["vc"] == "Alpha Venture Partners"
+    other = db.connect(tmp_path / "other.db")
+    import_companies(other, json.loads(json.dumps(exported)))
+    assert [r["name"] for r in vcs.removed_links(other, company_id(other, "Bolt"))] == ["Alpha Venture Partners"]
+
+    # Removing it again says so; linking by hand restores the link and forgets the removal.
+    assert cli.main(["vcs", "unlink", "Bolt", "Alpha Venture Partners"]) == 0
+    assert "Bolt was not linked to Alpha Venture Partners." in capsys.readouterr().out
+    assert cli.main(["vcs", "link", "Bolt", "Alpha Venture Partners"]) == 0
+    assert companies.backed_by(conn)[bolt] == ["Alpha"] and vcs.removed_links(conn, bolt) == []
+    assert conn.execute("SELECT source FROM company_vcs WHERE company_id = ?", (bolt,)).fetchone()["source"] == "manual"
+    # A link made by hand that no board backs is simply removed.
+    companies.add_company(conn, "Cobalt")
+    vcs.link_company(conn, "Cobalt", "Alpha Venture Partners")
+    assert vcs.unlink_company(conn, "Cobalt", "Alpha Venture Partners")[2] is True
+    assert company_id(conn, "Cobalt") not in companies.backed_by(conn)
+
+
+def test_removals_table_arrives_by_upgrade_and_links_made_before_it_are_kept(harvested, monkeypatch):
+    bolt = company_id(harvested, "Bolt")
+    harvested.execute("DROP TABLE company_vc_removals")
+    harvested.execute(f"PRAGMA user_version = {db.SCHEMA_VERSION - 1}")
+    harvested.commit()
+    with db.transaction(harvested):
+        vcs.sync_board_links(harvested)                     # as an older migration would call it: no table yet
+    path = harvested.execute("PRAGMA database_list").fetchone()["file"]
+    upgraded = db.connect(path)
+    assert db.schema_version(upgraded) == db.SCHEMA_VERSION
+    assert upgraded.execute("SELECT COUNT(*) FROM company_vc_removals").fetchone()[0] == 0
+    assert companies.backed_by(upgraded)[bolt] == ["Alpha"]
+
+
 def test_vc_commands_add_list_edit_attach_remove(harvested, capsys):
     assert cli.main(["vcs", "add", "Alpha Venture Partners"]) == 1
     assert "already exists" in capsys.readouterr().err
@@ -409,7 +469,8 @@ def test_mcp_profile_and_vc_tools(harvested, isolated_db_path):
         "company": "Bolt", "vc": "Gamma Capital", "newly_linked": True}
     assert companies.backed_by(harvested)[company_id(harvested, "Bolt")] == ["Alpha", "Gamma"]
     assert session.call("unlink_company_from_vc", company="Bolt", vc="Alpha") == {
-        "company": "Bolt", "vc": "Alpha Venture Partners", "removed": True, "still_linked": True}
+        "company": "Bolt", "vc": "Alpha Venture Partners", "removed": True, "still_linked": False}
+    assert companies.backed_by(harvested)[company_id(harvested, "Bolt")] == ["Gamma"]      # the board link is gone
     assert session.call("attach_board_to_vc", board=B, vc="Gamma Capital") == {"board": B, "vc": "Gamma Capital"}
     assert session.call("remove_vc", vc="Gamma Capital") == {
         "removed": "Gamma Capital", "company_links_removed": 2, "boards_left_without_a_vc": 1}

@@ -120,7 +120,7 @@ Write (absent in read-only mode):
 | `set_company_profile` | Fill in a company's profile fields in one call (recorded as set by an agent; a value set by hand is kept) |
 | `add_vc`, `edit_vc`, `remove_vc` | Maintain the VC list; `edit_vc` can mark a group as an ecosystem |
 | `attach_board_to_vc` | Say which VC a portfolio board belongs to |
-| `link_company_to_vc`, `unlink_company_from_vc` | Link a company to a VC by hand, or undo it |
+| `link_company_to_vc`, `unlink_company_from_vc` | Link a company to a VC by hand, or remove a link however it was made; a removed link does not come back from a board |
 | `map_board` | Map a company to a Greenhouse, Lever, Ashby, Workday, Rippling, Gem, Workable or Eightfold board, or to the Google career site |
 | `record_job_system` | Record by hand which unsupported job system a company uses |
 | `activate_candidate` | Start tracking a candidate |

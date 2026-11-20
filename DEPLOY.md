@@ -90,7 +90,7 @@ rm ~/rolescout-companies.json                              # on both, when done
 ```
 
 The export also carries the profile values you set by hand, the VC list and
-the VC links you made by hand. Check, on the Mac: `rolescout companies
+the VC links you made or removed by hand. Check, on the Mac: `rolescout companies
 report` shows the same mapped, unsupported and unresolved counts as on your
 own machine. Importing again later is safe: it adds new companies and boards
 and updates details, and never removes anything. Marks (dismissed, saved,
@@ -259,8 +259,11 @@ What the ranking does that is worth knowing when you read the list:
   the table, a role with several locations shows the one that mattered
   first, then "+N more".
 - At some companies a Senior title is what others call Staff. Name them
-  under `[leveling]` and a Senior title there earns the Staff points:
-  `senior_as_staff = ["Acme", "Globex"]`.
+  under `[leveling]` (`senior_as_staff = ["Acme", "Globex"]`) and a Senior
+  title there is scored as the Staff title would be: "Senior Product
+  Manager" earns the title points of "Staff Product Manager" and the
+  seniority points of "Staff". It never scores lower than as written, and
+  `rolescout why ID` shows both lines.
 
 ## Cuts and company overviews
 
@@ -318,11 +321,14 @@ rolescout vcs edit "Example Tech Alliance" --type ecosystem
 rolescout vcs edit "Acme Venture Partners" --short Acme
 rolescout vcs add "Bolt Capital"
 rolescout vcs link "Some Company" "Bolt Capital"    # by hand; stays whatever the boards say
+rolescout vcs unlink "Some Company" "Bolt Capital"  # removed for good, even if a board lists the company
 rolescout vcs attach https://jobs.example.vc "Acme Venture Partners"
 ```
 
 Profiles and VC links are filled from the boards on upgrade, after every
-harvest and on activation, from the database alone.
+harvest and on activation, from the database alone. What you did by hand
+wins: a value you set is kept, a link you made stays, and a link you removed
+does not come back until you link the two again.
 
 For browsing (in Datasette, for example) the database has read-only views:
 `v_company_overview` (profile, VCs, open roles, opened and closed in the last

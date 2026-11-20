@@ -1581,13 +1581,11 @@ def _cmd_vcs_link(args) -> int:
 def _cmd_vcs_unlink(args) -> int:
     conn = connect(args.db)
     company, name, removed = vcs.unlink_company(conn, args.company, args.vc)
-    still = any(l["name"] == name for l in vcs.company_links(conn, get_company(conn, company)["id"]))
     if not removed:
         print(f"{company} was not linked to {name}.")
-    elif still:
-        print(f"{company}: the link made by hand is removed, but a board of {name} lists it, so it stays linked.")
     else:
-        print(f"{company} is no longer linked to {name}.")
+        print(f"{company} is no longer linked to {name}. A board that lists it will not bring the link back; "
+              f"to restore it: rolescout vcs link {json.dumps(company)} {json.dumps(name)}")
     return 0
 
 
@@ -2174,7 +2172,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("company")
     p.add_argument("vc")
     p.set_defaults(func=_cmd_vcs_link)
-    p = vcsub.add_parser("unlink", parents=[db], help="remove a link made by hand")
+    p = vcsub.add_parser("unlink", parents=[db], help="remove a link, however it was made; a board does not bring it back")
     p.add_argument("company")
     p.add_argument("vc")
     p.set_defaults(func=_cmd_vcs_unlink)

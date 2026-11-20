@@ -77,6 +77,23 @@ class RankingConfig:
         self._leveled = {name.casefold() for name in self.senior_as_staff}
         by_word = {word.casefold(): (word, points) for word, points in self.seniority.items()}
         self._senior, self._staff = by_word.get("senior"), by_word.get("staff")
+        self._senior_word = _phrase("Senior")
+
+    def _senior_word_in(self, title: str) -> str:
+        """"Senior", as the seniority table or the title spells it."""
+        if self._senior:
+            return self._senior[0]
+        match = self._senior_word.search(title or "")
+        return match.group(0) if match else "Senior"
+
+    def leveled_title(self, title: str, company: str | None) -> str | None:
+        """What a Senior title at a leveled company is called elsewhere:
+        "Senior Product Manager" -> "Staff Product Manager". None when the
+        company is not leveled or the title has no "Senior" in it."""
+        if not self._staff or (company or "").casefold() not in self._leveled:
+            return None
+        leveled = self._senior_word.sub(self._staff[0], title or "")
+        return leveled if leveled != (title or "") else None
 
     def wants_title(self, title: str) -> bool:
         """Whether a role with this title can reach the shortlist at all: it
@@ -256,7 +273,9 @@ exclude = [{exclude}]
 {table(seniority or STARTER_SENIORITY, 10)}
 
 # Leveling: at the companies named here a "Senior" title is what most others
-# call "Staff", so it earns the points of "Staff" above instead of "Senior".
+# call "Staff", so it is scored as the Staff title would be: "Senior Product
+# Manager" earns the title points of "Staff Product Manager" (when that is a
+# wanted phrase worth more) and the seniority points of "Staff".
 # Use the names as `rolescout companies list` shows them (capitals do not
 # matter), e.g. senior_as_staff = ["Acme", "Globex"]. `rolescout why ID` says
 # when this applied.
@@ -407,8 +426,22 @@ def evaluate(role, cfg: RankingConfig, today: date, baseline: bool = False) -> E
         else:
             ev.detail.append(f"{nothing} (+0)")
 
+    def best_title(text: str):
+        return _best([(p, pts) for p, pts, pattern in cfg._wanted if pattern.search(text)])
+
+    def best_seniority(text: str):
+        return _best([(p, pts) for p, pts, pattern in cfg._seniority if pattern.search(text)])
+
+    company = role["company"] if "company" in role.keys() else ""
+    # Leveling: at the listed companies a Senior title is another company's
+    # Staff, so it is scored as that title would be, for the title phrase and
+    # for the seniority word alike. It never scores lower than as written.
+    as_staff = cfg.leveled_title(title, company)
     excluded = next((p for p, pattern in cfg._exclude if pattern.search(title)), None)
-    wanted = _best([(p, pts) for p, pts, pattern in cfg._wanted if pattern.search(title)])
+    wanted, leveled_wanted = best_title(title), best_title(as_staff) if as_staff else None
+    title_leveled = leveled_wanted is not None and (wanted is None or leveled_wanted[1] > wanted[1])
+    if title_leveled:
+        wanted = leveled_wanted
     if excluded:
         ev.eligible, ev.why_not = False, f'its title contains "{excluded}", a phrase you never want'
     elif wanted is None:
@@ -416,17 +449,16 @@ def evaluate(role, cfg: RankingConfig, today: date, baseline: bool = False) -> E
 
     if wanted:
         ev.score += wanted[1]
-        line = f'Title matches "{wanted[0]}" ({_pts(wanted[1])})'
+        line = (f'Title counts as "{as_staff}" at {company} (leveling), which matches "{wanted[0]}" '
+                f"({_pts(wanted[1])})" if title_leveled else f'Title matches "{wanted[0]}" ({_pts(wanted[1])})')
         ev.reasons.append(line)
         ev.detail.append(line)
     else:
         ev.detail.append("Title matches no wanted phrase (+0)")
-    senior = _best([(p, pts) for p, pts, pattern in cfg._seniority if pattern.search(title)])
-    company = role["company"] if "company" in role.keys() else ""
-    # Leveling: at the listed companies a Senior title is another company's Staff.
-    if (senior and cfg._senior and cfg._staff and senior[0] == cfg._senior[0]
-            and (company or "").casefold() in cfg._leveled and cfg._staff[1] > senior[1]):
-        add(cfg._staff[1], f'Seniority: "{senior[0]}" counts as "{cfg._staff[0]}" at {company} (leveling)', "")
+    senior, leveled_senior = best_seniority(title), best_seniority(as_staff) if as_staff else None
+    if leveled_senior is not None and (senior is None or leveled_senior[1] > senior[1]):
+        add(leveled_senior[1], f'Seniority: "{cfg._senior_word_in(title)}" counts as "{leveled_senior[0]}" '
+                               f"at {company} (leveling)", "")
     else:
         add(senior[1] if senior else 0.0, f'Seniority: "{senior[0]}"' if senior else "",
             "No seniority word in the title")
