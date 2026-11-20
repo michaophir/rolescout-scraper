@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from rolescout import db
+from rolescout import companies, db
 
 
 def test_path_precedence_flag_then_env_then_home(monkeypatch, tmp_path):
@@ -61,3 +61,39 @@ def test_newer_database_is_refused(tmp_path):
     conn.close()
     with pytest.raises(db.SchemaError):
         db.connect(path)
+
+
+def test_upgrade_clears_compensation_that_is_not_pay(isolated_db_path):
+    conn = db.connect()
+    company_id = companies.add_company(conn, "Acme")
+    board_id = companies.add_board(conn, "Acme", "lever", "acme")
+    stored = {
+        ("lever", "eeo"): "We are an equal opportunity employer and value diversity.",
+        ("lever", "benefits"): "401(k) match, 25 days off and the chance to work with 300 colleagues.",
+        ("lever", "range"): "The base range for this position is $87,069-$124,385 plus equity. Benefits include",
+        ("ashby", "words"): "Offers Equity",
+        ("ashby", "figure"): "$150K – $200K • Offers Equity",
+        ("greenhouse", "notice"): "We review pay every year.",
+        ("greenhouse", "pay"): "$190,000 — $230,000 USD",
+        ("rippling", "pay"): "USD 185,000 - 240,000 per year (US)",
+        ("workday", "none"): "",
+    }
+    for (source, job_id), text in stored.items():
+        conn.execute("INSERT INTO roles (source, source_job_id, company_id, board_id, title, compensation_text, "
+                     "first_seen_at, last_seen_at) VALUES (?, ?, ?, ?, 'Engineer', ?, 'x', 'x')",
+                     (source, job_id, company_id, board_id, text))
+    # As the database was before this version.
+    conn.execute("DROP TABLE shortlist_postings")
+    conn.execute("PRAGMA user_version = 11")
+    conn.close()
+
+    upgraded = db.connect()
+    assert db.schema_version(upgraded) == db.SCHEMA_VERSION >= 12
+    kept = {(r["source"], r["source_job_id"]): r["compensation_text"]
+            for r in upgraded.execute("SELECT source, source_job_id, compensation_text FROM roles")}
+    # Text with no number goes, from any source. Lever's goes whatever it
+    # says: it was the posting's closing section, and the next fetch stores
+    # pay from the pay fields.
+    assert {key for key, text in kept.items() if text} == {("ashby", "figure"), ("greenhouse", "pay"), ("rippling", "pay")}
+    assert all(kept[key] == stored[key] for key in kept if kept[key])
+    assert upgraded.execute("SELECT COUNT(*) FROM shortlist_postings").fetchone()[0] == 0

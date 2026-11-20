@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from rolescout.adapters.base import BoardIdentity, SourceAdapter, SourceError
 from rolescout.models import Role
-from rolescout.text import html_to_lines, normalize_workplace_type, strip_html
+from rolescout.text import html_to_lines, normalize_workplace_type, pay_text, strip_html
 
 
 def _date_from_millis(value: object) -> str:
@@ -16,6 +16,35 @@ def _date_from_millis(value: object) -> str:
         return datetime.fromtimestamp(value / 1000, tz=timezone.utc).date().isoformat()
     except (TypeError, ValueError, OSError, OverflowError):
         return ""
+
+
+def _amount(value: object) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _pay(item: dict) -> str:
+    """Pay, from the two fields a posting has for it and no other.
+
+    ``salaryRange`` holds the numbers (``min``, ``max``, ``currency`` and an
+    ``interval`` such as ``per-year-salary``); ``salaryDescription`` is the
+    company's sentence about them. Few postings fill either in. Pay written
+    anywhere else is prose among other prose and stays in the description:
+    ``additional``, the closing section, mostly holds benefits and the
+    equal-opportunity statement.
+    """
+    pay = item.get("salaryRange")
+    pay = pay if isinstance(pay, dict) else {}
+    low, high = _amount(pay.get("min")), _amount(pay.get("max"))
+    if low or high:
+        amount = f"{low:,.0f} - {high:,.0f}" if low and high and low != high else f"{(high or low):,.0f}"
+        interval = str(pay.get("interval") or "").lower()
+        period = re.match(r"per-([a-z]+)", interval)
+        per = f"per {period.group(1)}" if period else interval.replace("-", " ")
+        return " ".join(part for part in (str(pay.get("currency") or ""), amount, per) if part)
+    return pay_text(item.get("salaryDescriptionPlain") or strip_html(item.get("salaryDescription")))
 
 
 def _full_description(item: dict) -> str:
@@ -36,7 +65,7 @@ class LeverAdapter(SourceAdapter):
     name = "lever"
 
     def board_url(self, ref: str) -> str:
-        # The list call already carries description, comp text and workplace type.
+        # The list call already carries description, pay and workplace type.
         return f"https://api.lever.co/v0/postings/{ref}?mode=json"
 
     def items(self, payload: object, ref: str) -> list[dict]:
@@ -70,7 +99,7 @@ class LeverAdapter(SourceAdapter):
                 workplace_type=normalize_workplace_type(item.get("workplaceType")),
                 url=item.get("hostedUrl") or "",
                 date_posted=_date_from_millis(item.get("createdAt")),
-                compensation_text=(item.get("additionalPlain") or "").strip(),
+                compensation_text=_pay(item),
                 description=_full_description(item),
             ))
         return roles

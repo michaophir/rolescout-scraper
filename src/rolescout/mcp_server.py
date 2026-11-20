@@ -211,7 +211,13 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
         The list is rebuilt after every daily scout from the owner's ranking rules; rank 1 is
         best. Each entry has role_id, rank, score, company, title, location, mark
         ("saved" or null), whether it is new since the previous list, and backed_by: the names
-        of the portfolio boards that list the company (empty if none). For view=by_company,
+        of the portfolio boards that list the company (empty if none). Postings that are
+        clearly one job posted once per location (same company and title, and the same
+        description apart from the place, or the same posted date and department where no
+        description is stored) are one entry: role_id is its best-scoring posting, location counts the
+        other places as "+N more", other_postings lists them (role_id and location), and it takes
+        one of the company's slots. Roles with the same score are ordered by posted date, newest
+        first, then by company name. For view=by_company,
         limit and offset page over companies. Follow up with get_role for a description or
         explain_rank for the scoring.
         """
@@ -227,6 +233,9 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
                         row.update(company=e["company"], backed_by=e["backed_by"])
                     row.update(title=e["title"], location=e["location_shown"], mark=e["mark"],
                                shortlist_rank=e["list_rank"], url=e["url"])
+                    if e["other_postings"]:
+                        row["other_postings"] = [{"role_id": o["id"], "location": o["location"]}
+                                                 for o in e["other_postings"]]
                     if include_reasons:
                         row["reasons"] = e["reasons"]
                     return row
@@ -272,6 +281,9 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
                     row.update(company=e["company"], backed_by=e["backed_by"])
                 row.update(title=e["title"], location=e["location_shown"], mark=e["mark"],
                            new=bool(previous) and e["id"] in new_ids, url=e["url"])
+                if e["other_postings"]:
+                    row["other_postings"] = [{"role_id": o["id"], "location": o["location"]}
+                                             for o in e["other_postings"]]
                 if include_reasons:
                     row["reasons"] = e["reasons"]
                 return row
@@ -406,8 +418,10 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
         Returns the role's score, one line for every scoring rule (including the ones that gave
         no points), its rank if listed, and otherwise the reason it is absent: closed, company
         deactivated, marked dismissed or applied, title rules, held back by the per-company cap,
-        or simply outscored. Use it when the owner asks "why is this here" or "why isn't X on
-        the list".
+        or simply outscored. A job posted once per location is one entry on the list: for one of
+        its other postings, rank is the entry's rank and listed_under_role_id names the posting
+        that leads it; other_postings lists the rest of the job's postings. Use it when the owner
+        asks "why is this here" or "why isn't X on the list".
         """
         with database() as conn:
             info = ranking.explain(conn, role_id, load_ranking())
@@ -418,6 +432,9 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
                 "list_date": info["list_date"], "score": info["score"], "score_breakdown": info["detail"],
                 "why_not_listed": info["why_not"] or None,
                 "held_back_by_company_cap": info["held_back_by_cap"], "mark": role["mark"],
+                "listed_under_role_id": info["listed_under"]["id"] if info["listed_under"] else None,
+                "other_postings": [{"role_id": o["id"], "location": o["location"], "score": o["score"]}
+                                   for o in info["other_postings"]],
                 "ranking_rules_changed_since_list_was_built": info["config_changed"],
             }
 
@@ -905,16 +922,21 @@ def build_server(db_path: str | os.PathLike, config: str | os.PathLike | None = 
     ) -> dict[str, Any]:
         """Record the owner's decision on a role. A role has one mark at a time; marking again
         replaces it. The shortlist is refreshed immediately, so a dismissed or applied role
-        disappears and the next role moves up. Saved and applied roles keep their description
+        disappears and the next role moves up. The mark covers the job: when the company posted
+        it once per location, those postings leave the list too (also_covers names them); other
+        roles that only share its title are not affected.
+        Saved and applied roles keep their description
         after the posting closes. Only mark a role when the owner has said so; undo with
         unmark_role.
         """
         with database() as conn:
             role = ranking.mark_role(conn, role_id, status, note)
             rebuild_quietly(conn)
+            others = [] if role["closed_at"] or status == "saved" else ranking.other_open_postings(conn, role)
             return {"role_id": role_id, "company": role["company"], "title": role["title"],
                     "mark": status, "note": note.strip() or None,
-                    "role_status": "closed" if role["closed_at"] else "open"}
+                    "role_status": "closed" if role["closed_at"] else "open",
+                    "also_covers": [{"role_id": o["id"], "location": o["location"]} for o in others]}
 
     @server.tool(title="Remove a role's mark", annotations=writes)
     def unmark_role(role_id: RoleId) -> dict[str, Any]:

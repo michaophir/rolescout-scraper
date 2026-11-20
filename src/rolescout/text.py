@@ -12,6 +12,16 @@ def collapse_whitespace(text: str) -> str:
     return WHITESPACE_RE.sub(" ", text).strip()
 
 
+def pay_text(text: object, max_chars: int = 500) -> str:
+    """Text for a role's compensation, or "" when it names no figure.
+
+    A pay field sometimes holds only words ("Competitive salary", "Offers
+    equity"); stored as compensation that reads as pay where there is none.
+    """
+    cleaned = collapse_whitespace(str(text or ""))
+    return cleaned[:max_chars] if any(ch.isdigit() for ch in cleaned) else ""
+
+
 def strip_html(raw: str | None) -> str:
     """Decode HTML entities, strip tags, and collapse whitespace."""
     if not raw:

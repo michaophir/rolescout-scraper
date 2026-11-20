@@ -8,6 +8,8 @@ boards were added. Nothing is fetched.
 import sqlite3
 from datetime import datetime, timezone
 
+from rolescout.shortlist import new_between
+
 TOP_COMPANIES = 5
 MAX_NAMES = 6
 MAX_SHORTLIST = 10
@@ -113,12 +115,13 @@ def build_digest(conn: sqlite3.Connection, since: str | None = None, now: dateti
             before = conn.execute(
                 "SELECT * FROM shortlists WHERE id != ? AND (built_at <= ? OR (run_id IS NOT NULL AND run_id <= ?)) "
                 "ORDER BY list_date DESC LIMIT 1", (current["id"], after, first_id)).fetchone()
-        new_entries = [] if before is None else conn.execute(
+        # An entry is one job; it is not new when the earlier list showed
+        # the same job under another city's posting.
+        new_ids = set() if before is None else new_between(conn, current["id"], before["id"])
+        new_entries = [e for e in conn.execute(
             "SELECT e.rank, c.name AS company, r.title, r.id AS role_id FROM shortlist_entries e "
             "JOIN roles r ON r.id = e.role_id JOIN companies c ON c.id = r.company_id "
-            "WHERE e.shortlist_id = ? AND e.role_id NOT IN "
-            "(SELECT role_id FROM shortlist_entries WHERE shortlist_id = ?) ORDER BY e.rank",
-            (current["id"], before["id"])).fetchall()
+            "WHERE e.shortlist_id = ? ORDER BY e.rank", (current["id"],)) if e["role_id"] in new_ids]
         size = conn.execute("SELECT COUNT(*) FROM shortlist_entries WHERE shortlist_id = ?",
                             (current["id"],)).fetchone()[0]
         out["shortlist"] = {

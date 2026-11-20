@@ -441,6 +441,29 @@ MIGRATIONS: list[list] = [
         )
         """,
     ],
+    [
+        # Compensation holds pay or nothing. One source's values came from a
+        # posting's closing section (benefits, the equal-opportunity text), so
+        # all of them go; the next fetch stores pay from the pay fields. From
+        # any source, text that names no figure goes too.
+        """
+        UPDATE roles SET compensation_text = ''
+        WHERE compensation_text != '' AND (source = 'lever' OR compensation_text NOT GLOB '*[0-9]*')
+        """,
+        """
+        -- A job posted once per location is one entry on a shortlist: the
+        -- best-scoring posting is the entry (or the role held back), and the
+        -- job's other postings are listed here under it.
+        CREATE TABLE shortlist_postings (
+            shortlist_id  INTEGER NOT NULL REFERENCES shortlists(id) ON DELETE CASCADE,
+            role_id       INTEGER NOT NULL REFERENCES roles(id),
+            lead_role_id  INTEGER NOT NULL REFERENCES roles(id),
+            score         REAL NOT NULL,
+            PRIMARY KEY (shortlist_id, role_id)
+        )
+        """,
+        "CREATE INDEX shortlist_postings_lead ON shortlist_postings (shortlist_id, lead_role_id)",
+    ],
 ]
 
 SCHEMA_VERSION = len(MIGRATIONS)

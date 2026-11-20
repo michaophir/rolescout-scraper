@@ -422,6 +422,34 @@ def test_missing_boards_and_bad_references():
             "acme/wd5/Jobs")
 
 
+def test_a_retitled_posting_keeps_its_first_slug_and_its_title_and_link_stay_paired():
+    # Workday names a posting's path after its first title and never renames
+    # it. A re-titled posting is listed with the new title at the old path, and
+    # the title and the link of a stored role always come from one list item.
+    listed = [
+        {"title": "Head of Product, Innovation and AI", "externalPath": "/job/Here/Director-of-Strategy_R7",
+         "locationsText": "Here", "postedOn": "Posted Today"},
+        {"title": "Director of Strategy", "externalPath": "/job/Here/Director-of-Strategy_R9",
+         "locationsText": "Here", "postedOn": "Posted Today"},
+        posting(1),
+    ]
+
+    def answer(method, url, body):
+        if url.endswith("/robots.txt"):
+            return Response(404, "")
+        if method == "POST":
+            return {"total": 3, "jobPostings": listed}
+        return {"jobPostingInfo": {"title": "ignored", "jobDescription": "<p>Text</p>"}}
+    roles = quiet(Scripted(answer)).fetch("acme/wd5/Jobs", context=FetchContext(wants_description=lambda t: True))
+    assert [(r.title, r.source_job_id, r.url) for r in roles] == [
+        ("Head of Product, Innovation and AI", "acme/jobs/Director-of-Strategy_R7",
+         "https://acme.wd5.myworkdayjobs.com/Jobs/job/Here/Director-of-Strategy_R7"),
+        ("Director of Strategy", "acme/jobs/Director-of-Strategy_R9",
+         "https://acme.wd5.myworkdayjobs.com/Jobs/job/Here/Director-of-Strategy_R9"),
+        ("Role 1", "acme/jobs/Role-1_R1", "https://acme.wd5.myworkdayjobs.com/Jobs/job/Here/Role-1_R1"),
+    ]
+
+
 def test_a_busy_server_is_retried_once_then_reported():
     jobs = "https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/Jobs/jobs"
     waits = []
@@ -433,6 +461,103 @@ def test_a_busy_server_is_retried_once_then_reported():
 
     with pytest.raises(SourceError, match="HTTP 500"):
         quiet(board_of(1, statuses={jobs: 500})).fetch("acme/wd5/Jobs")
+
+
+class Clock:
+    """A clock that only moves when the adapter sleeps."""
+
+    def __init__(self):
+        self.now = 100.0
+        self.waits = []
+
+    def sleep(self, seconds):
+        self.waits.append(seconds)
+        self.now += seconds
+
+    def adapter(self, session, **kwargs):
+        return WorkdayAdapter(session, sleep=self.sleep, clock=lambda: self.now,
+                              today=lambda: date(2026, 1, 1), **kwargs)
+
+
+def limited(refusals, total=25):
+    """A board whose list endpoint answers 429 as ``refusals`` says: a list of
+    answers used up one per request (a status, or a Response), then the board."""
+    refusals = list(refusals)
+    board = board_of(total)
+
+    def answer(method, url, body):
+        if method == "POST" and refusals:
+            refusal = refusals.pop(0)
+            return refusal if isinstance(refusal, Response) else Response(refusal, {})
+        return board.answer(method, url, body)
+    return Scripted(answer)
+
+
+def test_a_429_is_retried_after_a_pause_and_slows_that_host_for_the_rest_of_the_run():
+    clock = Clock()
+    web = limited([429, Response(429, {}, {"Retry-After": "120"})])
+    adapter = clock.adapter(web)
+    assert len(adapter.fetch("acme/wd5/Jobs")) == 25
+    # robots.txt; the first page refused twice (a pause of 30 s, then the 120 s
+    # it asked for, more than the 90 s it would have got); then both pages, two
+    # seconds apart where it was one.
+    assert clock.waits == [1.0, 30.0, 120.0, 2.0]
+    assert adapter.last_stats.requests == 5 and adapter.last_stats.complete
+
+    # Another career site on the same host is read at the slower pace, and
+    # counted from the last request to that host. A different host starts at
+    # one a second.
+    clock.waits.clear()
+    adapter.fetch("acme/wd5/Other")
+    assert clock.waits == [2.0, 2.0, 2.0]
+    clock.waits.clear()
+    adapter.fetch("other/wd5/Jobs")
+    assert clock.waits == [1.0, 1.0]
+
+
+def test_a_host_that_keeps_answering_429_fails_the_fetch_and_closes_nothing(conn):
+    companies.add_company(conn, "Acme")
+    companies.add_board(conn, "Acme", "workday", "acme/wd5/Jobs")
+    companies.add_board(conn, "Acme", "workday", "acme/wd5/Other")
+    fine = quiet(board_of(25))
+    scout.run_scout(conn, adapter_for=lambda source: fine)
+    scout.run_scout(conn, adapter_for=lambda source: fine)
+    before = [tuple(r) for r in conn.execute("SELECT id, closed_at, missed_fetches, last_seen_at FROM roles")]
+    assert len(before) == 50
+
+    clock = Clock()
+    busy = clock.adapter(limited([429] * 100))
+    with pytest.raises(SourceError, match=r"acme.wd5.myworkdayjobs.com keeps answering HTTP 429 \(asked too "
+                                          r"often\) for 'acme/wd5/Jobs'; the fetch was abandoned"):
+        busy.fetch("acme/wd5/Jobs")
+    assert clock.waits == [1.0, 30.0, 90.0]                  # robots.txt, then three tries of the first page
+
+    run = scout.run_scout(conn, adapter_for=lambda source: clock.adapter(limited([429] * 100)))
+    assert [b.status for b in run.boards] == ["error", "error"]
+    assert all("keeps answering HTTP 429" in b.error for b in run.boards)
+    assert [tuple(r) for r in conn.execute(
+        "SELECT id, closed_at, missed_fetches, last_seen_at FROM roles")] == before
+
+    # Refused in the middle of the list: the pages already read are not
+    # stored as the board, so no role can count as missing.
+    run = scout.run_scout(conn, adapter_for=lambda source: clock.adapter(limited([200] + [429] * 100)))
+    assert [b.status for b in run.boards] == ["error", "error"]
+    assert [tuple(r) for r in conn.execute(
+        "SELECT id, closed_at, missed_fetches, last_seen_at FROM roles")] == before
+
+
+def test_a_host_that_refuses_descriptions_keeps_the_list_and_leaves_them_for_later():
+    board = board_of(25)
+
+    def answer(method, url, body):
+        return Response(429, {}) if method == "GET" and "/job/" in url else board.answer(method, url, body)
+    web = Scripted(answer)
+    adapter = quiet(web)
+    roles = adapter.fetch("acme/wd5/Jobs", context=FetchContext(wants_description=lambda t: True))
+    stats = adapter.last_stats
+    assert len(roles) == 25 and stats.complete and stats.descriptions_waiting == 25
+    assert sum(1 for method, url, _ in web.calls if "/job/" in url) == 3     # one description, tried three times
+    assert stats.notes == ["25 description(s) left for the next run"]
 
 
 def test_robots_txt_is_read_against_the_endpoint_actually_fetched():

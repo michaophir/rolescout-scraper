@@ -89,10 +89,10 @@ Read (always available):
 
 | Tool | What it does |
 |---|---|
-| `get_shortlist` | The ranked shortlist: flat, grouped by company, or only what is new. With a filter (stage, sector, HQ, role location, employees, VC) it ranks every qualifying role that passes, not only today's list |
+| `get_shortlist` | The ranked shortlist: flat, grouped by company, or only what is new. With a filter (stage, sector, HQ, role location, employees, VC) it ranks every qualifying role that passes, not only today's list. Postings that are clearly one job posted once per location are one entry, with `other_postings` naming the rest |
 | `get_role` | One role in full; the description only when asked for; includes the portfolio boards that list its company |
 | `search_roles` | Search all stored roles by title, company, open/closed and first-seen date, with the same filters as `get_shortlist` |
-| `explain_rank` | Why a role ranks where it does, or why it is not on the shortlist |
+| `explain_rank` | Why a role ranks where it does, or why it is not on the shortlist. For a posting listed under another posting of the same job, `listed_under_role_id` names that one |
 | `list_marks` | Roles marked dismissed, saved or applied |
 | `list_target_companies` | Target companies with boards and coverage state |
 | `coverage_gaps` | Companies that cannot be fetched, grouped by job system, with build candidates |
@@ -111,7 +111,7 @@ Write (absent in read-only mode):
 
 | Tool | What it does |
 |---|---|
-| `mark_role` | Mark a role dismissed, saved or applied, with an optional note |
+| `mark_role` | Mark a role dismissed, saved or applied, with an optional note. Dismissed and applied cover the same job's postings for other locations, not other roles with the same title |
 | `unmark_role` | Remove a role's mark |
 | `add_target_company` | Add a company to the target list |
 | `deactivate_company` | Stop tracking a company, keeping its history |

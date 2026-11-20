@@ -6,26 +6,23 @@ from bs4 import BeautifulSoup
 
 from rolescout.adapters.base import BoardIdentity, SourceAdapter, SourceError
 from rolescout.models import Role
-from rolescout.text import collapse_whitespace, strip_html
+from rolescout.text import pay_text, strip_html
 
 COMPENSATION_BLOCK_MAX_CHARS = 500
 
 
 def extract_compensation(content_html: str) -> str:
-    """Pull compensation text out of a Greenhouse `content` HTML blob."""
+    """Pay from a Greenhouse `content` HTML blob: the pay range the board
+    marks up, else its pay-transparency block. Either counts only when it
+    names a figure."""
     if not content_html:
         return ""
     soup = BeautifulSoup(html.unescape(content_html), "html.parser")
-    pay_range = soup.select_one(".pay-range")
-    if pay_range:
-        text = collapse_whitespace(pay_range.get_text(separator=" "))
+    for selector in (".pay-range", ".content-pay-transparency"):
+        found = soup.select_one(selector)
+        text = pay_text(found.get_text(separator=" "), COMPENSATION_BLOCK_MAX_CHARS) if found else ""
         if text:
             return text
-    pay_block = soup.select_one(".content-pay-transparency")
-    if pay_block:
-        text = collapse_whitespace(pay_block.get_text(separator=" "))
-        if text:
-            return text[:COMPENSATION_BLOCK_MAX_CHARS]
     return ""
 
 

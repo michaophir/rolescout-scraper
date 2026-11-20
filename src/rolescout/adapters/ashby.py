@@ -5,7 +5,7 @@ import re
 
 from rolescout.adapters.base import BoardIdentity, SourceAdapter, SourceError
 from rolescout.models import Role
-from rolescout.text import normalize_workplace_type, strip_html
+from rolescout.text import normalize_workplace_type, pay_text, strip_html
 
 
 class AshbyAdapter(SourceAdapter):
@@ -53,7 +53,8 @@ class AshbyAdapter(SourceAdapter):
                 workplace_type=normalize_workplace_type(item.get("workplaceType")),
                 url=item.get("jobUrl") or f"https://jobs.ashbyhq.com/{ref}/{job_id}",
                 date_posted=(item.get("publishedAt") or "")[:10],
-                compensation_text=(compensation.get("compensationTierSummary") or "").strip(),
+                # The summary may say only "Offers Equity": no figure, so no pay.
+                compensation_text=pay_text(compensation.get("compensationTierSummary")),
                 description=strip_html(item.get("descriptionHtml")),
             ))
         return roles

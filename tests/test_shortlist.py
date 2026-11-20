@@ -46,10 +46,14 @@ zero_days = 11
 """
 
 
-def mk(job_id, title, location="Austin", workplace="", source="greenhouse", posted=""):
-    return Role(source=source, source_job_id=job_id, company="x", title=title, department="Product",
+def mk(job_id, title, location="Austin", workplace="", source="greenhouse", posted="", text=None,
+       department="Product"):
+    """A role. Its description is its own ("About a1") unless ``text`` gives
+    one; ``text=""`` stores none."""
+    return Role(source=source, source_job_id=job_id, company="x", title=title, department=department,
                 location=location, workplace_type=workplace, url=f"https://example.com/{job_id}",
-                date_posted=posted, compensation_text="", description=f"About {job_id}")
+                date_posted=posted, compensation_text="",
+                description=f"About {job_id}" if text is None else text)
 
 
 def day(n, hour=12):
@@ -179,6 +183,260 @@ def test_baseline_roles_are_not_new_but_later_ones_are(conn):
     assert by_job["old"]["score"] == 30                                          # baseline, no date: no recency
     assert by_job["dated"]["score"] == 39                                        # posted 2 days ago: 9 of 10
     assert not any("First seen" in reason for reason in by_job["old"]["reasons"])
+
+
+# --- one job, several postings -------------------------------------------------
+
+ONE_SLOT = SMALL_CONFIG.replace("size = 3", "size = 3\nmax_per_company = 1")
+
+
+def about(place):
+    """One job's description as each city's posting words it: the place and
+    the line breaks differ, nothing else does."""
+    return f"Location: {place}\nLead the roadmap.\n\n  This role is based in {place}. Ship   weekly."
+
+
+def per_city(world):
+    world("Alpha", [
+        mk("ny", "Senior Product Manager", "New York, NY", text=about("New York, NY")),   # 30 + 10 + 10 NY + 10 new = 60
+        mk("austin", "Senior Product Manager", "Austin, TX", text=about("Austin, TX")),   # 50
+        # 55; capitals and spacing aside, the same title, and the text on one line.
+        mk("remote", "senior  product manager", "Remote - US", text=about("Remote - US").replace("\n", " ")),
+        mk("other", "Product Manager", "Austin, TX"),                  # 40, another job
+    ], on_day=10)
+    # The same title and the same text at another company: 50, and another job.
+    world("Beta", [mk("b1", "Senior Product Manager", "Austin, TX", text=about("Austin, TX"))], on_day=10)
+
+
+def test_a_job_posted_once_per_city_is_one_entry_scored_by_its_best_location(conn, world):
+    per_city(world)
+    result = ranking.build_shortlist(conn, cfg(ONE_SLOT), now=day(10))
+    # Three jobs qualify, not five postings. Alpha's job with three postings
+    # takes its one slot, so its other job is what the cap holds back.
+    assert (result["listed"], result["eligible"], result["held_back"]) == (2, 3, 1)
+    current = ranking.latest_shortlist(conn)["id"]
+    first, second = ranking.shortlist_entries(conn, current, cfg(ONE_SLOT))
+    assert (first["company"], first["id"], first["score"]) == ("Alpha", role_id(conn, "ny"), 60.0)
+    assert first["location"] == "New York, NY; Remote - US; Austin, TX"       # the best first, then by score
+    assert first["location_shown"] == "New York, NY +2 more"
+    assert first["postings"] == 3
+    assert [(o["id"], o["location"], o["score"]) for o in first["other_postings"]] == [
+        (role_id(conn, "remote"), "Remote - US", 55.0), (role_id(conn, "austin"), "Austin, TX", 50.0)]
+    assert (second["company"], second["postings"], second["other_postings"]) == ("Beta", 1, [])
+    assert second["location"] == second["location_shown"] == "Austin, TX"
+    held = ranking.held_back(conn, current)
+    assert [(h["title"], h["postings"]) for h in held] == [("Product Manager", 1)]
+    # Every posting is still stored, open and its own role.
+    assert conn.execute("SELECT COUNT(*) FROM roles WHERE closed_at IS NULL").fetchone()[0] == 5
+
+    # A posting that is not the entry explains itself by the entry it is listed with.
+    info = ranking.explain(conn, role_id(conn, "austin"), cfg(ONE_SLOT), now=day(10))
+    assert (info["rank"], info["why_not"], info["score"], info["listed_score"]) == (1, "", 50.0, 50.0)
+    assert info["listed_under"] == {"id": role_id(conn, "ny"), "location": "New York, NY",
+                                    "url": "https://example.com/ny", "score": 60.0}
+    lead = ranking.explain(conn, role_id(conn, "ny"), cfg(ONE_SLOT), now=day(10))
+    assert lead["listed_under"] is None and [o["id"] for o in lead["other_postings"]] == [
+        role_id(conn, "remote"), role_id(conn, "austin")]
+
+    # With no cap the held-back job is listed; the three postings are still one entry.
+    ranking.build_shortlist(conn, cfg(), now=day(10))
+    assert [(rank, title) for rank, title, _ in listed(conn)] == [
+        (1, "Senior Product Manager"), (2, "Senior Product Manager"), (3, "Product Manager")]
+
+
+def test_the_same_job_led_by_another_city_is_not_new_and_a_mark_covers_the_job(conn, world, capsys, isolated_db_path):
+    per_city(world)
+    (isolated_db_path.parent / "ranking.toml").write_text(ONE_SLOT)
+    ranking.build_shortlist(conn, cfg(ONE_SLOT), now=day(10))
+    # The next day the New York posting moves to Boston and scores less: the
+    # remote posting leads the entry now. It is the same entry, not a new one.
+    world("Alpha", [mk("ny", "Senior Product Manager", "Boston, MA", text=about("Boston, MA")),
+                    mk("austin", "Senior Product Manager", "Austin, TX", text=about("Austin, TX")),
+                    mk("remote", "senior  product manager", "Remote - US", text=about("Remote - US")),
+                    mk("other", "Product Manager", "Austin, TX")], on_day=11)
+    world("Beta", [mk("b1", "Senior Product Manager", "Austin, TX", text=about("Austin, TX"))], on_day=11)
+    result = ranking.build_shortlist(conn, cfg(ONE_SLOT), now=day(11))
+    current = ranking.latest_shortlist(conn)["id"]
+    first = ranking.shortlist_entries(conn, current, cfg(ONE_SLOT))[0]
+    assert (first["id"], first["score"], first["location_shown"]) == (role_id(conn, "remote"), 55.0, "Remote - US +2 more")
+    assert result["new"] == 0 and ranking.new_since(conn, current)[1] == set()
+
+    assert cli.main(["shortlist"]) == 0
+    out = capsys.readouterr().out
+    assert "2 roles of 3 that qualify" in out and "Remote - US +2 more" in out
+    assert "A job posted once per location is one entry" in out
+    assert cli.main(["why", str(role_id(conn, "austin"))]) == 0
+    out = capsys.readouterr().out
+    assert "Rank 1 of 2 on the shortlist" in out
+    assert f"The entry is this job's best-scoring posting, ID {role_id(conn, 'remote')} (Remote - US, score 55)" in out
+
+    # Saved under any of its postings, the job is flagged saved.
+    ranking.mark_role(conn, role_id(conn, "austin"), "saved")
+    assert ranking.shortlist_entries(conn, current)[0]["mark"] == "saved"
+    ranking.unmark_role(conn, role_id(conn, "austin"))
+
+    # Dismissing the entry dismisses the job: no other city's posting takes
+    # its place, and Alpha's slot goes to its other job.
+    assert cli.main(["mark", str(role_id(conn, "remote")), "dismissed"]) == 0
+    out = capsys.readouterr().out
+    assert (f"The same job is posted 2 more times (ID {role_id(conn, 'ny')}, {role_id(conn, 'austin')}); "
+            "the mark covers the job, so those stay off the shortlist too.") in out
+    assert [(e["company"], e["title"]) for e in ranking.shortlist_entries(
+        conn, ranking.latest_shortlist(conn)["id"])] == [("Beta", "Senior Product Manager"), ("Alpha", "Product Manager")]
+    info = ranking.explain(conn, role_id(conn, "ny"), cfg(ONE_SLOT), now=day(11))
+    assert info["rank"] is None and info["why_not"] == (
+        f"you marked another posting of the same job dismissed (ID {role_id(conn, 'remote')}, Remote - US), "
+        "and a mark covers the job wherever it is posted")
+    # Beta's job has the same title and is another company's: untouched.
+    assert ranking.explain(conn, role_id(conn, "b1"), cfg(ONE_SLOT), now=day(11))["rank"] == 1
+    assert cli.main(["unmark", str(role_id(conn, "remote"))]) == 0
+    assert ranking.shortlist_entries(conn, ranking.latest_shortlist(conn)["id"])[0]["postings"] == 3
+
+
+def entries_of(conn, config=None):
+    """Today's entries as (the posting that leads, the postings folded under it), by source job ID."""
+    names = {r["id"]: r["source_job_id"] for r in conn.execute("SELECT id, source_job_id FROM roles")}
+    ranking.build_shortlist(conn, config or cfg(WIDE), now=day(10))
+    return [(names[e["id"]], sorted(names[o["id"]] for o in e["other_postings"]))
+            for e in ranking.shortlist_entries(conn, ranking.latest_shortlist(conn)["id"])]
+
+
+WIDE = SMALL_CONFIG.replace("size = 3", "size = 20\nmax_per_company = 0")
+
+
+def test_the_same_title_is_not_enough_to_fold_two_postings(conn, world):
+    # A large company posts many jobs under one title. Only postings whose
+    # description is the same text, the place and the spacing aside, are one job.
+    world("Alpha", [
+        mk("ads-ny", "Product Manager", "New York, NY", text="Own the ads roadmap. Based in New York, NY."),
+        mk("ads-sf", "Product Manager", "San Francisco, CA", text="Own the ads  roadmap.\nBased in San Francisco, CA."),
+        mk("pay-ny", "Product Manager", "New York, NY", text="Own the payments roadmap. Based in New York, NY."),
+        mk("pay-sf", "Product Manager", "San Francisco, CA", text="Own the payments roadmap. Based in San Francisco, CA."),
+        mk("search", "Product Manager", "New York, NY", text="Own the search roadmap."),
+        # One text that names every city it is posted for is the same text.
+        mk("all-ny", "Product Manager", "New York, NY", text="Growth. Offices: New York, NY and Austin, TX."),
+        mk("all-tx", "Product Manager", "Austin, TX", text="Growth. Offices: New York, NY and Austin, TX."),
+        # The place is all that may differ: another word is another job.
+        mk("team-a", "Product Manager", "Denver, CO", text="Join team A in Denver, CO."),
+        mk("team-b", "Product Manager", "Denver, CO", text="Join team B in Denver, CO."),
+    ], on_day=10)
+    assert sorted(entries_of(conn)) == [
+        ("ads-ny", ["ads-sf"]), ("all-ny", ["all-tx"]), ("pay-ny", ["pay-sf"]),
+        ("search", []), ("team-a", []), ("team-b", [])]
+    # Five postings that qualify beyond those folded, each its own entry with its own slot.
+    assert ranking.latest_shortlist(conn)["eligible"] == 6
+    capped = entries_of(conn, cfg(WIDE.replace("max_per_company = 0", "max_per_company = 2")))
+    assert len(capped) == 2 and len(ranking.held_back(conn, ranking.latest_shortlist(conn)["id"])) == 4
+
+
+def test_without_a_description_to_compare_the_posted_date_and_department_decide(conn, world):
+    def bare(job_id, posted="2026-03-08", department="Product", text="", place="Austin, TX"):
+        return mk(job_id, "Product Manager", place, posted=posted, department=department, text=text)
+    world("Alpha", [
+        # No description stored for either: the same date and department make them one job.
+        bare("a1"), bare("a2", place="Denver, CO"),
+        bare("day", posted="2026-03-07"),                       # another day: another job
+        bare("dept", department="Growth"),                      # another department: another job
+        bare("undated", posted=""), bare("undated-2", posted=""),               # no date to go by: in doubt, apart
+        bare("no-dept", department=""), bare("no-dept-2", department=""),       # no department to go by: apart
+    ], on_day=10)
+    assert sorted(entries_of(conn)) == [
+        ("a1", ["a2"]), ("day", []), ("dept", []), ("no-dept", []), ("no-dept-2", []),
+        ("undated", []), ("undated-2", [])]
+
+    # One with a description and one without are compared by date and department too.
+    world("Beta", [bare("b1", text="Own the roadmap."), bare("b2", place="Denver, CO"),
+                   bare("b3", posted="2026-03-01")], on_day=10)
+    assert [e for e in entries_of(conn) if e[0].startswith("b")] == [("b1", ["b2"]), ("b3", [])]
+    # Two descriptions that differ settle it, whatever the date and the
+    # department say; and a posting joins a job only if it matches all of it.
+    world("Gamma", [bare("g1", text="Own ads."), bare("g2", text="Own search."), bare("g3")], on_day=10)
+    assert [e for e in entries_of(conn) if e[0].startswith("g")] == [("g1", ["g3"]), ("g2", [])]
+
+
+def test_a_mark_covers_only_the_postings_folded_with_it(conn, world):
+    world("Alpha", [
+        mk("ads-ny", "Product Manager", "New York, NY", text="Own the ads roadmap. Based in New York, NY."),
+        mk("ads-sf", "Product Manager", "San Francisco, CA", text="Own the ads roadmap. Based in San Francisco, CA."),
+        mk("pay-ny", "Product Manager", "New York, NY", text="Own the payments roadmap. Based in New York, NY."),
+    ], on_day=10)
+    for status in ("dismissed", "applied"):
+        ranking.mark_role(conn, role_id(conn, "ads-ny"), status)
+        assert [o["id"] for o in ranking.other_open_postings(conn, ranking.get_role(conn, role_id(conn, "ads-ny")))] == [
+            role_id(conn, "ads-sf")]
+        # The other city's posting of the same job goes; the other job with the same title stays.
+        assert entries_of(conn) == [("pay-ny", [])]
+        info = ranking.explain(conn, role_id(conn, "ads-sf"), cfg(WIDE), now=day(10))
+        assert info["why_not"].startswith(f"you marked another posting of the same job {status} "
+                                          f"(ID {role_id(conn, 'ads-ny')}, New York, NY)")
+        assert ranking.explain(conn, role_id(conn, "pay-ny"), cfg(WIDE), now=day(10))["rank"] == 1
+        ranking.unmark_role(conn, role_id(conn, "ads-ny"))
+    assert sorted(entries_of(conn)) == [("ads-ny", ["ads-sf"]), ("pay-ny", [])]
+
+
+def test_a_filtered_ranking_folds_the_postings_that_pass_the_filter(conn, world):
+    from rolescout import filters
+    per_city(world)
+    ranking.build_shortlist(conn, cfg(ONE_SLOT), now=day(10))
+    found = ranking.filtered_entries(conn, cfg(ONE_SLOT), filters.build_filter(conn, location="Austin"), now=day(10))
+    # Of Alpha's three postings only Austin passes; the entry is that posting,
+    # and it still knows its rank on today's list, where New York leads it.
+    assert found["qualifying"] == 3
+    assert [(e["company"], e["title"], e["id"], e["location_shown"], e["postings"], e["list_rank"])
+            for e in found["entries"]] == [
+        ("Alpha", "Senior Product Manager", role_id(conn, "austin"), "Austin, TX", 1, 1),
+        ("Beta", "Senior Product Manager", role_id(conn, "b1"), "Austin, TX", 1, 2),
+        ("Alpha", "Product Manager", role_id(conn, "other"), "Austin, TX", 1, None)]
+    usa = ranking.filtered_entries(conn, cfg(ONE_SLOT), filters.build_filter(conn, location="United States"),
+                                   now=day(10))["entries"]
+    assert (usa[0]["id"], usa[0]["postings"], usa[0]["location_shown"]) == (
+        role_id(conn, "ny"), 3, "New York, NY +2 more")
+    assert len(usa) == 3                                          # no cap in a filtered ranking
+
+
+# --- ties ----------------------------------------------------------------------
+
+NO_RECENCY = SMALL_CONFIG.replace("size = 3", "size = 10\nmax_per_company = 1").replace("max_points = 10", "max_points = 0")
+
+
+def test_roles_with_the_same_score_are_ordered_by_posted_date_then_company(conn, world):
+    # Every role scores 30. Entered in an order that is none of the orders below.
+    world("Gamma", [mk("g1", "Product Manager", posted="2026-03-05")], on_day=9)
+    world("Beta", [mk("b1", "Product Manager", posted="2026-03-08")], on_day=9)
+    world("Alpha", [
+        mk("a-old", "Product Manager, Ads", posted="2026-03-07"),
+        mk("a-zulu", "Product Manager, Zulu", posted="2026-03-08"),
+        mk("a-seen", "Product Manager, Billing"),                    # no posted date: first seen 03-09 stands in
+        mk("a-mid", "Product Manager, Cloud", posted="2026-03-07"),
+    ], on_day=9)
+
+    def order():
+        return [(role["company"], role["title"]) for role, ev in ranking.rank_roles(conn, cfg(NO_RECENCY), now=day(10))]
+    assert {ev.score for _, ev in ranking.rank_roles(conn, cfg(NO_RECENCY), now=day(10))} == {30.0}
+    expected = [
+        ("Alpha", "Product Manager, Billing"),       # 03-09, the newest
+        ("Alpha", "Product Manager, Zulu"),          # 03-08: Alpha before Beta
+        ("Beta", "Product Manager"),                 # 03-08
+        ("Alpha", "Product Manager, Ads"),           # 03-07: the same company, so by title
+        ("Alpha", "Product Manager, Cloud"),         # 03-07
+        ("Gamma", "Product Manager"),                # 03-05
+    ]
+    assert order() == expected and order() == expected
+
+    # The list and the roles the cap holds back keep that order.
+    ranking.build_shortlist(conn, cfg(NO_RECENCY), now=day(10))
+    current = ranking.latest_shortlist(conn)["id"]
+    assert [(e["company"], e["title"]) for e in ranking.shortlist_entries(conn, current)] == [
+        expected[0], expected[2], expected[5]]
+    assert [(h["company"], h["title"]) for h in ranking.held_back(conn, current)] == [
+        expected[1], expected[3], expected[4]]
+
+    # A role already open when its board was first read, with no posted date,
+    # has no date at all and comes after every role that has one.
+    companies.add_company(conn, "Delta")
+    companies.add_board(conn, "Delta", "greenhouse", "delta")
+    scout.run_scout(conn, adapter_for=Scripted(delta=[[mk("d1", "Product Manager")]]), clock=lambda: stamp(10))
+    assert order() == [*expected, ("Delta", "Product Manager")]
 
 
 # --- the per-company cap -----------------------------------------------------

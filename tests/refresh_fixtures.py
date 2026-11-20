@@ -3,6 +3,11 @@
     python tests/refresh_fixtures.py board greenhouse SLUG --name COMPANY
     python tests/refresh_fixtures.py board lever SLUG --name COMPANY
     python tests/refresh_fixtures.py board ashby SLUG --name COMPANY
+    python tests/refresh_fixtures.py board lever-pay SLUG --name COMPANY
+
+``lever-pay`` wants a board where some postings fill in the pay fields and
+some do not: it keeps one posting with a pay range and a sentence about it,
+one with the range only and one with neither, and shortens their long text.
 
 Saves the raw source responses (not normalized output), so the tests exercise
 the real parsing. The board's slug and the company's names are replaced with
@@ -46,9 +51,33 @@ BOARDS = {
                    "https://boards-api.greenhouse.io/v1/boards/{}/jobs?content=true", "jobs"),
     "lever": ("lever_postings_with_list_sections.json",
               "https://api.lever.co/v0/postings/{}?mode=json", None),
+    "lever-pay": ("lever_postings_with_pay_fields.json",
+                  "https://api.lever.co/v0/postings/{}?mode=json", None),
     "ashby": ("ashby_board_with_compensation.json",
               "https://api.ashbyhq.com/posting-api/job-board/{}?includeCompensation=true", "jobs"),
 }
+
+
+LONG_TEXT = 600     # of a posting's opening text, in the pay fixture
+
+
+def pay_examples(postings: list[dict]) -> list[dict]:
+    """One posting with both pay fields, one with the range only, one with neither."""
+    def first(want_range: bool, want_sentence: bool) -> dict:
+        for item in postings:
+            if (bool(item.get("salaryRange")), bool(item.get("salaryDescriptionPlain"))) == (want_range, want_sentence):
+                return item
+        raise SystemExit("this board has no posting with "
+                         f"{'a' if want_range else 'no'} pay range and {'a' if want_sentence else 'no'} pay sentence")
+    picked = [first(True, True), first(True, False), first(False, False)]
+    for item in picked:
+        item["lists"] = (item.get("lists") or [])[:1]
+        for key in ("description", "descriptionPlain", "descriptionBody", "descriptionBodyPlain"):
+            text = item.get(key)
+            if isinstance(text, str) and len(text) > LONG_TEXT:
+                cut = text[:LONG_TEXT]
+                item[key] = cut[:cut.rfind(" ")] + (" ..." if key.endswith("Plain") else " ...</div>")
+    return picked
 
 
 def record_board(source: str, slug: str, names: list[str]) -> None:
@@ -63,7 +92,7 @@ def record_board(source: str, slug: str, names: list[str]) -> None:
         if isinstance(data.get("meta"), dict):
             data["meta"]["total"] = KEEP
     else:
-        data = data[:KEEP]
+        data = pay_examples(data) if source == "lever-pay" else data[:KEEP]
     text = json.dumps(data, indent=2, ensure_ascii=False)
     for name in sorted({slug, *names}, key=len, reverse=True):
         words = r"[\s_-]*".join(re.escape(w) for w in name.split())

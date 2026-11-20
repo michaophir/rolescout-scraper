@@ -283,7 +283,8 @@ def test_a_link_removed_by_hand_does_not_come_back_from_a_board(harvested, filte
 def test_removals_table_arrives_by_upgrade_and_links_made_before_it_are_kept(harvested, monkeypatch):
     bolt = company_id(harvested, "Bolt")
     harvested.execute("DROP TABLE company_vc_removals")
-    harvested.execute(f"PRAGMA user_version = {db.SCHEMA_VERSION - 1}")
+    harvested.execute("DROP TABLE shortlist_postings")
+    harvested.execute("PRAGMA user_version = 10")            # the version before the table came
     harvested.commit()
     with db.transaction(harvested):
         vcs.sync_board_links(harvested)                     # as an older migration would call it: no table yet

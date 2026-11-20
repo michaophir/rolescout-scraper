@@ -622,6 +622,9 @@ def _cmd_shortlist_filtered(conn, args, only: filters.RoleFilter) -> int:
     off_list = sum(1 for e in result["entries"] if e["list_rank"] is None)
     print(f"Filtered ranking ({only.describe()}): {total} of the {result['qualifying']} roles that qualify, "
           f"ranked now; {off_list} of them are not on today's shortlist")
+    if any(e["postings"] > 1 for e in entries):
+        print("A job posted once per location is one entry: its best-scoring posting, with the other "
+              "locations counted in \"+N more\".")
     if not entries:
         print("\nNo roles to show.")
         return 0
@@ -704,6 +707,9 @@ def _cmd_shortlist(args) -> int:
         held_by_company[h["company"]] = held_by_company.get(h["company"], 0) + 1
     print(f"Shortlist for {current['list_date']}: {total} roles of {current['eligible']} that qualify; {compared}"
           + (f"; {len(held)} held back by the per-company cap" if held else ""))
+    if any(e["postings"] > 1 for e in entries):
+        print("A job posted once per location is one entry: its best-scoring posting, with the other "
+              "locations counted in \"+N more\". rolescout why ID lists them.")
     if stale:
         print(stale)
     if args.new and previous is None:
@@ -754,6 +760,11 @@ def _cmd_mark(args) -> int:
               "applied": "it will not be shortlisted again, and its description is kept after it closes",
               "saved": "it stays on the shortlist, flagged, and its description is kept after it closes"}
     print(f"Marked {args.status}: {role['company']}, {role['title']} (ID {role_id}); {effect[args.status]}.")
+    others = [] if role["closed_at"] else ranking.other_open_postings(conn, role)
+    if others and args.status in ranking.HIDDEN_MARKS:
+        print(f"The same job is posted {len(others)} more time{'' if len(others) == 1 else 's'} "
+              f"(ID {', '.join(str(o['id']) for o in others)}); the mark covers the job, so "
+              f"{'that stays' if len(others) == 1 else 'those stay'} off the shortlist too.")
     if role["closed_at"] and args.status in ranking.KEEP_DESCRIPTION_MARKS:
         print("Note: this role had already closed, so its description was already deleted.")
     return 0
@@ -800,10 +811,19 @@ def _cmd_why(args) -> int:
     if role["mark"]:
         print(f"Marked {role['mark']}" + (f": {role['mark_note']}" if role["mark_note"] else ""))
     print()
+    under = info["listed_under"]
     if info["rank"]:
         print(f"Rank {info['rank']} of {info['list_size']} on the shortlist for {info['list_date']}.")
+        if under:
+            print(f"The entry is this job's best-scoring posting, ID {under['id']} "
+                  f"({under['location'] or 'no location given'}, score {under['score']:g}); "
+                  "this posting is listed with it.")
     else:
         print(f"Not on the shortlist: {info['why_not']}.")
+    if info["other_postings"]:
+        print("Also posted for: " + "; ".join(
+            f"{o['location'] or 'no location given'} (ID {o['id']}, score {o['score']:g})"
+            for o in info["other_postings"]))
     print(f"\nScore {info['score']:g}, from:")
     for line in info["detail"]:
         print(f"  {line}")
@@ -1958,7 +1978,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = commands.add_parser(
         "mark", parents=[db, config],
-        help="mark a role dismissed, saved or applied")
+        help="mark a role dismissed, saved or applied; dismissed and applied cover the same job's postings "
+             "for other locations")
     p.add_argument("id", help="the role's ID, from the ID column")
     p.add_argument("status", choices=ranking.MARKS)
     p.add_argument("--note", help="anything you want to remember about it")

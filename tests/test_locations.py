@@ -79,14 +79,17 @@ def test_requirement_accepts_unplaced_remote_and_literal_places():
 
 def build(conn, world, text=REQUIRE_US):
     world("Alpha", [
-        mk("london", "Product Manager", "London, UK"),
-        mk("both", "Product Manager", "London | New York, NY"),
-        mk("canada", "Product Manager", "Remote - Canada"),
-        mk("remote", "Product Manager", "Remote"),
-        mk("remote-flag", "Product Manager", "", workplace="remote"),
-        mk("austin", "Product Manager", "Austin, TX"),
-        mk("blank", "Product Manager", ""),
-        mk("telaviv", "Product Manager", "Tel Aviv, IL"),
+        # Eight jobs, each with a title of its own: with one title, descriptions
+        # that differ only in the place ("About london", "About austin") would
+        # make some of them one job posted per city.
+        mk("london", "Product Manager, Ads", "London, UK"),
+        mk("both", "Product Manager, Billing", "London | New York, NY"),
+        mk("canada", "Product Manager, Cloud", "Remote - Canada"),
+        mk("remote", "Product Manager, Data", "Remote"),
+        mk("remote-flag", "Product Manager, Events", "", workplace="remote"),
+        mk("austin", "Product Manager, Fraud", "Austin, TX"),
+        mk("blank", "Product Manager, Growth", ""),
+        mk("telaviv", "Product Manager, Health", "Tel Aviv, IL"),
     ], on_day=10)
     ranking.build_shortlist(conn, cfg(text), now=day(10))
     entries = ranking.shortlist_entries(conn, ranking.latest_shortlist(conn)["id"], cfg(text))

@@ -18,6 +18,9 @@ November 2026; ``tests/fixtures/workday_*.json`` hold recorded responses.
   description and its exact ``startDate``. That is one request per role, so it
   is made only for the roles the caller wants a description for.
 - A wrong site answers 404; a wrong tenant or data center answers 422.
+- A host that is asked too often answers 429. The limit is counted per
+  hostname, so the career sites of one tenant share it: the second site read
+  in a row is the one refused. How many requests it allows is not published.
 - The tenant in the path is usually the first label of the hostname, but a
   tenant with an underscore has a hyphen in its hostname (tenant ``acme_corp``
   is served from ``acme-corp.wd5.myworkdayjobs.com``).
@@ -42,15 +45,18 @@ from rolescout.text import collapse_whitespace, strip_html
 
 PAGE_SIZE = 20                 # the most the endpoint accepts
 RESULT_CAP = 2000              # the most one search reports
-MIN_INTERVAL = 1.0             # seconds between requests, whatever session is used
+MIN_INTERVAL = 1.0             # seconds between requests to one host, whatever session is used
 BOARD_SECONDS = 900.0          # one board's fetch stops after this long (the largest board seen took ~500)
 MAX_REQUESTS = 900             # ... or after this many requests
 MAX_DESCRIPTIONS = 150         # descriptions fetched per board per fetch; the rest wait
 MAX_SPLIT_VALUES = 100         # a facet with more values than this is not used to split
 MAX_SPLIT_DEPTH = 2            # facets combined at most
-RETRY_STATUSES = {429, 500, 502, 503, 504}
+RETRY_STATUSES = {500, 502, 503, 504}   # retried once, after RETRY_WAIT
 RETRY_WAIT = 5.0
 MAX_RETRY_WAIT = 30.0
+RATE_LIMIT_WAITS = (30.0, 90.0)   # pauses before the retries of a request answered 429
+MAX_RETRY_AFTER = 300.0        # the longest pause a Retry-After header can ask for
+SLOWER_AFTER_429 = 2.0         # a host's interval is multiplied by this once it answered 429
 DETAIL_FAILURES_TO_STOP = 3    # consecutive failed description requests
 
 _LABEL = r"[A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?"
@@ -267,6 +273,18 @@ class _NoTenant(BoardNotFound):
     """HTTP 422: the data center has no tenant by that name."""
 
 
+class RateLimited(SourceError):
+    """The host kept answering 429 through every retry."""
+
+
+@dataclass
+class _HostPace:
+    """When one host was last asked, and how far apart its requests are kept."""
+
+    interval: float
+    last_request: float | None = None
+
+
 class WorkdayAdapter(SourceAdapter):
     """One Workday career site per reference, ``tenant/wdN/site``.
 
@@ -276,9 +294,12 @@ class WorkdayAdapter(SourceAdapter):
     only when none is stored yet. Every other role comes back with
     ``description == ""``.
 
-    Requests are at least ``min_interval`` apart. A fetch that runs out of
-    time or requests returns what it has and says so in ``last_stats``
-    (``complete`` False, or descriptions left waiting).
+    Requests to one host are at least ``min_interval`` apart, across every
+    board on it for as long as the adapter lives. A 429 is retried after a
+    pause and slows that host down from then on; a host that keeps answering
+    429 fails the fetch (``RateLimited``), so nothing is stored or closed. A
+    fetch that runs out of time or requests returns what it has and says so
+    in ``last_stats`` (``complete`` False, or descriptions left waiting).
     """
 
     name = "workday"
@@ -303,7 +324,7 @@ class WorkdayAdapter(SourceAdapter):
         self._sleep = sleep
         self._clock = clock
         self._today = today or (lambda: datetime.now(timezone.utc).date())
-        self._last_request: float | None = None
+        self._hosts: dict[str, _HostPace] = {}           # by hostname
         self._deadline = float("inf")
         self._tenants: dict[tuple[str, str], str] = {}   # (host, site) -> tenant that answered
         self.last_stats = FetchStats()
@@ -325,36 +346,59 @@ class WorkdayAdapter(SourceAdapter):
     # -- requests
 
     def _send(self, method: str, url: str, ref: WorkdayRef, **kwargs) -> requests.Response:
-        """One paced request, retried once when the server says it is busy."""
+        """One request, paced for its host.
+
+        A 429 is retried after each of ``RATE_LIMIT_WAITS`` (or the longer
+        pause the answer asks for), and the host is asked more slowly from
+        then on; one that still answers 429 raises ``RateLimited``. A server
+        error or a failed connection is retried once.
+        """
         stats = self.last_stats
-        for attempt in (1, 2):
+        pace = self._hosts.setdefault(urlsplit(url).netloc, _HostPace(self.min_interval))
+        limited = iter(RATE_LIMIT_WAITS)
+        retried = False
+        while True:
             if stats.requests >= self.max_requests:
                 raise _BudgetSpent(f"used its {self.max_requests} requests")
             if self._clock() >= self._deadline:
                 raise _BudgetSpent(f"ran for its {self.board_seconds:g} seconds")
-            if self._last_request is not None:
-                wait = self.min_interval - (self._clock() - self._last_request)
+            if pace.last_request is not None:
+                wait = pace.interval - (self._clock() - pace.last_request)
                 if wait > 0:
                     self._sleep(wait)
             stats.requests += 1
             try:
                 resp = self.session.request(method, url, timeout=DEFAULT_TIMEOUT, **kwargs)
             except requests.RequestException as exc:
-                self._last_request = self._clock()
-                if attempt == 1:
-                    self._sleep(RETRY_WAIT)
-                    continue
-                raise SourceError(f"{self.name}: request for {str(ref)!r} failed: {exc}") from exc
-            self._last_request = self._clock()
-            if resp.status_code in RETRY_STATUSES and attempt == 1:
-                try:
-                    wait = float(resp.headers.get("Retry-After") or RETRY_WAIT)
-                except (TypeError, ValueError):
-                    wait = RETRY_WAIT
-                self._sleep(min(max(wait, self.min_interval), MAX_RETRY_WAIT))
+                pace.last_request = self._clock()
+                if retried:
+                    raise SourceError(f"{self.name}: request for {str(ref)!r} failed: {exc}") from exc
+                retried = True
+                self._sleep(RETRY_WAIT)
+                continue
+            pace.last_request = self._clock()
+            if resp.status_code == 429:
+                pace.interval = max(pace.interval, self.min_interval * SLOWER_AFTER_429)
+                pause = next(limited, None)
+                if pause is None:
+                    raise RateLimited(
+                        f"{self.name}: {urlsplit(url).netloc} keeps answering HTTP 429 (asked too often) "
+                        f"for {str(ref)!r}; the fetch was abandoned and nothing was changed")
+                self._sleep(min(max(self._retry_after(resp), pause), MAX_RETRY_AFTER))
+                continue
+            if resp.status_code in RETRY_STATUSES and not retried:
+                retried = True
+                self._sleep(min(max(self._retry_after(resp) or RETRY_WAIT, pace.interval), MAX_RETRY_WAIT))
                 continue
             return resp
-        raise AssertionError("unreachable")
+
+    @staticmethod
+    def _retry_after(resp: requests.Response) -> float:
+        """The seconds a Retry-After header asks for; 0 when it gives none."""
+        try:
+            return max(0.0, float((getattr(resp, "headers", None) or {}).get("Retry-After") or 0))
+        except (TypeError, ValueError):
+            return 0.0
 
     def _check_robots(self, ref: WorkdayRef) -> None:
         """Refuse the board when its robots.txt disallows the endpoint we read.
@@ -591,7 +635,9 @@ class WorkdayAdapter(SourceAdapter):
             try:
                 resp = self._send("GET", ref.api + paths[role.source_job_id], ref,
                                   headers={"Accept-Language": "en-US"})
-            except _BudgetSpent:
+            except (_BudgetSpent, RateLimited):
+                # The list is read and stands; the descriptions wait for a run
+                # the host has room for.
                 stats.descriptions_waiting = len(queue) - position
                 break
             except SourceError:

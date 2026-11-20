@@ -69,7 +69,7 @@ touches live boards, and it is run by hand.
 |---|---|---|
 | `greenhouse`, `lever`, `ashby`, `gem`, `workable` | board name | Whole board with descriptions in one request |
 | `rippling` | board name | List in one request; description, date and pay cost one request per role |
-| `workday` | `TENANT/wdN/SITE` | 20 roles per request; one request per description |
+| `workday` | `TENANT/wdN/SITE` | 20 roles per request; one request per description; paced per host, a 429 retried after a pause |
 | `eightfold` | `SITE-HOST/COMPANY-DOMAIN` | Ten roles per request; two list endpoints, the second tried when the first cannot be read; no descriptions |
 | `google` | `careers` | The single-company exception below: one feed, one request |
 
@@ -90,10 +90,20 @@ keep doing.
   parser: before Python 3.14 it obeys the first matching rule.
 - Closing: a role closes on its second miss in a row, and only complete
   reads count a miss. A failed fetch changes nothing.
+- Compensation: `compensation_text` holds pay or nothing. An adapter fills
+  it only from a field the source has for pay, through `text.pay_text`,
+  which returns "" for text that names no figure.
+- One job, one entry: postings that are clearly one job are one entry on
+  the shortlist and in the filtered ranking, led by the best-scoring
+  posting. `shortlist.SameJob` decides: the same company and title, and the
+  same description apart from places and whitespace, or, where one has no
+  stored description, the same known posted date and department. In doubt
+  they stay apart. A dismissed or applied mark covers the same postings. Every posting stays a row in
+  `roles`; a list's other postings are in `shortlist_postings`.
 - Completeness: a source that reports a total counts as complete when it saw
   at least 99% of it (`COMPLETE_SHARE` in `adapters/base.py`). Seen and
   reported are stored per fetch in `run_boards`.
-- Schema: version 11, kept in `PRAGMA user_version`. A change is a new entry
+- Schema: version 12, kept in `PRAGMA user_version`. A change is a new entry
   at the end of `MIGRATIONS` in `db.py`; existing databases upgrade in place
   when any command opens them. Never edit an earlier entry.
 - `rolescout init` never changes a company or a config that is already

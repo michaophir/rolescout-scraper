@@ -249,6 +249,26 @@ What the ranking does that is worth knowing when you read the list:
 - No company takes more than `max_per_company` slots (5 in the starter).
   Roles held back by that cap are counted in the by-company view and named
   by `rolescout why ID`.
+- A company that posts one job once per city gets one entry for it, not one
+  per posting. Postings are folded only when they are clearly one job: the
+  same company and title, and the same description text once the place and
+  the spacing are set aside. Where a posting has no stored description to
+  compare, the posted date and the department must both be known and the
+  same. Anything less stays separate entries, since a large company posts
+  many different jobs under one title. The entry is the best-scoring posting, its location column counts the
+  other cities as "+N more", and it takes one of the company's slots.
+  `rolescout why ID` lists the other postings with their IDs, and for one of
+  them names the entry it is listed with. Every posting is still stored and
+  found by `rolescout query`. The filtered ranking does the same with the
+  postings that pass the filter.
+- Marking a role dismissed or applied covers the job: the postings folded
+  with it by the rule above leave the list too, and other roles with the
+  same title stay. A job saved under any of its postings is
+  flagged saved.
+- Roles with the same score are ordered by posted date, newest first, then
+  by company name, then by title. Where a board gives no posted date, the
+  day rolescout first saw the role stands in; a role with neither comes
+  last.
 - A role's age is counted from the date the company posted it, falling back
   to the date rolescout first saw it. Roles that were already open when a
   company was first fetched and carry no posted date get no points for being
@@ -410,6 +430,14 @@ Workday costs more requests than the other sources, so the scout prints the
 requests and time each board took:
 
 - The list of roles takes one request per 20 roles, one second apart.
+  Requests are paced per Workday hostname, so the career sites of one
+  company share one pace.
+- A host that answers "too many requests" (HTTP 429) is asked again after 30
+  and then 90 seconds, or after the longer pause it asks for, and is read at
+  half the pace for the rest of the run. If it refuses a third time the
+  fetch fails, and as with any failed fetch nothing is stored and no role is
+  closed. When it refuses only the descriptions, the list is kept and the
+  descriptions wait for the next run.
 - A description takes one request per role. It is fetched once, and only for
   roles whose title matches a wanted phrase in `ranking.toml` (and no excluded
   one) and for roles you marked saved or applied. Every other role is stored
@@ -487,6 +515,11 @@ to confirm. To map one by hand, paste any URL of the board:
 ```sh
 rolescout companies map "Acme" rippling "https://ats.rippling.com/acme/jobs/JOB-ID"
 ```
+
+Compensation is stored only from the fields a job system has for pay
+(Greenhouse, Lever, Ashby and Rippling have one), and only when it names a
+figure. Pay that a company writes into the description stays in the
+description.
 
 Gem and Workable return every role with its description in one request.
 Rippling lists roles in one request, but a description, posted date and pay
